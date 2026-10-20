@@ -1,0 +1,9 @@
+[collector]
+data_root = "../data/production"
+environment = "production"
+currencies = ["BTC", "ETH"]
+depth = 10000
+rate = 10
+workers = 8
+# macOS local development only. VPS config requires NTP synchronization.
+require_ntp = false

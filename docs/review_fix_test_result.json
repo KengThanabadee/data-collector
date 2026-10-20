@@ -1,0 +1,28 @@
+{
+  "tests": 35,
+  "failures": 0,
+  "errors": 0,
+  "elapsed_seconds": 11.087,
+  "successful": true,
+  "source": {
+    "source_sha256": "3bc67ea43edae67b0de3c84149c64e584784aebdcf87fe3237e5e3efba278bf5",
+    "files": {
+      "option_collector/__init__.py": "0f400d1bd99e90f95f21ab2490d7a8556e82c091410bcf4663066c5f56a17102",
+      "option_collector/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+      "option_collector/archive.py": "db4146478b8120c79f642479080802fc1d365407803ce7c3cbad4ef34de7ef74",
+      "option_collector/audit.py": "21e1f0312862da5500c37b6fc4b3c0b67bce2dcf1bb19facbfb0c7b867f940a6",
+      "option_collector/cli.py": "e61bd8b51a0869c3575532a3a786ae53dfe31294f4be68909a7fe4c47ea49948",
+      "option_collector/collector.py": "9be94355ed80ef60100b344f875bac414d08f0c80a362b04afffc78146b93980",
+      "option_collector/common.py": "a82f527dab9049e1977e7dcb781b71b8300c78574a38989023b55499320277c9",
+      "option_collector/config.py": "1808109155ae0ff71d41c61d46cd735ab7e5a27f8886ff52f7997f42e3c562ca",
+      "option_collector/delivery.py": "8040f92381daf89796fb78364e3c158093064e7cc11a9565574d4a02a009385e",
+      "option_collector/operations.py": "56468cf1079018de76fe232f0e729474b42ff57e77e046fbc3f3096ec201fe38",
+      "option_collector/schema.py": "e6910ad0703ea6a0325af524d6f44eb8bd0a6054b06a30e9d8c752ece346366f",
+      "option_collector/transport.py": "edcf846fda09be0f1f83520fdeb5c6537e453561fbfd79a08275215c72cc2725",
+      "requirements.lock": "de47b21b70eb542b4d4e60aba322f45cc3814a205c1d117744f1115155b1a6cb",
+      "pyproject.toml": "58bcf3ce898da06651cf73292e428623a425f0bcc7df44bb2acdf270a6a770c4"
+    }
+  },
+  "command": ".venv/bin/python -B -m unittest discover -s tests",
+  "scope": "synthetic fixtures, localhost HTTP fault server, subprocess kill/recovery; no live exchange or deployment"
+}

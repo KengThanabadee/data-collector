@@ -1,0 +1,102 @@
+{
+  "receipt": "final-validation-run.json",
+  "markets": {
+    "BTC": {
+      "status": "complete",
+      "options": 884,
+      "requests": 889,
+      "missing": 0,
+      "errors": 0,
+      "archive_bytes": 313456,
+      "archive_sha256": "3e0e5d0b26fb84759e62c8c17fb9ddf7b2c0cd00421fa0f23834d5d133e9ed4f",
+      "context_bytes": 21995,
+      "manifest_bytes": 52548,
+      "destination": "snapshots/2026/10/19/manual/31bdc7e6-4108-4505-b9e4-d707b64d3cfd/BTC",
+      "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+    },
+    "ETH": {
+      "status": "complete",
+      "options": 766,
+      "requests": 771,
+      "missing": 0,
+      "errors": 0,
+      "archive_bytes": 266473,
+      "archive_sha256": "f2174d2753e8a992c59768672ec5796ccf2151b662ae80f8239aa88620ada4f0",
+      "context_bytes": 18417,
+      "manifest_bytes": 43742,
+      "destination": "snapshots/2026/10/19/manual/31bdc7e6-4108-4505-b9e4-d707b64d3cfd/ETH",
+      "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+    }
+  },
+  "observation_span_seconds": 173.391583984375,
+  "response_body_bytes": 3871614,
+  "rounds": [
+    {
+      "receipt": "local-validation-run.json",
+      "markets": {
+        "BTC": {
+          "status": "complete",
+          "options": 884,
+          "requests": 889,
+          "missing": 0,
+          "errors": 0,
+          "archive_bytes": 313137,
+          "archive_sha256": "01d7a1c05ae5d351fbf7f3ae7d8ff23dded55055c9381277074e6135d3a3cf68",
+          "context_bytes": 21995,
+          "manifest_bytes": 52548,
+          "destination": "snapshots/2026/10/19/manual/affa8893-6258-4723-9648-7f604f94b0d1/BTC",
+          "source_sha256": "004e8c87c2c4020442e92ef8c95dd6fde292a60976892c146ce2f24b5f127b7d"
+        },
+        "ETH": {
+          "status": "complete",
+          "options": 766,
+          "requests": 771,
+          "missing": 0,
+          "errors": 0,
+          "archive_bytes": 265606,
+          "archive_sha256": "d4cda81356b0d4a5cfc98a62a54e89ca6a2ab8f7dbda87cd1915cfbbd43b7573",
+          "context_bytes": 18417,
+          "manifest_bytes": 43742,
+          "destination": "snapshots/2026/10/19/manual/affa8893-6258-4723-9648-7f604f94b0d1/ETH",
+          "source_sha256": "004e8c87c2c4020442e92ef8c95dd6fde292a60976892c146ce2f24b5f127b7d"
+        }
+      },
+      "observation_span_seconds": 174.334072265625,
+      "response_body_bytes": 3868730
+    },
+    {
+      "receipt": "final-validation-run.json",
+      "markets": {
+        "BTC": {
+          "status": "complete",
+          "options": 884,
+          "requests": 889,
+          "missing": 0,
+          "errors": 0,
+          "archive_bytes": 313456,
+          "archive_sha256": "3e0e5d0b26fb84759e62c8c17fb9ddf7b2c0cd00421fa0f23834d5d133e9ed4f",
+          "context_bytes": 21995,
+          "manifest_bytes": 52548,
+          "destination": "snapshots/2026/10/19/manual/31bdc7e6-4108-4505-b9e4-d707b64d3cfd/BTC",
+          "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+        },
+        "ETH": {
+          "status": "complete",
+          "options": 766,
+          "requests": 771,
+          "missing": 0,
+          "errors": 0,
+          "archive_bytes": 266473,
+          "archive_sha256": "f2174d2753e8a992c59768672ec5796ccf2151b662ae80f8239aa88620ada4f0",
+          "context_bytes": 18417,
+          "manifest_bytes": 43742,
+          "destination": "snapshots/2026/10/19/manual/31bdc7e6-4108-4505-b9e4-d707b64d3cfd/ETH",
+          "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+        }
+      },
+      "observation_span_seconds": 173.391583984375,
+      "response_body_bytes": 3871614
+    }
+  ],
+  "current_source_fingerprint": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Deribit raw capture every five minutes UTC
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00 UTC
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,16 @@
+{
+  "command": ".venv/bin/python -m unittest discover -s tests -v",
+  "tests": 27,
+  "passed": true,
+  "duration_seconds": 8.036,
+  "python": "3.12.14",
+  "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0",
+  "recorded_utc": "2026-10-19T15:57:15.094+00:00",
+  "notes": [
+    "Synthetic fixtures and localhost fault server; no exchange calls from tests",
+    "Five actual SIGKILL publication checkpoints",
+    "External hard stop tested against a subprocess ignoring SIGTERM",
+    "52-page delivery scheduling simulation includes losing the derived cursor",
+    "Linux/systemd/Telegram/VPS soak not run"
+  ]
+}

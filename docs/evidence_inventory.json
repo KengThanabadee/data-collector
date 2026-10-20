@@ -1,0 +1,103 @@
+{
+  "archives": [
+    {
+      "archive_sha256": "576dca7db2e08f6f96bae35986d3132101c94328f6e514cbdcfde1849faf20de",
+      "path": "experiments/results/2026-10-19-delivery-corrected/delivery-history",
+      "records": 52,
+      "verified": true
+    },
+    {
+      "archive_sha256": "aa8ee15f768faab717ef6eaeb253be58f9b13b8eda7af97c55d39eac873cffd5",
+      "path": "experiments/results/2026-10-19-depth10000-full/initial-discovery",
+      "records": 10,
+      "verified": true
+    },
+    {
+      "archive_sha256": "fc8508df4ada0cb29769475eb1383344e8a23c61302dd6915f6a5027d7bc3f3a",
+      "path": "experiments/results/2026-10-19-depth10000-full/round-1-discovery",
+      "records": 10,
+      "verified": true
+    },
+    {
+      "archive_sha256": "d078d937865a7084d4fda090cb7e687f1d180663f1d2361010747aacd44963c8",
+      "path": "experiments/results/2026-10-19-depth10000-full/round-1-full",
+      "records": 1724,
+      "verified": true
+    },
+    {
+      "archive_sha256": "cdc1e2c32ec64bf385e48086dc5ec9afb0036080f53193d52b25d99ad4baf853",
+      "path": "experiments/results/2026-10-19-history/raw",
+      "records": 137,
+      "verified": true
+    },
+    {
+      "archive_sha256": "f19590e65adf7ffa74429e01c1f6e7cdade43e4f2294322268af3c761b974805",
+      "path": "experiments/results/2026-10-19-local-live/delivery-history",
+      "records": 2,
+      "verified": true
+    },
+    {
+      "archive_sha256": "e383fc1b402798f476ea8896f5f35b18d91d11dfd4cb97af0a36067ea191ff75",
+      "path": "experiments/results/2026-10-19-local-live/depth-comparison",
+      "records": 46,
+      "verified": true
+    },
+    {
+      "archive_sha256": "6e8c7d666978436c917abc5ceed1bafd76d340551ee055bb0b83278120597dc8",
+      "path": "experiments/results/2026-10-19-local-live/initial-discovery",
+      "records": 10,
+      "verified": true
+    },
+    {
+      "archive_sha256": "387754ce9e7ba112c151b2d803d383686795dbc233e0cfeccee1f9121b414f0d",
+      "path": "experiments/results/2026-10-19-local-live/pilot-10rps",
+      "records": 300,
+      "verified": true
+    },
+    {
+      "archive_sha256": "e93bd1b8f75c9d0a569f535c560761378efe4fd289c1d08146de805b81d0bffc",
+      "path": "experiments/results/2026-10-19-local-live/pilot-2rps",
+      "records": 60,
+      "verified": true
+    },
+    {
+      "archive_sha256": "48251780d2599565b30e9d9c864fc227d477814b18a0b5c38beea5ea506ab0d3",
+      "path": "experiments/results/2026-10-19-local-live/pilot-5rps",
+      "records": 150,
+      "verified": true
+    },
+    {
+      "archive_sha256": "9b53562b290a3e4935587265679340308c66cde26519e20bdd46df5b0735e470",
+      "path": "experiments/results/2026-10-19-local-live/pilot-8rps",
+      "records": 240,
+      "verified": true
+    },
+    {
+      "archive_sha256": "eee97b5d0e20e1f42d7eb858bc6a774424aae84299c83ad0d0b67a926d36c8ed",
+      "path": "experiments/results/2026-10-19-local-live/round-1-discovery",
+      "records": 10,
+      "verified": true
+    },
+    {
+      "archive_sha256": "3ffc53a73b795211e75e6ee171bdd5fdad4dec0b4989e8c71daaba9da7af4fd7",
+      "path": "experiments/results/2026-10-19-local-live/round-1-full",
+      "records": 1724,
+      "verified": true
+    },
+    {
+      "archive_sha256": "dfe839a3d8df8c2c70b9c8a8bb573f590c155e773354f2744753d754264f6360",
+      "path": "experiments/results/2026-10-19-local-live/round-2-discovery",
+      "records": 10,
+      "verified": true
+    },
+    {
+      "archive_sha256": "d4762e8135dda20f1c2b4a546ec4e24ecec0b841a644171e414543f802a3c74e",
+      "path": "experiments/results/2026-10-19-local-live/round-2-full",
+      "records": 1724,
+      "verified": true
+    }
+  ],
+  "source_snapshot_hashes_verified": true,
+  "verified_archives": 16,
+  "verified_records": 6209
+}

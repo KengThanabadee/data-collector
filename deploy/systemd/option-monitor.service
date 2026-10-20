@@ -1,0 +1,21 @@
+[Unit]
+Description=Collector disk, clock and gaps monitoring
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=option-collector
+Group=option-collector
+WorkingDirectory=/opt/option-collector/current
+ExecStart=/opt/option-collector/current/.venv/bin/python -m option_collector --config /etc/option-collector/collector.toml monitor-once
+TimeoutStartSec=20
+TimeoutStopSec=2
+UMask=0077
+LogNamespace=option-collector
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/option-collector
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

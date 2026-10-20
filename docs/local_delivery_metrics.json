@@ -1,0 +1,34 @@
+{
+  "elapsed_seconds": 21.31459733308293,
+  "markets": {
+    "BTC": {
+      "archive_sha256": "30ccb2c7a74c5f39bcf2904cc02a3d73e3de5bbd3c2cedf9e5a44e8fbb2062c4",
+      "destination": "delivery/2026/10/19/0c70a7e5-dcf6-4712-8dc4-cb185447ac42/BTC",
+      "records_total": 2643,
+      "requests": 27,
+      "status": "complete",
+      "successful_pages": 27,
+      "failed_attempts": [],
+      "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+    },
+    "ETH": {
+      "archive_sha256": "36c1f989cd81551220eaed847fbd9fb418e6fa1535039c98ee238a15b918be68",
+      "destination": "delivery/2026/10/19/6cb19686-e045-478b-81b2-186706151fff/ETH",
+      "records_total": 2483,
+      "requests": 26,
+      "status": "complete",
+      "successful_pages": 25,
+      "failed_attempts": [
+        {
+          "logical_request_id": "page:700",
+          "attempt": 1,
+          "transport_error": "TimeoutError",
+          "validation_error": null,
+          "http_status": null
+        }
+      ],
+      "source_sha256": "86269e3e064957ebbfcdd85bd198ec44753014fbba1d8c31ffd03f5b1b26d3f0"
+    }
+  },
+  "validation_only": true
+}

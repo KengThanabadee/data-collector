@@ -1,0 +1,9 @@
+[collector]
+data_root = "/var/lib/option-collector"
+environment = "production"
+currencies = ["BTC", "ETH"]
+depth = 10000
+rate = 10
+workers = 8
+require_ntp = true
+notification_file = "/etc/option-collector/healthchecks.json"

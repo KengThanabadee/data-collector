@@ -1,0 +1,11 @@
+[Unit]
+Description=Independent collector health check every minute
+
+[Timer]
+OnCalendar=*-*-* *:*:10 UTC
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+
+[Install]
+WantedBy=timers.target

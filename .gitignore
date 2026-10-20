@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+experiments/results/
+.venv/
+data/
+*.egg-info/
+build/
+dist/
+healthchecks.json
+.env
+
+.env.*
+!.env.example
+.DS_Store

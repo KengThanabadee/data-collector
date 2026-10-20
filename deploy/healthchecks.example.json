@@ -1,0 +1,6 @@
+{
+  "BTC": "https://hc-ping.com/REPLACE-WITH-BTC-CHECK-ID",
+  "ETH": "https://hc-ping.com/REPLACE-WITH-ETH-CHECK-ID",
+  "delivery": "https://hc-ping.com/REPLACE-WITH-DELIVERY-CHECK-ID",
+  "health": "https://hc-ping.com/REPLACE-WITH-HEALTH-CHECK-ID"
+}
