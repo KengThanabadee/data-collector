@@ -1,0 +1,28 @@
+{
+  "chunk": "07c",
+  "status": "approved_bounded_90s_probe",
+  "reviewer": "dc_chunk7c_duration_review",
+  "reasoning_effort": "high",
+  "findings_closed": [],
+  "tests": "8 probe tests independently passed; exact one-line change from approved7b independently hashed",
+  "sources": {
+    "experiments/dc_deribit_probe.py": "52533d4ea5c7793bb6582cc83d431ca327c8d78fb88fd40d0c1e2407a7477b7b",
+    "tests/test_dc_probe.py": "8e38c480473c35bf58918b8b59fa3e475888b75364f1d06d56f46a100efc5f2e"
+  },
+  "limits": "90s WebSocket connect/capture window; REST discovery, bounded close handshake and local archive work occur outside that window. No production readiness claim.",
+  "live_evidence_review": {
+    "status": "approved_bounded_native_sample",
+    "reviewer": "dc_chunk7c_duration_review",
+    "report": "docs/v2/implementation/deribit-probe-90s.json",
+    "report_sha256": "2e62d5958f628c5211161dd6e4584aa8ee5b96c51a407cdf37be6370c46710b2",
+    "raw_records": 50,
+    "ws_frames": 42,
+    "native_book_messages": 41,
+    "advancing_deltas": {
+      "BTC": 12,
+      "ETH": 27
+    },
+    "independent_decimal_reconstruction_equal": true,
+    "limitations": "Two sampled instruments only; continuous runtime, reconnect/reconciliation, full-scope capacity, production and research sufficiency not established"
+  }
+}

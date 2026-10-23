@@ -1,0 +1,19 @@
+{
+  "chunk": "04c",
+  "status": "approved",
+  "reviewer": "dc_chunk4c_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "explicit instrument/listing proof/recovery binding",
+    "known-head and expected-pin regression/fork rejection",
+    "prospective scan limits before control write"
+  ],
+  "tests": "19 scoped tests;104 full v2 tests pass; reviewer independent listing/fork/exact-budget/older-expected-pin checks passed",
+  "sources": {
+    "data_collector/ledger.py": "90849f9e453102dc413c0f85b4831b78bdf757bbc4a6a45daf33d7b13b468bcf",
+    "data_collector/validity.py": "86774a2297844661f00c7d84c912b4991ce87859eaff727b7f7675448e32391a",
+    "tests/test_dc_ledger.py": "2a96e30335a3755077603a87e79da5ec8b1d7fb2e567999850f10aa31f2e14fd",
+    "tests/test_dc_validity.py": "2d1b9a46b4e81b73cecbfa4cd9c6e0d9081cc5d8f86ba6c5d59bc17571eb7910"
+  },
+  "limits": "Durable local ledger and exact pinned dependencies; native anchor semantic attestation, checkpoint/index and snapshot/export integration remain pending"
+}

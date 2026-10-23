@@ -1,0 +1,15 @@
+{
+  "chunk": "03c",
+  "status": "approved",
+  "reviewer": "dc_chunk3c_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "Bybit REST seed binds request category and symbol"
+  ],
+  "tests": "34 contract/book/bootstrap/decoder tests passed independently",
+  "sources": {
+    "data_collector/decoders.py": "17f6feb550d4cb7c9d16394940ed1e447714035d75f4b0d6fd23ad1977cd70fb",
+    "tests/test_dc_decoders.py": "9d4118414bbbf5b8c24ad038a7f4da022aa56576491d8c390bbaa920659fbc43"
+  },
+  "limits": "Native depth decoding only; transport/live source bundles remain separate gates"
+}

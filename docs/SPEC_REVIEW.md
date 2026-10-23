@@ -1,3 +1,5 @@
+> Historical review of [Specification v1](SPEC_V1.md). Current v2 contracts and verification gates are in [SPEC.md](../SPEC.md); this review does not approve the v2 implementation.
+
 # Spec review — 19 ต.ค. 2026 (เวลาไทย)
 
 ผู้ตรวจ: agent `/root/review_spec_v1` แบบ read-only แยกจากผู้เขียน อ่าน [SPEC.md](../SPEC.md) ทั้งฉบับ เทียบ [รายงานทดลอง](EXPERIMENT_REPORT.md), [metrics](experiment_metrics.json) และ [experiment README](../experiments/README.md) พร้อมตรวจเอกสารทางการของ discovery/order book/delivery ไม่มีการแก้ไฟล์หรือเรียก live market experiments โดย reviewer

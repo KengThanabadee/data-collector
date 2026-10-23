@@ -1,0 +1,17 @@
+{
+  "chunk": "2a",
+  "status": "approved",
+  "reviewer": "dc_chunk2a_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "distinct recovery marker per prefix+tail evidence",
+    "atomic marker publication and fsync retry",
+    "initial/reopened WAL and directory durability before acknowledgement"
+  ],
+  "tests": "10journal tests plus8contracts tests pass, including actual SIGKILL at three recovery stages",
+  "sources": {
+    "data_collector/journal.py": "eb86ca5907dca852ed08c68c442856d750f3514982a64bf9eeca2717e6efc6d5",
+    "tests/test_dc_journal.py": "451b578d5e593455eb4da469368e1e47e86c071bc09c732c51aefbaf1a1c77e1"
+  },
+  "limits": "Compressed segment publication and replay are chunk2b and later. No power-cut or production-host result claimed."
+}

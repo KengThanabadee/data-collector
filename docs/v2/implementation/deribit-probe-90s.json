@@ -1,0 +1,81 @@
+{
+  "schema": "dc.probe-evidence/2",
+  "created_utc": "2026-10-23T10:55:14.735229+00:00",
+  "config": {
+    "mode": "public_native_book_probe",
+    "currencies": [
+      "BTC",
+      "ETH"
+    ],
+    "duration_seconds": 90,
+    "max_frames": 200,
+    "max_total_bytes": 20971520,
+    "max_response_bytes": 4194304,
+    "max_ws_message_bytes": 2097152,
+    "http": "https://www.deribit.com/api/v2/public/get_instruments",
+    "ws": "wss://www.deribit.com/ws/api/v2",
+    "index_http": "https://www.deribit.com/api/v2/public/get_index_price",
+    "max_rest_requests": 4,
+    "selection": "nearest_expiry_call_nearest_native_index",
+    "overflow_reserve_bytes": 2097152
+  },
+  "root": "/Users/keng/Developer/option-collector/data/v2-probes/c07e5286224c4fbabed9878de3572222",
+  "manifest": "/Users/keng/Developer/option-collector/data/v2-probes/c07e5286224c4fbabed9878de3572222/archive/segments/578918dba779086c7d895a29db2aa2ea377326bc798eccf2fb1989d33592bb4c",
+  "source_sha256": "3bc3fe94848d7e42e99de3721dbefa6b6f24050c2ba96e2e6545479c68b1e3fd",
+  "capture_id": "probe-c07e5286224c4fbabed9878de3572222",
+  "universe": [
+    {
+      "instrument_name": "BTC-24OCT26-81500-C",
+      "creation_timestamp": 1792483211000,
+      "expiration_timestamp": 1792828800000,
+      "base_currency": "BTC",
+      "selected_strike": "8.15E+4",
+      "selection_index_price": "81583.38"
+    },
+    {
+      "instrument_name": "ETH-24OCT26-2400-C",
+      "creation_timestamp": 1792483210000,
+      "expiration_timestamp": 1792828800000,
+      "base_currency": "ETH",
+      "selected_strike": "2.4E+3",
+      "selection_index_price": "2395.11"
+    }
+  ],
+  "stop_reason": "duration_bound",
+  "frames": 42,
+  "payload_bytes": 1510057,
+  "counts": {
+    "BTC-24OCT26-81500-C": {
+      "snapshots": 1,
+      "deltas": 12,
+      "applied": 13,
+      "applied_snapshots": 1,
+      "applied_deltas": 12,
+      "invalid": 0
+    },
+    "ETH-24OCT26-2400-C": {
+      "snapshots": 1,
+      "deltas": 27,
+      "applied": 28,
+      "applied_snapshots": 1,
+      "applied_deltas": 27,
+      "invalid": 0
+    }
+  },
+  "subscription_ack_channels": [
+    "book.ETH-24OCT26-2400-C.100ms",
+    "book.BTC-24OCT26-81500-C.100ms"
+  ],
+  "archive_verified": true,
+  "book_replay_equal": true,
+  "capture_schema_ok": true,
+  "book_payload_sha256": "32fb33209b586be8ab9275c7cf86c52bf03912da7aa9edda57eaacf4bb6b6d1d",
+  "initial_native_book_evidence": true,
+  "limitations": [
+    "Bounded Deribit BTC/ETH option sample only",
+    "No REST reconciliation, reconnect or capacity/soak proof",
+    "No shared-time snapshot, historical quote sufficiency or production readiness claim"
+  ],
+  "report_sha256": "2e62d5958f628c5211161dd6e4584aa8ee5b96c51a407cdf37be6370c46710b2",
+  "interpretation": "Bounded Deribit native book sample; no full-universe, reconnect, capacity, historical research sufficiency or production readiness claim."
+}

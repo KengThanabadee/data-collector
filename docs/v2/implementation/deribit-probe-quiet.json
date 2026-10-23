@@ -1,0 +1,74 @@
+{
+  "schema": "dc.probe-evidence/2",
+  "created_utc": "2026-10-23T10:46:43.664963+00:00",
+  "config": {
+    "mode": "public_native_book_probe",
+    "currencies": [
+      "BTC",
+      "ETH"
+    ],
+    "duration_seconds": 20,
+    "max_frames": 200,
+    "max_total_bytes": 20971520,
+    "max_response_bytes": 4194304,
+    "max_ws_message_bytes": 2097152,
+    "http": "https://www.deribit.com/api/v2/public/get_instruments",
+    "ws": "wss://www.deribit.com/ws/api/v2",
+    "overflow_reserve_bytes": 2097152
+  },
+  "root": "/Users/keng/Developer/option-collector/data/v2-probes/99318616ce2f47f7861bd2a4957b82c1",
+  "manifest": "/Users/keng/Developer/option-collector/data/v2-probes/99318616ce2f47f7861bd2a4957b82c1/archive/segments/5aab45e16996ac78aaefa33a972e15c194f129e4b90b202eb995e69864605140",
+  "source_sha256": "3bc3fe94848d7e42e99de3721dbefa6b6f24050c2ba96e2e6545479c68b1e3fd",
+  "capture_id": "probe-99318616ce2f47f7861bd2a4957b82c1",
+  "universe": [
+    {
+      "instrument_name": "BTC-24OCT26-72000-C",
+      "creation_timestamp": 1792483211000,
+      "expiration_timestamp": 1792828800000,
+      "base_currency": "BTC"
+    },
+    {
+      "instrument_name": "ETH-24OCT26-2000-C",
+      "creation_timestamp": 1792486260000,
+      "expiration_timestamp": 1792828800000,
+      "base_currency": "ETH"
+    }
+  ],
+  "stop_reason": "duration_bound",
+  "frames": 4,
+  "payload_bytes": 1497466,
+  "counts": {
+    "BTC-24OCT26-72000-C": {
+      "snapshots": 1,
+      "deltas": 0,
+      "applied": 1,
+      "applied_snapshots": 1,
+      "applied_deltas": 0,
+      "invalid": 0
+    },
+    "ETH-24OCT26-2000-C": {
+      "snapshots": 1,
+      "deltas": 1,
+      "applied": 2,
+      "applied_snapshots": 1,
+      "applied_deltas": 1,
+      "invalid": 0
+    }
+  },
+  "subscription_ack_channels": [
+    "book.ETH-24OCT26-2000-C.100ms",
+    "book.BTC-24OCT26-72000-C.100ms"
+  ],
+  "archive_verified": true,
+  "book_replay_equal": true,
+  "capture_schema_ok": true,
+  "book_payload_sha256": "21c47fb31ca915f88f8576afb593b27d70d5819dcbd469aed44da741951b7f79",
+  "initial_native_book_evidence": false,
+  "limitations": [
+    "Bounded Deribit BTC/ETH option sample only",
+    "No REST reconciliation, reconnect or capacity/soak proof",
+    "No shared-time snapshot, historical quote sufficiency or production readiness claim"
+  ],
+  "report_sha256": "76119c262831f510162932d1afceca0b8b6a866b9fae042306b310329cc1da0e",
+  "interpretation": "Initial discovery/subscription/snapshot/archive/replay worked; insufficient advancing deltas in quiet selected contracts. Gate remains failed, not a readiness claim."
+}

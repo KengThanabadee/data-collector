@@ -1,0 +1,110 @@
+# DC v2 design input only. Existing option_collector config must reject this schema.
+# This file does not start a capture and has not been capacity-certified.
+schema = "dc.release-config/2"
+profile_id = "dc-v2-bounded-pilot-20261023.1"
+mode = "bounded-pilot"
+activation = "disabled"
+underlyings = ["BTC", "ETH"]
+venues = ["deribit", "binance", "bybit"]
+require_resolved_feed_gates = true
+
+[run]
+max_seconds = 7200
+max_total_ingress_bytes = 5368709120
+max_archive_growth_bytes = 10737418240
+max_instruments_per_venue = 100
+max_options_per_venue = 64
+max_spot_per_venue = 4
+max_outright_derivatives_per_venue = 16
+max_spreads_per_venue = 8
+# Each selected concrete symbol/profile must be frozen in a release universe manifest.
+require_universe_manifest = true
+
+[resources]
+# Candidate host floor for tests, not a procurement recommendation or capacity result.
+candidate_host_vcpu = 8
+candidate_host_ram_mib = 16384
+candidate_free_disk_gib = 100
+aggregate_rss_hard_mib = 4096
+venue_rss_hard_mib = 896
+writer_rss_hard_mib = 512
+replay_rss_hard_mib = 512
+aggregate_queue_bytes = 201326592
+per_venue_queue_bytes = 67108864
+per_connection_bootstrap_bytes = 16777216
+aggregate_bootstrap_bytes = 67108864
+max_message_bytes = 16777216
+max_rest_response_bytes = 33554432
+aggregate_inflight_rest_bytes = 67108864
+max_expanded_record_bytes = 33554432
+control_reserve_bytes = 268435456
+max_open_segments = 12
+
+[archive]
+format = "dc.raw/2"
+segment_max_seconds = 60
+segment_target_uncompressed_bytes = 67108864
+fsync_max_interval_ms = 1000
+checkpoint_seconds = 300
+compression_buffer_bytes = 1048576
+verify_buffer_bytes = 1048576
+allow_automatic_raw_deletion = false
+
+[health]
+snapshot_interval_seconds = 60
+snapshot_publish_deadline_seconds = 5
+receive_apply_p99_ms = 1000
+receive_apply_hard_ms = 5000
+receive_durable_p99_ms = 2000
+receive_durable_hard_ms = 5000
+clock_sample_seconds = 60
+max_clock_offset_ms = 100
+clock_recovery_healthy_samples = 2
+subscription_ack_timeout_seconds = 10
+bootstrap_timeout_seconds = 30
+reconcile_seconds = 300
+metadata_poll_seconds = 60
+deribit_metadata_audit_seconds = 300
+listing_observed_to_subscription_seconds = 120
+queue_warning_fraction = 0.75
+queue_recover_fraction = 0.25
+persist_backlog_hard_seconds = 5
+
+[disk]
+warning_free_fraction = 0.20
+stop_free_fraction = 0.10
+stop_free_bytes = 5368709120
+resume_free_fraction = 0.20
+resume_free_bytes = 10737418240
+# Stop if either minimum fails; resume only when both pass plus temp/anchor headroom.
+
+[reconnect]
+initial_seconds = 1
+maximum_seconds = 60
+jitter_fraction = 0.20
+max_new_connections_per_venue_per_minute = 12
+max_attempts_per_feed_per_10min = 20
+circuit_open_seconds = 600
+planned_binance_rotation_seconds = 85800
+
+[backup]
+# No destination provisioned. Empty value deliberately blocks production readiness.
+destination = ""
+require_independent_host = true
+upload_interval_seconds = 300
+rpo_committed_seconds = 900
+restore_slice_max_bytes = 10737418240
+restore_slice_rto_seconds = 14400
+resume_capture_rto_seconds = 3600
+allow_automatic_remote_deletion = false
+
+[acceptance]
+fixture_durable_record_loss = 0
+fixture_unexplained_gaps = 0
+fixture_replay_hash_mismatches = 0
+soak_hours_min = 24
+valid_eligible_seconds_fraction_min = 0.995
+snapshot_deadline_fraction_min = 0.99
+cpu_p95_host_fraction_max = 0.70
+queue_p99_fraction_max = 0.50
+required_free_disk_days_at_measured_peak = 7

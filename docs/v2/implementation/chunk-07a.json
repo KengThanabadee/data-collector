@@ -1,0 +1,19 @@
+{
+  "chunk": "07a",
+  "status": "approved_probe_harness",
+  "reviewer": "dc_chunk7a_probe_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "applied delta evidence excludes duplicate/pre-snapshot deliveries",
+    "crossing message archived under explicit bounded reserve",
+    "completed discovery responses survive validation errors",
+    "malformed envelopes fail evidence gate and preserve sealed raw",
+    "sealed-archive native book reconstruction compared to captured state"
+  ],
+  "tests": "7 local tests with multiple malformed/duplicate/overflow subcases passed independently",
+  "sources": {
+    "experiments/dc_deribit_probe.py": "84647db40eb0bd442043a78fd339b46b84e9ca72ac34ea0cddd62e89bc22d133",
+    "tests/test_dc_probe.py": "070f12c2432e90e65de8351d6ed192dea2772550cbcd74c618aec99a78cf3923"
+  },
+  "limits": "Bounded probe approved; no live result claimed by review. Continuous runtime and deployment pending."
+}

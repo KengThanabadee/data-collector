@@ -1,0 +1,16 @@
+{
+  "chunk": "03b",
+  "status": "approved",
+  "reviewer": "dc_chunk3b_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "Bybit empty reset seed becomes no_book/unavailable",
+    "Repeated seed in no_book requires explicit reset"
+  ],
+  "tests": "9 bootstrap tests passed independently",
+  "sources": {
+    "data_collector/bootstrap.py": "8a65b8dec49d55db7a573faf277797762d77f78e70b026b5b8a5d5e1c2689a58",
+    "tests/test_dc_bootstrap.py": "f7f0d47bbf3e5f10c6cad850295657979b3c35c8dbb4e743b40c4c51d084e2fe"
+  },
+  "limits": "Pure REST/WS synchronization only; no live bridge proof; CM/options gated"
+}

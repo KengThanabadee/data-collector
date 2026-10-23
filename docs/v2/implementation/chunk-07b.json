@@ -1,0 +1,15 @@
+{
+  "chunk": "07b",
+  "status": "approved_probe_selection",
+  "reviewer": "dc_chunk7b_selection_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "Declared nearest-expiry call selection never silently falls back to puts/unknown type"
+  ],
+  "tests": "8 probe tests independently passed including put-only/missing-type regression and archive/replay/failure/bound cases",
+  "sources": {
+    "experiments/dc_deribit_probe.py": "430ddf5e799164bdc4cad7d1bca17070c43fc1f63641a9a2dd88622f34763aa2",
+    "tests/test_dc_probe.py": "8e38c480473c35bf58918b8b59fa3e475888b75364f1d06d56f46a100efc5f2e"
+  },
+  "limits": "Bounded Deribit public sample only; no continuous multi-venue or production readiness claim"
+}

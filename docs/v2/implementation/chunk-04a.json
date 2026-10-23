@@ -1,0 +1,16 @@
+{
+  "chunk": "04a",
+  "status": "approved",
+  "reviewer": "dc_chunk4a_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "writer and reader share 65536-byte entry limit",
+    "aggregate ledger memory bound before mutation"
+  ],
+  "tests": "7 tests passed; reviewer also verified exact byte boundary round-trip",
+  "sources": {
+    "data_collector/validity.py": "0e6e65334390b65a75ee871e8d941207ad7f80066f5c2b9b7cc07053d2528c3b",
+    "tests/test_dc_validity.py": "af7cecf49e0ced402459b2afa2f12d2df611f6b091a8a58c77b628aac335f602"
+  },
+  "limits": "Pure correction projection; durable evidence/pinned exports integrated in later chunks"
+}

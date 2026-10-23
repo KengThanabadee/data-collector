@@ -1,0 +1,20 @@
+{
+  "chunk": "04b",
+  "status": "approved",
+  "reviewer": "dc_chunk4b_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "pre-barrier process-wide clock evidence",
+    "historical bad clock epoch recovery",
+    "epoch ordinal tie boundaries",
+    "allocation-pinned deadline and live observation",
+    "paired actual closure clock observation",
+    "control receipt identity across verified segments"
+  ],
+  "tests": "22 cutoff tests; reviewer independently verified25 randomized two-stream admission cases and close-fsync survivor replay",
+  "sources": {
+    "data_collector/cutoffs.py": "12ae8bc7651f17c8ccd91f489b7d21e837d41ab95ba9bc256035f5820f7907e1",
+    "tests/test_dc_cutoffs.py": "21bc4b32668167deb3703191ce06253ef28c868ed3e3f267aae5c69a81ad259a"
+  },
+  "limits": "Local serialized ingress/closure only; transport scheduler, verified ledger writer, snapshot publication and checkpoint/export remain pending"
+}

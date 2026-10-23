@@ -1,0 +1,223 @@
+{
+  "review_date_local": "2026-10-23",
+  "purpose": "Bounded public documentation freeze only; no market-data capture or runtime validation",
+  "per_response_cap_bytes": 2097152,
+  "total_cap_bytes": 33554432,
+  "sources": [
+    {
+      "id": "D1",
+      "title": "Deribit full book",
+      "requested_url": "https://docs.deribit.com/subscriptions/orderbook/bookinstrument_nameinterval",
+      "retrieved_at_utc": "2026-10-23T06:02:13.326828+00:00",
+      "status": 200,
+      "final_url": "https://docs.deribit.com/subscriptions/orderbook/bookinstrument_nameinterval",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 401950,
+      "truncated": false,
+      "sha256": "3bc3fe94848d7e42e99de3721dbefa6b6f24050c2ba96e2e6545479c68b1e3fd",
+      "saved_body": "experiments/results/2026-10-23-dc-v2-docs-public/D1.body"
+    },
+    {
+      "id": "D2",
+      "title": "Market-data best practices",
+      "requested_url": "https://docs.deribit.com/articles/market-data-collection-best-practices",
+      "retrieved_at_utc": "2026-10-23T06:02:14.172592+00:00",
+      "status": 200,
+      "final_url": "https://docs.deribit.com/articles/market-data-collection-best-practices",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 540470,
+      "truncated": false,
+      "sha256": "704883a30a7bfccade5aaebf1377f4593070bd64645d1b35d2ccf29dae787b50",
+      "saved_body": "experiments/results/2026-10-23-dc-v2-docs-public/D2.body"
+    },
+    {
+      "id": "D3",
+      "title": "Spot routing",
+      "requested_url": "https://docs.deribit.com/articles/spot-trading-venues",
+      "retrieved_at_utc": "2026-10-23T06:02:14.847325+00:00",
+      "status": 200,
+      "final_url": "https://docs.deribit.com/articles/spot-trading-venues",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 502786,
+      "truncated": false,
+      "sha256": "8496a9c854e6d5982f144a399781f9ad3a3abc8a903f6469285cd8790fbfbd0c",
+      "saved_body": "experiments/results/2026-10-23-dc-v2-docs-public/D3.body"
+    },
+    {
+      "id": "D4",
+      "title": "Connection management",
+      "requested_url": "https://docs.deribit.com/articles/connection-management-best-practices",
+      "retrieved_at_utc": "2026-10-23T06:02:19.220404+00:00",
+      "status": 200,
+      "final_url": "https://docs.deribit.com/articles/connection-management-best-practices",
+      "content_type": "text/html; charset=utf-8",
+      "bytes": 493740,
+      "truncated": false,
+      "sha256": "5afaaf89702c30d4c57bdfb537c136ea706379528cd1adfa504d604af4ccbc8b",
+      "saved_body": "experiments/results/2026-10-23-dc-v2-docs-public/D4.body"
+    },
+    {
+      "id": "D5",
+      "title": "Options collection, combos and settlement",
+      "requested_url": "https://docs.deribit.com/articles/options-data-collection-best-practices",
+      "retrieved_at_utc": "2026-10-23T06:02:21.079999+00:00",
+      "error": "URLError: <urlopen error _ssl.c:993: The handshake operation timed out>"
+    },
+    {
+      "id": "B1",
+      "title": "Official spot streams and local-book algorithm",
+      "requested_url": "https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md",
+      "retrieved_at_utc": "2026-10-23T06:02:37.251825+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B2",
+      "title": "UM local-book algorithm",
+      "requested_url": "https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/How-to-manage-a-local-order-book-correctly",
+      "retrieved_at_utc": "2026-10-23T06:02:49.156062+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B3",
+      "title": "UM/CM integration, identity and shared pool",
+      "requested_url": "https://developers.binance.com/docs/derivatives/coin-margined-futures/Important-CM-UM-Integration-Notice",
+      "retrieved_at_utc": "2026-10-23T06:02:49.301522+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B4",
+      "title": "Futures connect/routing",
+      "requested_url": "https://developers.binance.com/docs/derivatives/usds-margined-futures/websocket-market-streams/Connect",
+      "retrieved_at_utc": "2026-10-23T06:02:49.408326+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B5",
+      "title": "Current options public WS catalogue",
+      "requested_url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-options/api/ws-streams/public",
+      "retrieved_at_utc": "2026-10-23T06:02:49.515090+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B6",
+      "title": "Current options REST market data",
+      "requested_url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-options/api/rest-api/market-data",
+      "retrieved_at_utc": "2026-10-23T06:02:49.621606+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B7",
+      "title": "Current options market WS catalogue",
+      "requested_url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-options/api/ws-streams/market",
+      "retrieved_at_utc": "2026-10-23T06:02:49.726797+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "B8",
+      "title": "Options general info and units of time",
+      "requested_url": "https://developers.binance.com/docs/derivatives/options-trading/general-info",
+      "retrieved_at_utc": "2026-10-23T06:02:49.829844+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y1",
+      "title": "Instrument discovery",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/market/instrument",
+      "retrieved_at_utc": "2026-10-23T06:02:49.937081+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y2",
+      "title": "Standard/options books",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook",
+      "retrieved_at_utc": "2026-10-23T06:02:50.041026+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y3",
+      "title": "Full WS book",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/full-ob",
+      "retrieved_at_utc": "2026-10-23T06:02:50.147773+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y4",
+      "title": "Full REST seed",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/market/full-ob",
+      "retrieved_at_utc": "2026-10-23T06:02:50.256314+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y5",
+      "title": "Trades and flags",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/trade",
+      "retrieved_at_utc": "2026-10-23T06:02:50.363414+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y6",
+      "title": "Ticker schemas",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/ticker",
+      "retrieved_at_utc": "2026-10-23T06:02:50.466806+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y7",
+      "title": "RPI book",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook-rpi",
+      "retrieved_at_utc": "2026-10-23T06:02:50.574437+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y8",
+      "title": "All liquidation",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/all-liquidation",
+      "retrieved_at_utc": "2026-10-23T06:02:50.678768+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y9",
+      "title": "Spread book",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/spread/websocket/public/orderbook",
+      "retrieved_at_utc": "2026-10-23T06:02:50.785507+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y10",
+      "title": "Spread trades",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/spread/websocket/public/trade",
+      "retrieved_at_utc": "2026-10-23T06:02:50.891016+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "Y11",
+      "title": "Rate limits",
+      "requested_url": "https://bybit-exchange.github.io/docs/v5/rate-limit",
+      "retrieved_at_utc": "2026-10-23T06:02:50.994965+00:00",
+      "error": "URLError: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    }
+  ],
+  "total_bytes": 1938946,
+  "documentation_review": {
+    "method": "Official pages opened with the web documentation reader in this task; see source IDs and claims in FEEDS.md. Direct HTTP results below are a separate source-body preservation attempt, not the outcome of web-reader verification.",
+    "catalogue_version": "dc-feeds/2.1",
+    "raw_bodies_complete": false,
+    "release_requirement": "Freeze exact applicable source/schema bytes and hashes for each enabled profile before acceptance; partial direct capture does not satisfy this release gate.",
+    "followup_reviews": [
+      {
+        "date_local": "2026-10-23",
+        "source_id": "Y3",
+        "url": "https://bybit-exchange.github.io/docs/v5/websocket/public/full-ob",
+        "method": "Official documentation web reader plus two independent agent reviews",
+        "section": "Full Order Book Synchronization Procedure",
+        "verified_claims": [
+          "Bootstrap matches both snapshot seq and u to buffered delta",
+          "Subsequent full-book u is consecutive; seq need not be consecutive",
+          "u=1 resets; gap requires resynchronization",
+          "Initial REST seed at most10000levels per side"
+        ],
+        "qualification": "Documentation verification only; no live fixture/capture executed"
+      }
+    ]
+  }
+}

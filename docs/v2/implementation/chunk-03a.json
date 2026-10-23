@@ -1,0 +1,17 @@
+{
+  "chunk": "03a",
+  "status": "approved",
+  "reviewer": "dc_chunk3a_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "Deribit snapshot duplicate/stale protection",
+    "reset removes levels and provenance together",
+    "atomic insert-before-delete at capacity"
+  ],
+  "tests": "38 scoped tests passed; 9 book tests",
+  "sources": {
+    "data_collector/books.py": "4782d2119eb95573c1c07b6e1538b817e32d69ef47cf9dd130dfa8e48c13414c",
+    "tests/test_dc_books.py": "e28bc4e4e6b22beec41c856de2f6e9f50dc15705641be5d9f1fefb563f5855dd"
+  },
+  "limits": "Decimal L2 and snapshot feeds only; no native decoder/transport readiness"
+}

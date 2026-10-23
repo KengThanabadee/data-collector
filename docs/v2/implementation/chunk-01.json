@@ -1,0 +1,22 @@
+{
+  "chunk": "1",
+  "status": "approved",
+  "reviewer": "dc_chunk1_review",
+  "reasoning_effort": "high",
+  "findings_closed": [
+    "effective-interval revision ordering",
+    "receipt-position knowledge order independent of UTC",
+    "large v1 manifest compatibility",
+    "unknown effective boundary requires explicit version pin"
+  ],
+  "tests": "8 new tests pass after final fixes; 35 existing tests pass across sandbox29 and approved loopbackHTTP6 runs",
+  "sources": {
+    "data_collector/__init__.py": "5d5b7f2512ecf401521d0435f531224b412c06de9b07a017a4c47547d5151a95",
+    "data_collector/contracts.py": "62107c54af98242399d0b2707f4e76a5370bee5285c74430f9d09f981160f6a8",
+    "data_collector/metadata.py": "4f50f16e1790dcf0e3ef2536dbe293034bcf9e20eb290c072efaeaf206965a59",
+    "data_collector/legacy.py": "1fe288962ff83865edc848f454c1e9e0a2d15213737cd92335a91c2d9bc22851",
+    "tests/test_dc_contracts.py": "355842330004dc97145c509b7fc2ab0125db2df71488bcd894707f9929d9d23f",
+    "pyproject.toml": "e4c7bf604e6c76101dab780b8cc3dbb91dcf4c4a967df86a11754d6681fa0669"
+  },
+  "limits": "Cross-owner metadata transitions and full v2 runtime remain subsequent chunks."
+}

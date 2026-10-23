@@ -1,0 +1,21 @@
+[
+  {
+    "root": "/Users/keng/Developer/option-collector/data/v2-probes/99318616ce2f47f7861bd2a4957b82c1",
+    "native_book_messages": 3,
+    "independent_decimal_book_check": true
+  },
+  {
+    "root": "/Users/keng/Developer/option-collector/data/v2-probes/adbcb43564a64679a720fe4fccbb2fbd",
+    "native_book_messages": 7,
+    "independent_decimal_book_check": true
+  },
+  {
+    "root": "/Users/keng/Developer/option-collector/data/v2-probes/c07e5286224c4fbabed9878de3572222",
+    "native_book_messages": 41,
+    "independent_decimal_book_check": true,
+    "advancing_deltas": {
+      "ETH-24OCT26-2400-C": 27,
+      "BTC-24OCT26-81500-C": 12
+    }
+  }
+]

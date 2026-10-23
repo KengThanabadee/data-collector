@@ -1,0 +1,16 @@
+{
+  "chunk": "04e",
+  "status": "approved",
+  "reviewer": "dc_chunk4e_review",
+  "reasoning_effort": "high",
+  "tests": "131 full v2 tests pass;10 publication tests including actual child process exits after4commit steps",
+  "sources": {
+    "data_collector/snapshots.py": "2c9a201d9e839fef19f7fbe3a66d3ee2e9f7456e4dc1dd7b2244ed8a48bdaaf8",
+    "tests/test_dc_snapshots.py": "af728b7d7aad453b54e802490fdd3b8ad082560196838a322feb0a815abcc05a"
+  },
+  "findings_closed": [
+    "historical reads select only pinned raw/ledger segment dependencies",
+    "retry repeats durable no-clobber file and directory synchronization after surviving index link"
+  ],
+  "limits": "Serialized local committed-segment publication; live WAL/seal integration, assessed exports, checkpoints, owner transitions and CLI pending"
+}

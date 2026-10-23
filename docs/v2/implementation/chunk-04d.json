@@ -1,0 +1,22 @@
+{
+  "chunk": "04d",
+  "status": "approved",
+  "reviewer": "dc_chunk4d_review",
+  "reasoning_effort": "high",
+  "tests": "121 full v2 tests pass; reviewer 43 focused tests pass",
+  "sources": {
+    "data_collector/replay.py": "bb445c2ce77b2608ce96a19b9e89b16ca9c5fc5fc17e6276ba991c5818811cc6",
+    "data_collector/books.py": "d9aaf64357e3d7900c005f3e1bc964dc2d979efe1c94eaa666dcfae412233f5c",
+    "tests/test_dc_replay.py": "8f6461564c50fc7378768f4cacaadb59c3e0d5e8a94d5a41585880ba0e08b9e6",
+    "tests/test_dc_books.py": "c47d3d6c8bdb14a356e0338081ed2633a695f6c2d0df890a589660c4a360820c"
+  },
+  "findings_closed": [
+    "malformed book/control envelopes and native topic routing",
+    "latest durable ledger pin before closure",
+    "bounded aggregated diagnostics",
+    "accepted recovery anchors preserve historical ledger gaps",
+    "explicit metadata supersession including unknown effective boundary",
+    "highest observed native recovery watermark including initial bootstrap"
+  ],
+  "limits": "Local one-owner book materialization; publication/export, owner transitions, aggregate venue closures and checkpoints remain pending"
+}
