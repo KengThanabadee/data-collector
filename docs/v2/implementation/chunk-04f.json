@@ -1,0 +1,15 @@
+{
+  "chunk": "04f",
+  "status": "approved",
+  "reviewer": "dc_chunk4f_review",
+  "reasoning_effort": "high",
+  "tests": "141 full v2 tests pass; reviewer36 export/snapshot/replay tests pass; git diff --check passed",
+  "sources": {
+    "data_collector/exports.py": "b6b59138372f640503d3bddd59e109249bfeef2110b59c28417731bb6b17ef38",
+    "data_collector/snapshots.py": "ea2b49bbefcd22963ca6cd07621d433f373f979a8f73530943abdaa780cb6416",
+    "tests/test_dc_exports.py": "aa2a6e2bce6fa73ff62a166f3e5305731d251e024d04174c2dae8d7011007dff",
+    "tests/test_dc_replay.py": "ff9ad5d4f2736e2856a60526d8b9837a60ec1498bd9e3c32eec64c1b339e2b6f"
+  },
+  "findings_closed": [],
+  "limits": "Local portable original/assessed export with exact pinned raw/ledger replay; checkpoint acceleration, owner transitions, continuous capture, all-venue aggregation and production acceptance remain pending"
+}

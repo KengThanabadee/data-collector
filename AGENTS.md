@@ -1,0 +1,43 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+
+- `option_collector/`: working v1 Deribit REST collector, CLI, archive reader, and operations.
+- `data_collector/`: v2 raw contracts, journals, immutable segments, native books, cutoff coordination, ledger, replay, and snapshots. Continuous multi-venue capture remains under development.
+- `tests/`: synthetic fixtures and `unittest` suites; v2 tests use `test_dc_*.py`.
+- `config/` and `deploy/`: local/VPS configuration and Linux service templates.
+- `experiments/`: bounded probes and research scripts. Generated captures belong in ignored `data/` or `experiments/results/`.
+- `SPEC.md` and `docs/v2/`: authoritative v2 contracts, acceptance gates, and review evidence. Preserve `docs/SPEC_V1.md` and v1 compatibility.
+
+## Build, Test, and Development Commands
+
+Use Python 3.12 from the repository root:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m pip wheel --no-deps . -w dist
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m unittest tests.test_dc_snapshots -v
+.venv/bin/python -m option_collector status --json
+```
+
+These commands prepare dependencies, build a wheel, run all or focused tests, and inspect local status. `collect-once` performs a real public-API capture; it does not start continuous collection. Planned v2 CLI commands are not yet available.
+
+## Coding Style & Naming Conventions
+
+Use four-space indentation, `snake_case` functions/modules, `PascalCase` classes, and `UPPER_CASE` constants. Follow surrounding code; avoid unrelated formatting changes. No formatter or linter is configured. Keep native numeric precision and exact raw bytes; use explicit typed identities and versioned schemas.
+
+## Testing Guidelines
+
+Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, temporary directories, and deterministic clocks. HTTP tests require loopback access; live exchange probes remain separate. Cover changed invariants, failure paths, replay determinism, and v1 compatibility. There is no percentage coverage threshold; production acceptance follows `docs/v2/ACCEPTANCE.md`.
+
+## Commit, Pull Request & Agent Workflow
+
+History uses descriptive imperative subjects, such as `Implement reviewed DC v2 archive and snapshot foundations`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
+
+Implement bounded chunks, obtain a fresh high-reasoning agent review, fix findings, and obtain re-review before dependent work. Record approval and source hashes in `docs/v2/implementation/`. Commit only approved versions; keep unfinished work separate.
+
+## Data & Configuration Safety
+
+Never commit credentials, `.env` files, private healthcheck URLs, or raw archives. Keep v1/v2 data roots separate. Never overwrite immutable evidence, delete raw data to satisfy quotas, or substitute marks for missing quotes. Local tests do not establish deployment or production readiness.

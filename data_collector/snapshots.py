@@ -13,7 +13,7 @@ from .journal import Journal, _publish_bytes
 from .ledger import DurableLedger
 from .replay import BookBinding, ReplayLimits, SnapshotPlan, materialize_snapshot
 from .segments import _mkdir, iter_segment_records
-from .validity import FeedTarget, LedgerPin, ValidityLedger
+from .validity import FeedTarget, LedgerEntry, LedgerPin, ValidityLedger
 
 
 @dataclass(frozen=True)
@@ -73,13 +73,22 @@ def _ledger_view(paths,base,*,pin=None,limits):
     for _,record in _records(paths,limits):
         if record.record_id==descriptor['close_record_id']:
             if digest(record.to_bytes())!=descriptor['close_sha256']:raise ValueError('close raw hash conflict')
-            close=record
+            close=record;break
     if close is None:raise ValueError('committed close raw dependency missing')
+    def ledger_prefix():
+        for _,record in _records(paths,limits):
+            yield record
+            if pin is not None and record.kind=='coverage_event' and record.channel=='validity:'+descriptor['capture_scope']:
+                entry=LedgerEntry.from_bytes(record.body)
+                if entry.ledger_id==pin.ledger_id and entry.sequence==pin.sequence:
+                    if entry.entry_hash!=pin.head_hash:raise ValueError('requested ledger pin hash mismatch')
+                    return
+        if pin is not None:raise ValueError('requested ledger pin unavailable')
     with tempfile.TemporaryDirectory(prefix='dc-publication-') as directory:
         with Journal(Path(directory)/'reader.wal',venue=close.venue,environment=close.environment,create=True) as empty:
             durable=DurableLedger(empty,ledger_id=closed_pin.ledger_id,capture_scope=descriptor['capture_scope'],
                 capture_id=close.receipt.capture_id,process_session_id='publication-reader',provenance=close.provenance,
-                prior_records=lambda:(record for _,record in _records(paths,limits)),
+                prior_records=ledger_prefix,
                 max_scan_records=limits.max_records,max_scan_bytes=limits.max_scan_bytes,expected_pin=closed_pin)
             selected=durable.pin() if pin is None else pin
             if not isinstance(selected,LedgerPin) or selected.sequence<closed_pin.sequence:
@@ -94,6 +103,7 @@ def _ledger_view(paths,base,*,pin=None,limits):
             if digest(record.to_bytes())!=needed[record.record_id]:raise ValueError('ledger raw dependency hash conflict')
             found.add(record.record_id);reference=_segment_reference(path)
             references[reference['context_sha256']]=reference
+            if found==set(needed):break
     if found!=set(needed):raise ValueError('ledger raw dependency missing')
     return projection,selected,dependencies,[references[key] for key in sorted(references)]
 

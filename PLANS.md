@@ -14,10 +14,11 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk4c: durable correction ledger with exact raw evidence and verified restore; high-reasoning review approved after fixes.
 - [x] Chunk4d: local deterministic book snapshot materialization;121 v2 tests pass; high-reasoning review approved after fixes.
 - [x] Chunk4e: immutable local snapshot publication, pinned dependency reads and process-exit recovery; high-reasoning review approved after fixes.
+- [x] Chunk4f: portable original/assessed exports with pinned ledger replay; high-reasoning review approved.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
-- [ ] Remaining feed models/trades/references/owner transitions, snapshot publication/export/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
+- [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current131 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current141 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## V2 specification and implementation handoff — 23 October 2026
 
