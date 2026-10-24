@@ -33,6 +33,11 @@ class DurabilityUnknown(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class DurableAck:
+    """Raw persistence and processing latency, never UTC-alignment validity.
+
+    Measured-clock lanes use process monotonic timing; legacy lanes additionally
+    require paired UTC/monotonic agreement. Consult measured checks for alignment.
+    """
     record_id: str
     raw_sha256: str
     ingress_ordinal: int
@@ -141,7 +146,8 @@ class ArchiveLane:
             return self._last_observation, False, 'last_healthy_observation'
         previous = self._last_observation
         if (stamp[2] != previous[2] or stamp[1] < previous[1] or
-                abs((stamp[0]-previous[0])-(stamp[1]-previous[1])) > self.clock_tolerance_ns):
+                (self._clock is None and
+                 abs((stamp[0]-previous[0])-(stamp[1]-previous[1])) > self.clock_tolerance_ns)):
             self._clock_failed = True
         if not self._clock_failed:
             self._last_observation = stamp
@@ -361,7 +367,8 @@ class ArchiveLane:
             queue_valid = False
         valid = (lease.clock_valid and queue_valid and valid and latency >= 0 and
                  stamp[2] == (receipt.clock_epoch if epoch is None else epoch) and
-                 abs((stamp[0]-receipt.receive_utc_ns)-latency) <= self.clock_tolerance_ns)
+                 (self._clock is not None or
+                  abs((stamp[0]-receipt.receive_utc_ns)-latency) <= self.clock_tolerance_ns))
         if not valid:
             self._clock_failed = True
         timely = valid and not lease.late and latency < self.queue.limits.max_age_ns
@@ -375,6 +382,7 @@ class ArchiveLane:
             self._failure('runtime_clock_invalid', global_scope=True)
         body = canonical(dict(schema='dc.runtime-control/2', kind=kind, venue=self.identity['venue'],
                               control_time_valid=valid, control_time_source=source,
+                              timing_basis=self.timing_basis,
                               payload=payload))
         record = RawRecord(Receipt(self.identity['capture_id'], self.identity['process_session_id'],
                            'control:runtime:'+self.identity['venue'], self._control_seq, *stamp),
@@ -393,6 +401,7 @@ class ArchiveLane:
         body = canonical(dict(schema='dc.runtime-control/2', kind='writer_unconfirmed',
             venue=self.identity['venue'], control_time_valid=valid,
             control_time_source=source,
+            timing_basis=self.timing_basis,
             payload=dict(writer_error=self.writer_error, first_failure=self._global_failure,
                          unpersisted_controls=[event for event in self._controls if event is not self._global_failure],
                          watermarks=self._watermarks(), clock=self._clock_status(), unconfirmed_records=len(self._pending))))
@@ -499,8 +508,13 @@ class ArchiveLane:
             raise asyncio.CancelledError
         return self.health()
 
+    @property
+    def timing_basis(self):
+        return 'process_monotonic' if self._clock is not None else 'paired_utc_monotonic'
+
     def health(self):
         return dict(venue=self.identity['venue'], running=self._running, terminal=self._terminal,
+                    timing_basis=self.timing_basis,
                     accepting=not self._stopping and not self._terminal, durable_records=self._durable_count,
                     unconfirmed_records=len(self._pending), failed_connections=len(self._failed_connections),
                     venue_failure=None if self._global_failure is None else self._global_failure['reason'],

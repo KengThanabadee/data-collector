@@ -29,6 +29,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5h | Clock-bound local allocations/closures and independently verified snapshot replay dependencies | Approved after fixes; [evidence](implementation/chunk-05h.json) |
 | 5i | Separate raw durability timing from measured UTC alignment epochs | Approved; [evidence](implementation/chunk-05i.json) |
 | 5j | FIFO assignment of received raw alignment labels from committed clock controls | Approved; [evidence](implementation/chunk-05j.json) |
+| 5k | Continue measured-mode raw capture through UTC steps while retaining process timing faults | Approved; [evidence](implementation/chunk-05k.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -42,7 +43,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current267 v2 tests pass; existing35 v1 tests were verified earlier as described above.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current270 v2 tests pass; existing35 v1 tests were verified earlier as described above.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -66,7 +67,17 @@ adapters must use `submit_received` when they rely on this FIFO assignment.
 Async cutoff commands/timers and automatic correction ranges remain incomplete
 and must be reviewed before continuous snapshot publication.
 
-The existing observer still stops a lane after a large UTC wall step even when
-monotonic time remains intact. This predates5j and does not meet the final
-specification's continued raw capture through UTC-alignment faults; separate
-monotonic durability timing from UTC-step health before live runtime integration.
+Chunk5k removes the inherited UTC-step ingress stop for measured-clock lanes.
+Processing deadlines use monotonic time within the stable observer process epoch;
+forward/backward UTC steps preserve original receipt clocks and raw bytes. Paired
+clock checks still invalidate reference alignment and require two later healthy
+measurements before alignment recovers. Process epoch changes, monotonic
+regression, queue faults, missing clock observations and hard latency failures
+still halt ingress. Legacy lanes retain paired UTC/monotonic validation.
+
+Health and newly written runtime controls expose `timing_basis` as
+`process_monotonic` or `paired_utc_monotonic`. A runtime control's
+`control_time_valid` means its local observation is usable under that timing
+basis; it does not certify UTC/reference alignment. Snapshot eligibility must
+use the committed clock assessment/check dependencies. Continuous cutoff
+checks and automatic correction mapping remain necessary runtime integration.

@@ -26,11 +26,12 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5h: synchronous clock-bound local cutoffs and snapshot clock-dependency verification; independent high-reasoning re-review approved policy/deadline/namespace/bounds fixes.
 - [x] Chunk5i: separate process integrity timing from measured alignment epochs; independent high-reasoning review approved,261 v2 tests pass.
 - [x] Chunk5j: stamp received raw epochs from preceding committed FIFO clock controls; independent high-reasoning review approved.
-- [ ] Separate measured-mode UTC wall-step health from monotonic raw durability timing before live integration; async cutoff commands/timers and automatic correction mapping remain pending.
+- [x] Chunk5k: continue measured-mode raw capture through UTC wall steps with monotonic integrity/deadline guards; independent high-reasoning review approved.
+- [ ] Async cutoff commands/timers and automatic correction mapping remain pending.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current267 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current270 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

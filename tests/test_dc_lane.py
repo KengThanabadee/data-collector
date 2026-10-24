@@ -92,6 +92,99 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         record=self.record(lane,seq)
         return replace(record,receipt=replace(record.receipt,clock_epoch=PENDING_CLOCK_EPOCH))
 
+    async def test_measured_raw_capture_survives_forward_and_backward_utc_steps(self):
+        for step in (-500_000_000,500_000_000):
+            with self.subTest(step=step):
+                lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+                await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+                self.mono[0]+=60
+                healthy=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+                self.assertTrue(healthy.assessment.aligned)
+                entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+                original_append=lane.writer.append
+                def gated(value):
+                    if value.kind=='ws_message':
+                        entered.set()
+                        if not release.wait(3):raise OSError('test gate timeout')
+                    return original_append(value)
+                original=self.received(lane)
+                with patch.object(lane.writer,'append',side_effect=gated):
+                    future=lane.submit_received(original)
+                    self.assertTrue(await asyncio.to_thread(entered.wait,2))
+                    self.utc+=step;self.mono[0]+=1
+                    release.set();before=await asyncio.wait_for(future,5)
+                self.assertTrue(before.timing_valid)
+                self.assertEqual(before.receive_to_durable_ns,1)
+                changed=await asyncio.wait_for(self.clock_check(lane),5)
+                self.assertTrue(changed.timing_valid)
+                self.assertFalse(changed.assessment.aligned)
+                self.assertEqual(changed.assessment.reason,'wall_step')
+                self.assertNotEqual(changed.assessment.anchor.clock_epoch,before.clock_epoch)
+                after_record=self.received(lane,1)
+                after=await asyncio.wait_for(lane.submit_received(after_record),5)
+                self.assertTrue(after.timing_valid)
+                self.assertEqual(after.clock_epoch,changed.assessment.anchor.clock_epoch)
+                self.assertTrue(lane.health()['accepting'])
+                self.mono[0]+=1
+                warming=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,2)),5)
+                self.assertFalse(warming.assessment.aligned)
+                self.mono[0]+=60
+                recovered=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,3)),5)
+                self.assertTrue(recovered.assessment.aligned)
+                self.assertEqual(recovered.assessment.anchor.clock_epoch,after.clock_epoch)
+                lane.stop();await asyncio.wait_for(lane.test_task,5)
+                native=[r for r in self.records(lane) if r.kind=='ws_message']
+                self.assertEqual([r.receipt.receive_seq for r in native],[0,1])
+                self.assertEqual(native[0].receipt,replace(original.receipt,clock_epoch=before.clock_epoch))
+                self.assertEqual(native[1].receipt,replace(after_record.receipt,clock_epoch=after.clock_epoch))
+                self.assertEqual([r.body for r in native],[original.body,after_record.body])
+                self.assertEqual(self.clock_replay(lane).assessment,recovered.assessment)
+                self.assertEqual(lane.health()['failure_controls_durable'],0)
+                self.assertEqual(lane.health()['timing_basis'],'process_monotonic')
+                self.assertTrue(all(event['timing_basis']=='process_monotonic' for event in self.controls(lane)))
+
+    async def test_measured_observer_monotonic_regression_still_halts_raw_capture(self):
+        stamp=[self.observe()]
+        lane,_=self.lane(clock_policy=self.clock_policy(),observe=lambda:stamp[0]);self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.kind=='ws_message':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=lane.submit_received(self.received(lane))
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            stamp[0]=(stamp[0][0],stamp[0][1]-1,stamp[0][2])
+            release.set();ack=await asyncio.wait_for(future,5)
+            await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        self.assertFalse(lane.health()['accepting'])
+        self.assertEqual(len([r for r in self.records(lane) if r.kind=='ws_message']),1)
+
+    async def test_measured_processing_deadline_still_halts_raw_capture(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.kind=='ws_message':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=lane.submit_received(self.received(lane))
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            self.mono[0]+=5_000_000_000;release.set()
+            ack=await asyncio.wait_for(future,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertEqual(ack.receive_to_durable_ns,5_000_000_000)
+        self.assertFalse(lane.health()['accepting'])
+        self.assertEqual(len([r for r in self.records(lane) if r.kind=='ws_message']),1)
+
     async def test_received_epochs_follow_queued_clock_boundaries_without_waiting_for_disk(self):
         lane,_=self.lane(clock_policy=self.clock_policy())
         first_sample=lane.submit_clock(*self.clock_request(lane))
