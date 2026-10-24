@@ -73,5 +73,23 @@ The selected upstream unit suite also passed 12 tests (61 non-unit tests deselec
 | Exact REST acquisition | GET uses `response.text()`; error handling precedes raw callback | Byte fidelity/error-body qualification needed |
 | v2 durability/as-of/corrections | PCAP flush and replay exist; no recorder fsync or v2 close/ledger contract found | Existing archive/snapshot logic remains required |
 
-**Decision remains pending live evidence and the integration assessment.** The
-library is not yet a production dependency; no implementation has been removed.
+## Decision — 24 October 2026
+
+Continue with the existing collector as the production v2 core. Do not adopt
+Cryptofeed as a production dependency or replace existing modules now. This
+decision follows the user's latest direction after comparing reuse costs; it is
+not a claim that our unfinished live adapters outperform Cryptofeed.
+
+The pinned candidate provides useful exchange transports, subscriptions, native
+book handling and capture/replay. However, adoption would still retain our
+durable archive, shared-time closure, provenance and correction contracts, require
+extensions for missing catalogue profiles, and introduce Python-version and
+license integration work. Offline evidence does not establish a net reduction
+in implementation or maintenance effort for this repository.
+
+Defer CF02 live qualification rather than adding a second integration track.
+Keep the approved offline experiment and exact pin as reference evidence. A
+future proposal to reuse a specific adapter must name the code it replaces,
+qualify that feed's native semantics and raw preservation, and assess its actual
+license terms. No production implementation has been removed and the complete
+v2 feed catalogue and acceptance gates remain unchanged.

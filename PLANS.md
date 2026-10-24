@@ -24,16 +24,17 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5f: durable paired clock freshness checks, cumulative-drift protection and legacy log replay fixture; independent high-reasoning re-review approved both repairs.
 - [x] Chunk5g: async paired clock checks through the raw FIFO, shared operation caps and failure pin reporting; independent high-reasoning review approved.
 - [x] Chunk5h: synchronous clock-bound local cutoffs and snapshot clock-dependency verification; independent high-reasoning re-review approved policy/deadline/namespace/bounds fixes.
+- [x] Chunk5i: separate process integrity timing from measured alignment epochs; independent high-reasoning review approved,261 v2 tests pass.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current259 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current261 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
-## Cryptofeed reuse evaluation — active
+## Cryptofeed reuse evaluation — decision recorded
 
 - [x] CF01: isolate pinned Cryptofeed3.0.2, verify exact offline raw/book replay and abrupt-exit behavior; fresh high-reasoning review approved.
-- [ ] CF02: reviewed actively bounded live Deribit BTC/ETH options/perpetual capture, reconnect and replay.
-- [ ] Record full-spec reuse decision and implement the selected boundary in reviewed chunks.
+- [x] Retain our collector as the production v2 core; no Cryptofeed dependency or module replacement. See [decision](docs/v2/CRYPTOFEED_EVALUATION.md).
+- CF02 live qualification is deferred. Preserve the offline experiment as reference; continue the original runtime implementation and full acceptance scope.
 
 ## V2 specification and implementation handoff — 23 October 2026
 

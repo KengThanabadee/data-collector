@@ -207,7 +207,12 @@ class ArchiveLane:
             reason = 'queue_backlog' if isinstance(exc, QueueBacklog) else 'queue_capacity' if isinstance(exc, QueueCapacity) else 'queue_clock_or_closed'
             self._failure(reason, record, global_scope=not isinstance(exc, QueueCapacity))
             raise
-        self._pending[ticket] = _Pending(record.record_id, r, future)
+        # A measured alignment epoch classifies receive-asof eligibility; it
+        # is not the observer's process/monotonic integrity epoch. Losing UTC
+        # alignment must not by itself stop durable raw capture. Retain the
+        # legacy receipt/observer equality rule when measured clocks are off.
+        timing_epoch = self._last_observation[2] if self._clock is not None else None
+        self._pending[ticket] = _Pending(record.record_id, r, future, timing_epoch=timing_epoch)
         self._submitted[stream] = r.receive_seq
         self._last_submitted_mono = r.monotonic_ns
         self._admission_count += 1
@@ -402,7 +407,7 @@ class ArchiveLane:
                         if not pending.future.done():pending.future.set_result(result)
                         continue
                     stored = await self._disk(self.ingress.append, record)
-                    latency,timing_valid = self._timing(lease,stored.receipt)
+                    latency,timing_valid = self._timing(lease,stored.receipt,epoch=pending.timing_epoch)
                     receipt = dict(stream=asdict(stored.receipt.stream_key), receive_seq=stored.receipt.receive_seq,
                                    record_id=stored.record_id, raw_sha256=digest(stored.to_bytes()),
                                    monotonic_ns=stored.receipt.monotonic_ns, receive_utc_ns=stored.receipt.receive_utc_ns,

@@ -88,6 +88,69 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         return lane.submit_clock_check(utc_ns=kwargs.get('utc_ns',utc),monotonic_ns=kwargs.get('monotonic_ns',mono),
                                        boot_id=kwargs.get('boot_id','boot'))
 
+    async def test_measured_epoch_recovery_does_not_change_process_timing_epoch(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        first=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        self.mono[0]+=60
+        healthy=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        self.assertTrue(healthy.assessment.aligned)
+        epoch=healthy.assessment.anchor.clock_epoch
+        self.assertNotEqual(epoch,self.observe()[2])
+        record=self.record(lane)
+        record=replace(record,receipt=replace(record.receipt,clock_epoch=epoch))
+        ack=await asyncio.wait_for(lane.submit(record),5)
+        self.assertTrue(ack.timing_valid)
+        self.assertEqual(ack.receive_to_durable_ns,0)
+        self.mono[0]+=61
+        stale=await asyncio.wait_for(self.clock_check(lane),5)
+        self.assertFalse(stale.assessment.aligned)
+        self.assertNotEqual(stale.assessment.anchor.clock_epoch,epoch)
+        record2=self.record(lane,1)
+        record2=replace(record2,receipt=replace(record2.receipt,clock_epoch=stale.assessment.anchor.clock_epoch))
+        self.assertTrue((await asyncio.wait_for(lane.submit(record2),5)).timing_valid)
+        # Two later provider observations recover reference alignment. Raw
+        # capture stays live throughout; this does not make stale data valid.
+        self.mono[0]+=1
+        recovering=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,2)),5)
+        self.assertFalse(recovering.assessment.aligned)
+        self.mono[0]+=60
+        recovered=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,3)),5)
+        self.assertTrue(recovered.assessment.aligned)
+        self.assertTrue(lane.health()['accepting'])
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        native=[r for r in self.records(lane) if r.kind=='ws_message']
+        self.assertEqual([r.receipt.clock_epoch for r in native],
+                         [epoch,stale.assessment.anchor.clock_epoch])
+        self.assertEqual([r.body for r in native],[record.body,record2.body])
+        self.assertEqual(self.clock_replay(lane).assessment,recovered.assessment)
+        self.assertEqual(lane.health()['failure_controls_durable'],0)
+
+    async def test_process_epoch_fault_still_invalidates_measured_raw_inflight(self):
+        stamp=[self.observe()]
+        lane,_=self.lane(clock_policy=self.clock_policy(),observe=lambda:stamp[0]);self.start(lane)
+        measured=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        record=self.record(lane)
+        record=replace(record,receipt=replace(record.receipt,clock_epoch=measured.assessment.anchor.clock_epoch))
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(value):
+            if value.kind=='ws_message':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(value)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=lane.submit(record)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            stamp[0]=(stamp[0][0],stamp[0][1],'different-process-epoch')
+            release.set()
+            ack=await asyncio.wait_for(future,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        self.assertFalse(lane.health()['accepting'])
+        native=[r for r in self.records(lane) if r.kind=='ws_message']
+        self.assertEqual(len(native),1)
+        self.assertEqual(native[0].receipt,record.receipt)
+
     async def test_clock_checks_share_fifo_and_preserve_independent_source_sequence(self):
         lane,_=self.lane(clock_policy=self.clock_policy())
         first=lane.submit(self.record(lane))
