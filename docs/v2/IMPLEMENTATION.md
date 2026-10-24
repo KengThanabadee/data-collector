@@ -36,6 +36,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5o | Canonical publisher reports in raw FIFO, idempotent durable archival and bounded report replay | Approved; [evidence](implementation/chunk-05o.json) |
 | 5p | Bounded recurring local minute cutoffs with leased publication handoff and explicit stop/backlog failures | Approved; [evidence](implementation/chunk-05p.json) |
 | 5q | Owned timer/seal/publish/raw-report pipeline with deferred cancellation and durable handoff acknowledgement | Approved; [evidence](implementation/chunk-05q.json) |
+| 5r | Pinned cross-process cutoff reconciliation with durable interruption resolutions and recovery marker | Approved after fixes; [evidence](implementation/chunk-05r.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -49,7 +50,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current376 combined tests pass:341 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current392 combined tests pass:357 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -254,6 +255,42 @@ Synthetic integration covers consecutive published/archived reports, raw capture
 while publishing is blocked, cancellation during each owned write stage, late and
 post-artifact failed publication, producer failure and unconfirmed receipt/raw
 writes. This is the local publication path, not a deployed full capture service.
-Restart allocation reconciliation, automatic clock/gap corrections, checkpoints,
-all-feed transport supervision, operations/backup and intended-host acceptance
-remain pending. No live capture/deployment is started by this chunk.
+Chunk5r below supplies serialized restart reconciliation. Startup/runtime resume,
+automatic clock/gap corrections, checkpoints, all-feed transport supervision,
+operations/backup and intended-host acceptance remain pending. No live capture
+or deployment is started by this chunk.
+
+
+Chunk5r adds `CutoffPin` (control count, body-chain head and last raw-envelope
+hash) plus prior-prefix verification before a coordinator reads the target WAL.
+Cutoff restore rejects control namespace/venue confusion. `reconcile_cutoffs`
+consumes explicitly pinned verified segment references and a nonempty
+authoritative expected tip into a new process/session writer. It never guesses
+that tip from an incomplete directory listing or compares clocks across boots.
+
+Only unresolved allocations become `interrupted_before_close`, in cutoff order.
+Existing resolution/close bytes remain unchanged. A separate fsynced
+`dc.cutoff-recovery/2` marker records source/result pins, portable input hashes,
+failed/closed IDs and the next consecutive cutoff ID/UTC label. Retrying the same
+recovery verifies and retains its first marker and timestamps. Errors after an
+individual resolution or marker fsync return no successful recovery until retry
+verifies the owned WAL; a poisoned writer still needs normal WAL recovery first.
+The marker is not a snapshot or a retrospective delivery/timeliness certificate.
+
+Record/count/projection/metadata/marker bounds fail visibly. Target output records,
+control streams and serialized envelope bytes are reserved before any interruption
+append, so a successful recovery remains readable under the same limits on retry.
+Known target-process epoch changes or monotonic regressions require a fresh process
+instead of another write into that session. Prefix scans reserve
+conservative compressed/raw/evidence/metadata bytes before whole-segment reads;
+verification and exposed-row passes are bounded, and pins are checked again
+before new ready-marker publication. A recovery target may contain only its own
+interruption suffix and final marker, never newly started capture work. Both
+Journal and rotating SessionWriter fixtures preserve markers through restore and
+subsequent new-process reconciliation.
+
+This is the serialized recovery primitive and durable state handoff. Automatic
+startup selection of the authoritative prefix, raw-lane/clock-bound timer resume,
+late snapshot/report reconciliation and automatic clock/gap correction mapping
+remain pending. Full capture, checkpoint capacity, independent backup/restore and
+intended-host acceptance remain unfinished; no live service is started here.

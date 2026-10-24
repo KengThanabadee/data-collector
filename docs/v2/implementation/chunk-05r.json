@@ -1,0 +1,17 @@
+{
+  "chunk": "5r",
+  "status": "approved",
+  "reviewer": "dc_chunk5r_cutoff_recovery_review",
+  "reasoning_effort": "high",
+  "tests": "Root392 combined tests passed (357v2+35v1), including approved local HTTP fixtures. Reviewer independently passed65 recovery/cutoff/clockcutoff/pipeline tests and reproduced repaired headroom boundaries: max_records1 and max_streams1 reject before writes; max_records2 succeeds and retries with identical state.16 recovery tests cover exact prefix pins, unchanged closes, ambiguous failure/marker writes, corrupt pinned-input and target-control rejection, clock domains and rotating-writer restore.",
+  "sources": {
+    "data_collector/recovery.py": "3aebd923401c4bb7db4ac90ca1219a1e70c7ff867441b0c7fa30966605d70665",
+    "data_collector/cutoffs.py": "cfa46b2f59371bebc495a428bc82fe5169721be57e34b5ce3fadaa32b173e440",
+    "tests/test_dc_recovery.py": "64af24c2f73c792bb31fe6eee156c17a2505793e19430d121a961aca9e66d3ec",
+    "docs/v2/IMPLEMENTATION.md": "fae092c9270d606bbe7e78b72f22ffacc222e266e45396ab6df31eb05c706c83"
+  },
+  "findings_closed": [
+    "P2 successful reconciliation could exceed its own target record-read limit and fail identical retry. Preflight now reserves all generated target records, serialized envelope bytes and required control streams before appending any interruption. Exact-bound regression verifies success remains retryable."
+  ],
+  "limits": "Serialized disk-owner recovery primitive only. Requires externally authoritative nonempty source cutoff pin and immutable segment pins, with new process identity; no inference from incomplete directory listing. Marker is not checkpoint/snapshot/delivery certification. Existing closes unchanged; only unresolved allocations become interrupted. Same-target retries reject known epoch changes/monotonic regression; different new process may use lower monotonic origin. Startup prefix selection and raw-lane/clock-bound timer resume, automatic corrections, full-feed runtime/checkpoints, independent backup and intended-host24h acceptance remain pending. No live capture/deployment. PLANS implementation prefix approved; research suffix/README excluded."
+}

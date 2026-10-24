@@ -12,6 +12,20 @@ POLICY = "receive-asof/2"
 CONTROL_SCHEMA = "dc.cutoff-control/2"
 
 
+@dataclass(frozen=True, slots=True)
+class CutoffPin:
+    count: int
+    head_sha256: str | None
+    last_record_sha256: str | None
+
+    def __post_init__(self):
+        integer(self.count,'cutoff pin count')
+        if self.count:
+            sha256(self.head_sha256,'cutoff body head');sha256(self.last_record_sha256,'cutoff raw head')
+        elif self.head_sha256 is not None or self.last_record_sha256 is not None:
+            raise ValueError('empty cutoff pin cannot claim a head')
+
+
 @dataclass(frozen=True)
 class ClockAnchor:
     process_session_id: str
@@ -122,7 +136,7 @@ class CutoffCoordinator:
     """
     def __init__(self, journal, *, capture_scope, capture_id, process_session_id, provenance,
                  prior_records=lambda: (), max_cutoffs=10000, max_control_bytes=1024*1024,
-                 max_projection_bytes=16*1024*1024):
+                 max_projection_bytes=16*1024*1024, expected_prior_pin=None):
         for name, value in (("capture_scope", capture_scope), ("capture_id", capture_id), ("process_session_id", process_session_id)):
             text(value, name)
         integer(max_cutoffs, "max_cutoffs", 1); integer(max_control_bytes, "max_control_bytes", 1)
@@ -135,17 +149,24 @@ class CutoffCoordinator:
         self.prior_records = prior_records
         self.allocations, self.resolutions = {}, {}
         self._control_positions = {}
-        self.control_seq, self.head = 0, None
+        if expected_prior_pin is not None and not isinstance(expected_prior_pin,CutoffPin):
+            raise ValueError('typed expected cutoff prefix pin required')
+        self.control_seq, self.head, self._last_raw_sha256 = 0, None, None
         for record in prior_records():
             self._restore(record)
+        if expected_prior_pin is not None and self.pin!=expected_prior_pin:
+            raise ValueError('pinned prior cutoff prefix unavailable or mismatched')
         for encoded in journal.encoded_records(allow_unsealed=True):
             self._restore(RawRecord.from_bytes(encoded))
         self.next_receipt_seq = self._control_positions.get(StreamKey(capture_id, process_session_id, 'control:'+capture_scope), -1)+1
 
     def _restore(self, record):
-        if record.kind != 'control' or record.channel != 'cutoffs:'+self.scope:
+        if record.channel != 'cutoffs:'+self.scope and record.receipt.connection_id != 'control:'+self.scope:
             return
-        if record.receipt.capture_id != self.capture_id or record.receipt.connection_id != 'control:'+self.scope:
+        if (record.kind!='control' or record.native_product!='control' or record.instrument is not None or
+                record.native_fields_json!=b'{}' or record.channel!='cutoffs:'+self.scope or
+                record.receipt.capture_id!=self.capture_id or record.receipt.connection_id!='control:'+self.scope or
+                (record.venue,record.environment)!=self.journal.identity):
             raise ValueError("foreign cutoff ledger identity")
         if record.receipt.receive_seq != self._control_positions.get(record.receipt.stream_key,-1)+1:
             raise ValueError("cutoff control receipt prefix missing/conflicting")
@@ -229,9 +250,14 @@ class CutoffCoordinator:
         value = dict(payload=payload, hash=digest(record.to_bytes()), record_id=record.record_id)
         (self.allocations if kind == 'allocated' else self.resolutions)[payload['cutoff_id']] = value
         self.head = digest(record.body)
+        self._last_raw_sha256 = value['hash']
         self.control_seq += 1
         self.projection_bytes += len(canonical(payload))
         self._control_positions[record.receipt.stream_key] = record.receipt.receive_seq
+
+    @property
+    def pin(self):
+        return CutoffPin(self.control_seq,self.head,self._last_raw_sha256)
 
     def _append(self, kind, payload, *, utc_ns, monotonic_ns, clock_epoch):
         self._check(kind, payload)
