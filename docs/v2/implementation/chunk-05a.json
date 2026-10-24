@@ -1,0 +1,18 @@
+{
+  "chunk": "05a",
+  "status": "approved",
+  "reviewer": "dc_chunk5a_flow_review",
+  "reasoning_effort": "high",
+  "tests": "182 full v2 tests pass;22 scoped tests plus independent clock/cleanup/accounting probes passed",
+  "sources": {
+    "data_collector/queues.py": "00f7cbcd26fc447d3515c69387bbdb992b91070f8d4486772a7c58a92738d21f",
+    "data_collector/quota.py": "1881cc3d404d2ba9eaf938119219bd3a3d80369b5f028e4e1b1e0f61f1867332",
+    "tests/test_dc_queues.py": "4e3bcd03f31100e57ef2eb85107d9c7231b6317cb9b1e48bf156d397eac68cb7",
+    "tests/test_dc_quota.py": "39198371cce129842bbff0cb0a0cb982f31925bad40b2f5c521616182465bf48"
+  },
+  "findings_closed": [
+    "clock-failed ingress tail drains FIFO with explicit invalid clock metadata and retained charges",
+    "quota cleanup preserves first terminal cause across closure/cancellation"
+  ],
+  "limits": "Single-event-loop volatile byte queues and conservative weighted rolling-window REST admission only; transport weights/feed gating, durable failure controls, process/RSS isolation, venue supervision, continuous capture and live acceptance pending"
+}
