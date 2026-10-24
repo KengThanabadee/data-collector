@@ -1,0 +1,17 @@
+{
+  "chunk": "5q",
+  "status": "approved",
+  "reviewer": "dc_chunk5q_pipeline_review",
+  "reasoning_effort": "high",
+  "tests": "Root376 combined tests passed (341v2+35v1), including approved local HTTP loopback execution;40 focused tests also passed. Reviewer independently passed40 focused tests and6 adversarial probes: repeated cancellation while waiting; corrupt receipt hash; receipt for a different close; untimely raw ack; receipt cap exhaustion; next-close producer backlog while publishing is blocked. Initial reviewer usage-limit interruption was not an approval; the resumed fresh review completed successfully.",
+  "sources": {
+    "data_collector/pipeline.py": "311ae5c2225f3c708b117247c71628bc3662c0c6ca585698ba74b919a3f1c52d",
+    "tests/test_dc_pipeline.py": "ffbd54f6ddf31f9a428993345aed338fdee046d3b8b3dc6dcce33d5875b71476",
+    "data_collector/publisher.py": "0124c56f6d7f1e785d6e6526aa550665d6f894398083cc65033a0d506a26d39b",
+    "data_collector/lane.py": "53904d2ce622cf2288f2fcef22297effa4bd78819294a719542e19f09a5a2b52",
+    "tests/test_dc_publisher.py": "ed23cb97b489313726a154d7c3fb22ca7274f68958c7f347732724ac23c3a1c0",
+    "docs/v2/IMPLEMENTATION.md": "ec0e7bfdddb4e276c6b1359bec09f4e67b71ab72d2601c26859b0754503a9bfe"
+  },
+  "findings_closed": [],
+  "limits": "Fresh local pipeline only, with externally owned raw lane and measured reference sampler. Receipt cap must fit raw64KiB. Exact publisher bytes returned in immutable acknowledgement; handoff released only after timely durable raw report ack. Failed receipts stay failed; uncertainty retains current lease and halts venue. Deferred cancellation drains owned work before publisher unlock; hard hangs still require external process supervision. Restart reconciliation, automatic corrections, checkpoints, all-feed transport supervision, independent backup/restore and intended-host24h acceptance remain pending. No live collection/deployment. PLANS implementation prefix reviewed; research suffix/README excluded."
+}

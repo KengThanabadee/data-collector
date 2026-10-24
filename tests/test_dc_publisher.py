@@ -157,6 +157,7 @@ class PublisherTests(unittest.IsolatedAsyncioTestCase):
         first=await self.delivered(publisher)
         self.assertEqual((first.outcome,first.reason),('published','on_time'))
         body=first.receipt_path.read_bytes();receipt=strict_json(body)
+        self.assertEqual(first.receipt_body,body)
         self.assertEqual(digest(body),first.receipt_sha256)
         self.assertEqual(receipt['completed']['monotonic_ns'],1100)
         result=read_snapshot(publisher.root/'snapshots',first.snapshot_id,[s.path for s in self.inputs.segments])

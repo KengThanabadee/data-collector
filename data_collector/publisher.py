@@ -42,6 +42,7 @@ class SnapshotDelivery:
     snapshot_id: str | None
     receipt_path: Path
     receipt_sha256: str
+    receipt_body: bytes
 
 
 def _read(path, limit):
@@ -240,7 +241,7 @@ class SnapshotPublisher:
 
     def _result(self, path, body):
         value=strict_json(body)
-        return SnapshotDelivery(value['outcome'],value['reason'],value['close_record_id'],value['snapshot_id'],path,digest(body))
+        return SnapshotDelivery(value['outcome'],value['reason'],value['close_record_id'],value['snapshot_id'],path,digest(body),body)
 
     def _delivery_quality(self, inputs, evidence, observation):
         """Retain a locally detected step even after UTC returns or we reopen.

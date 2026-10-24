@@ -35,6 +35,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5n | Separate bounded snapshot publisher with immutable deadline/clock/knowledge delivery receipts | Approved after fixes; [evidence](implementation/chunk-05n.json) |
 | 5o | Canonical publisher reports in raw FIFO, idempotent durable archival and bounded report replay | Approved; [evidence](implementation/chunk-05o.json) |
 | 5p | Bounded recurring local minute cutoffs with leased publication handoff and explicit stop/backlog failures | Approved; [evidence](implementation/chunk-05p.json) |
+| 5q | Owned timer/seal/publish/raw-report pipeline with deferred cancellation and durable handoff acknowledgement | Approved; [evidence](implementation/chunk-05q.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -48,7 +49,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current365 combined tests pass:330 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current376 combined tests pass:341 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -219,6 +220,40 @@ recovery. Production still requires supervisor ordering: stop timers, drain owne
 publication, then stop the lane; hard hung operations need process supervision.
 A two-cycle synthetic integration consumes closures, seals inputs, publishes real
 book snapshots and archives/replays exact delivery reports while raw remains open.
-The production publication-consumer loop, restart allocation resume, automatic
-clock/gap correction mapping, checkpoint capacity and intended-host acceptance
-remain pending; no live collection or deployment is started by these tests.
+Chunk5q below supplies the local publication-consumer loop. Restart allocation
+resume, automatic clock/gap correction mapping, checkpoint capacity and intended-
+host acceptance remain pending; these tests start no live collection/deployment.
+
+
+Chunk5q adds `SnapshotPipeline` owning a fresh local `MinuteCutoffs` and a matching
+exclusive `SnapshotPublisher`, with its receipt cap configured at or below the raw
+report64KiB bound. It runs the timer and consumer together. Each consumer lease
+is held through exact scheduled input sealing, publication, receipt validation
+and a timely durable raw-report acknowledgement. Only then does it release the
+handoff slot. Failed publisher receipts are archived as failed, never promoted by
+artifact presence; unconfirmed operations retain the lease/current-close identity
+and visibly halt the venue. Health separates reported/published/failed/unconfirmed
+counts and exposes the active deadline. There is no accumulated result queue.
+
+`SnapshotDelivery` now returns its exact immutable, already-bounded receipt bytes
+with the hash/path. The consumer therefore neither rereads files nor performs
+publication I/O on the event loop. It does not fabricate a substitute receipt
+when publication or raw archival is unconfirmed. Existing runtime/emergency loss
+controls and missing-report counts remain authoritative, with ambiguous artifact
+or receipt files retained for later recovery.
+
+Stop/cancellation stops future timer work, drains any admitted seal/publication/
+report write and its handoff acknowledgement, joins the timer, then closes the
+publisher before returning or raising cancellation. The raw lane and measured
+clock sampler stay externally owned and must remain available until the pipeline
+has drained. A worker that never returns still requires a hard process-supervisor
+bound; deferred cancellation is not a thread-kill timeout. Constructor ownership
+prevents sharing the same timer/publisher across two pipelines.
+
+Synthetic integration covers consecutive published/archived reports, raw capture
+while publishing is blocked, cancellation during each owned write stage, late and
+post-artifact failed publication, producer failure and unconfirmed receipt/raw
+writes. This is the local publication path, not a deployed full capture service.
+Restart allocation reconciliation, automatic clock/gap corrections, checkpoints,
+all-feed transport supervision, operations/backup and intended-host acceptance
+remain pending. No live capture/deployment is started by this chunk.

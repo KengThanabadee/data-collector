@@ -516,7 +516,8 @@ class ArchiveLane:
 
     def halt_snapshot_schedule(self, reason):
         """Visible venue-local capture halt when bounded scheduling cannot run."""
-        if reason not in {'snapshot_handoff_backlog','snapshot_schedule_failure','snapshot_schedule_clock_invalid'}:
+        if reason not in {'snapshot_handoff_backlog','snapshot_schedule_failure','snapshot_schedule_clock_invalid',
+                          'snapshot_publication_failure'}:
             raise ValueError('explicit snapshot schedule failure required')
         self._failure(reason,global_scope=True)
 
