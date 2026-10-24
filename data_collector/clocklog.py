@@ -67,6 +67,13 @@ def _record(sample, assessment, source, ordinal, policy, sequence, head):
         'control',CHANNEL,'control',body,source.provenance)
 
 
+def _check_record(assessment, observation, policy, sequence, head, identity, capture, session, provenance):
+    body = canonical(dict(schema='dc.clock-check/2',sequence=sequence,previous_sha256=head,
+        policy=policy,observation=observation,assessment=asdict(assessment)))
+    return RawRecord(Receipt(capture,session,CONTROL,sequence,observation['utc_ns'],observation['monotonic_ns'],
+        assessment.anchor.clock_epoch),*identity,'control',CHANNEL,'control',body,provenance)
+
+
 class DurableClock:
     """Only expose an assessment after both measurement and control fsync.
 
@@ -95,6 +102,7 @@ class DurableClock:
         self.max_assessments = max_assessments
         self._pin = ClockPin(0,None,None)
         self._assessment = None
+        self._sample_count = 0
         self.poisoned = False
 
     @property
@@ -105,7 +113,7 @@ class DurableClock:
             raise ValueError('clock owner poisoned; recover and start fresh session')
         if self._pin.count >= self.max_assessments:
             raise ValueError('clock log bound; checkpoint/session rotation required')
-        validate_clock_source(source,sample,self.journal.identity,self.capture,self.session,self.provenance,self._pin.count)
+        validate_clock_source(source,sample,self.journal.identity,self.capture,self.session,self.provenance,self._sample_count)
         candidate = deepcopy(self._monitor)
         try:
             assessment = candidate.sample(sample,ingress_ordinal=ingress_ordinal)
@@ -122,8 +130,33 @@ class DurableClock:
             self.poisoned = True
             raise
         self._monitor,self._assessment = candidate,assessment
+        self._sample_count += 1
         self._pin = ClockPin(self._pin.count+1,digest(record.to_bytes()),record.record_id)
         return assessment
+
+    def check(self, *, utc_ns, monotonic_ns, boot_id, ingress_ordinal):
+        """Commit a paired freshness/step check without refreshing NTP evidence."""
+        if self.poisoned or self._pin.count >= self.max_assessments:
+            raise ValueError('clock owner poisoned or log bound; start fresh session')
+        observation = dict(utc_ns=utc_ns,monotonic_ns=monotonic_ns,boot_id=boot_id,ingress_ordinal=ingress_ordinal)
+        candidate = deepcopy(self._monitor)
+        try:
+            result = candidate.check(**observation)
+        except Exception:
+            self.poisoned = True
+            raise
+        record = _check_record(result,observation,self._policy,self._pin.count,self._pin.head_sha256,
+                               self.journal.identity,self.capture,self.session,self.provenance)
+        if len(record.to_bytes()) > self.journal.limits.max_record_bytes:
+            raise ValueError('clock check exceeds writer bound')
+        try:
+            self.journal.append(record)
+        except BaseException:
+            self.poisoned = True
+            raise
+        self._monitor,self._assessment = candidate,result
+        self._pin = ClockPin(self._pin.count+1,digest(record.to_bytes()),record.record_id)
+        return result
 
 
 def replay_clock(records, *, venue, environment, capture_id, process_session_id, provenance,
@@ -141,7 +174,7 @@ def replay_clock(records, *, venue, environment, capture_id, process_session_id,
     policy = _policy(policy)
     monitor = ClockMonitor(process_session_id,**policy)
     pending,assessment = None,None
-    count,scanned,size = 0,0,0
+    count,samples,scanned,size = 0,0,0,0
     pin = ClockPin(0,None,None)
     for record in records:
         if not isinstance(record,RawRecord):raise ValueError('verified typed raw required')
@@ -154,13 +187,21 @@ def replay_clock(records, *, venue, environment, capture_id, process_session_id,
             pending = record
             continue
         if local and record.receipt.connection_id == CONTROL:
-            if pending is None or count >= max_assessments:
-                raise ValueError('missing measurement or clock assessment bound')
+            if count >= max_assessments:
+                raise ValueError('clock assessment bound')
             body = strict_json(record.body)
-            sample = ClockSample(**body['sample'])
-            validate_clock_source(pending,sample,(venue,environment),capture_id,process_session_id,provenance,count)
-            result = monitor.sample(sample,ingress_ordinal=body['ingress_ordinal'])
-            expected = _record(sample,result,pending,body['ingress_ordinal'],policy,count,pin.head_sha256)
+            if body.get('schema') == 'dc.clock-check/2':
+                if pending is not None:raise ValueError('clock measurement/control pair interrupted by check')
+                result = monitor.check(**body['observation'])
+                expected = _check_record(result,body['observation'],policy,count,pin.head_sha256,
+                                         (venue,environment),capture_id,process_session_id,provenance)
+            else:
+                if pending is None:raise ValueError('missing clock measurement')
+                sample = ClockSample(**body['sample'])
+                validate_clock_source(pending,sample,(venue,environment),capture_id,process_session_id,provenance,samples)
+                result = monitor.sample(sample,ingress_ordinal=body['ingress_ordinal'])
+                expected = _record(sample,result,pending,body['ingress_ordinal'],policy,count,pin.head_sha256)
+                samples += 1
             if record.to_bytes() != expected.to_bytes():raise ValueError('clock control replay mismatch')
             count += 1
             pin = ClockPin(count,digest(record.to_bytes()),record.record_id)

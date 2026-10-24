@@ -74,6 +74,7 @@ class ClockMonitor:
         self._last_healthy_ns = None
         self._last_ordinal = 0
         self._observed_mono = None
+        self._last_pair = None
         self._restart = False
 
     @property
@@ -105,17 +106,19 @@ class ClockMonitor:
             reason = 'reference_offset_or_uncertainty'
         if previous is not None:
             elapsed = value.monotonic_ns-previous.monotonic_ns
-            if elapsed > self.max_age_ns:
+            if elapsed > self.max_age_ns and self._anchor.epoch_started_ns <= previous.monotonic_ns:
                 reason = 'sample_stale'
-            if abs((value.utc_ns-previous.utc_ns)-elapsed) > self.step_tolerance_ns:
+            if (abs((value.utc_ns-self._last_pair[0])-(value.monotonic_ns-self._last_pair[1])) > self.step_tolerance_ns or
+                    abs((value.utc_ns-self._anchor.utc_ns)-(value.monotonic_ns-self._anchor.monotonic_ns)) > self.step_tolerance_ns):
                 reason = 'wall_step'
         invalidated = None
         # A new fault closes the old epoch. Repeated bad reference samples stay
         # in the recovery epoch; every new wall step creates its own boundary.
         transition = previous is not None and reason != 'healthy' and (
-            self._anchor.healthy_samples > 0 or reason in {'wall_step', 'sample_stale'})
+            self._anchor.healthy_samples > 0 or reason in {'wall_step','sample_stale'})
         if transition:
-            if len(self._history)+1 >= self.max_epochs:
+            if (len(self._history)+1 >= self.max_epochs or
+                    (value.monotonic_ns,ingress_ordinal) <= self._anchor.boundary):
                 self._poison('clock epoch bound; rotate process session')
             invalidated = self._anchor.clock_epoch
             self._history.append(replace(self._anchor, healthy_samples=0))
@@ -135,10 +138,49 @@ class ClockMonitor:
             uncertainty_ns=abs(value.offset_ns)+value.uncertainty_ns, healthy_samples=count)
         self._sample, self._last_ordinal = value, ingress_ordinal
         self._observed_mono = value.monotonic_ns
+        self._last_pair = value.utc_ns,value.monotonic_ns
         aligned = reason == 'healthy' and count >= 2
         return ClockAssessment(self._anchor, value.evidence_sha256,
                                'warming_up' if reason == 'healthy' and not aligned else reason,
                                aligned, invalidated)
+
+    def check(self, *, utc_ns, monotonic_ns, boot_id, ingress_ordinal):
+        """Validate a paired observation without refreshing reference evidence.
+
+        Checks do not count as reference samples. A stale reference or observed
+        step closes alignment; two later measured samples are still required.
+        """
+        integer(utc_ns,'checked UTC'); integer(monotonic_ns,'checked monotonic')
+        integer(ingress_ordinal,'checked ingress ordinal')
+        text(boot_id,'checked boot')
+        if max(utc_ns,monotonic_ns,ingress_ordinal) > 2**63-1 or len(boot_id.encode()) > 128:
+            raise ValueError('clock check integer/identity bound')
+        if self._restart:
+            raise ClockRestartRequired('new process/session required')
+        if self._sample is None:
+            raise ValueError('measured reference sample required before checking')
+        if boot_id != self._sample.boot_id or monotonic_ns < self._observed_mono or ingress_ordinal < self._last_ordinal:
+            self._poison('checked boot/monotonic/ingress order changed')
+        reason = 'healthy'
+        if monotonic_ns-self._sample.monotonic_ns > self.max_age_ns:
+            reason = 'sample_stale'
+        if (abs((utc_ns-self._last_pair[0])-(monotonic_ns-self._last_pair[1])) > self.step_tolerance_ns or
+                abs((utc_ns-self._anchor.utc_ns)-(monotonic_ns-self._anchor.monotonic_ns)) > self.step_tolerance_ns):
+            reason = 'wall_step'
+        invalidated = None
+        if reason != 'healthy' and (self._anchor.healthy_samples > 0 or reason == 'wall_step'):
+            if len(self._history)+1 >= self.max_epochs or (monotonic_ns,ingress_ordinal) <= self._anchor.boundary:
+                self._poison('clock check epoch boundary/bound requires new session')
+            invalidated = self._anchor.clock_epoch
+            self._history.append(replace(self._anchor,healthy_samples=0))
+            self._anchor = ClockAnchor(self.session,self.session+':clock:'+str(len(self._history)),
+                utc_ns,monotonic_ns,self._anchor.uncertainty_ns,0,monotonic_ns,ingress_ordinal)
+            self._last_healthy_ns = None
+        self._observed_mono,self._last_ordinal = monotonic_ns,ingress_ordinal
+        self._last_pair = utc_ns,monotonic_ns
+        aligned = reason == 'healthy' and self._anchor.healthy_samples >= 2
+        return ClockAssessment(self._anchor,self._sample.evidence_sha256,
+            'warming_up' if reason == 'healthy' and not aligned else reason,aligned,invalidated)
 
     def anchor(self, *, now_monotonic_ns):
         """Current anchor, downgraded if overdue; never fabricate a fresh sample."""

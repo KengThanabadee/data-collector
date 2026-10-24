@@ -128,5 +128,77 @@ class ClockTests(unittest.TestCase):
         self.assertEqual(barrier['ordinal'],1)
         self.assertEqual(barrier['anchor']['healthy_samples'],2)
 
+    def check(self,mono,**kwargs):
+        return self.monitor.check(utc_ns=kwargs.get('utc',1000+mono),monotonic_ns=mono,
+                                  boot_id=kwargs.get('boot','boot'),ingress_ordinal=kwargs.get('ordinal',0))
+
+    def test_paired_checks_do_not_refresh_reference_or_count_as_healthy_samples(self):
+        self.monitor.sample(self.sample(10),ingress_ordinal=0)
+        self.assertFalse(self.check(70).aligned)
+        self.assertTrue(self.monitor.sample(self.sample(70),ingress_ordinal=0).aligned)
+        self.assertTrue(self.check(130).aligned)
+        fault=self.check(131)
+        self.assertFalse(fault.aligned)
+        self.assertEqual(fault.reason,'sample_stale')
+        self.assertEqual(fault.anchor.healthy_samples,0)
+        self.assertEqual(len(self.monitor.prior_anchors),1)
+        self.assertEqual(self.check(132).reason,'sample_stale')
+        self.assertEqual(len(self.monitor.prior_anchors),1)
+        self.assertFalse(self.monitor.sample(self.sample(140),ingress_ordinal=0).aligned)
+        self.assertTrue(self.monitor.sample(self.sample(200),ingress_ordinal=0).aligned)
+
+    def test_check_detects_wall_step_and_two_measured_samples_recover(self):
+        self.monitor.sample(self.sample(10),ingress_ordinal=0)
+        self.monitor.sample(self.sample(70),ingress_ordinal=0)
+        fault=self.check(80,utc=500,ordinal=1)
+        self.assertEqual(fault.reason,'wall_step')
+        self.assertEqual(fault.anchor.boundary,(80,1))
+        self.assertIsNotNone(fault.invalidated_epoch)
+        first=self.monitor.sample(replace(self.sample(90),utc_ns=510),ingress_ordinal=1)
+        second=self.monitor.sample(replace(self.sample(150),utc_ns=570),ingress_ordinal=1)
+        self.assertFalse(first.aligned)
+        self.assertTrue(second.aligned)
+        self.assertEqual(first.anchor.clock_epoch,fault.anchor.clock_epoch)
+
+    def test_checks_detect_cumulative_drift_relative_to_pinned_reference(self):
+        self.monitor.sample(self.sample(10),ingress_ordinal=0)
+        self.monitor.sample(self.sample(70),ingress_ordinal=0)
+        self.assertTrue(self.check(71,utc=1072).aligned)
+        self.assertTrue(self.check(72,utc=1074).aligned)
+        self.assertEqual(self.check(73,utc=1076).reason,'wall_step')
+
+    def test_interleaved_check_cannot_hide_cumulative_step_from_measured_sample(self):
+        self.monitor.sample(self.sample(10),ingress_ordinal=0)
+        old=self.monitor.sample(self.sample(70),ingress_ordinal=0)
+        self.assertTrue(self.check(71,utc=1072).aligned)
+        fault=self.monitor.sample(replace(self.sample(72),utc_ns=1075),ingress_ordinal=0)
+        self.assertFalse(fault.aligned)
+        self.assertEqual(fault.reason,'wall_step')
+        self.assertEqual(fault.invalidated_epoch,old.anchor.clock_epoch)
+
+    def test_sample_only_consecutive_stale_epochs_preserve_original_policy(self):
+        epochs=[self.monitor.sample(self.sample(mono),ingress_ordinal=0).anchor.clock_epoch
+                for mono in (10,70,140,210)]
+        self.assertEqual(epochs,['process:clock:0','process:clock:0','process:clock:1','process:clock:2'])
+
+    def test_check_order_faults_are_sticky_across_samples_and_queries(self):
+        for kind in ('mono','ordinal','boot'):
+            with self.subTest(kind=kind):
+                self.setUp()
+                self.monitor.sample(self.sample(10),ingress_ordinal=2)
+                self.monitor.check(utc_ns=1020,monotonic_ns=20,boot_id='boot',ingress_ordinal=3)
+                with self.assertRaises(ClockRestartRequired):
+                    self.check(19 if kind=='mono' else 21,boot='other' if kind=='boot' else 'boot',
+                               ordinal=2 if kind=='ordinal' else 3)
+                with self.assertRaises(ClockRestartRequired):self.monitor.sample(self.sample(100),ingress_ordinal=4)
+                with self.assertRaises(ClockRestartRequired):self.check(100,ordinal=4)
+
+    def test_checks_cannot_invent_reference_and_epoch_bound_remains_enforced(self):
+        with self.assertRaises(ValueError):self.check(1)
+        monitor=ClockMonitor('process',sample_interval_ns=60,max_sample_age_ns=60,max_epochs=1)
+        monitor.sample(self.sample(10),ingress_ordinal=0)
+        with self.assertRaises(ClockRestartRequired):
+            monitor.check(utc_ns=1071,monotonic_ns=71,boot_id='boot',ingress_ordinal=1)
+
 
 if __name__=='__main__':unittest.main()

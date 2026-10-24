@@ -1,5 +1,6 @@
 from dataclasses import replace
 from pathlib import Path
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -142,6 +143,69 @@ class ClockLogTests(unittest.TestCase):
         records=[record for path in paths for record in iter_segment_records(path)]
         self.assertGreater(len(paths),1)
         self.assertTrue(self.replay(records,expected_pin=owner.pin).assessment.aligned)
+
+    def test_fsynced_checks_replay_freshness_without_refreshing_measurements(self):
+        self.owner.sample(*self.measurement(0,10),ingress_ordinal=0)
+        self.owner.sample(*self.measurement(1,70),ingress_ordinal=1)
+        self.assertTrue(self.owner.check(utc_ns=1080,monotonic_ns=80,boot_id='boot',ingress_ordinal=2).aligned)
+        stale=self.owner.check(utc_ns=1131,monotonic_ns=131,boot_id='boot',ingress_ordinal=2)
+        self.assertFalse(stale.aligned)
+        self.assertEqual(stale.reason,'sample_stale')
+        self.assertEqual(self.replay().assessment,stale)
+        self.assertEqual(self.owner.pin.count,4)
+        first=self.owner.sample(*self.measurement(2,140),ingress_ordinal=2)
+        second=self.owner.sample(*self.measurement(3,200),ingress_ordinal=2)
+        self.assertFalse(first.aligned)
+        self.assertTrue(second.aligned)
+        self.assertEqual(self.replay().assessment,second)
+        sources=[r for r in self.records() if r.channel=='clock_measurement']
+        self.assertEqual([r.receipt.receive_seq for r in sources],[0,1,2,3])
+
+    def test_check_wall_fault_and_recovery_replay_same_epoch_boundaries(self):
+        self.owner.sample(*self.measurement(0,10),ingress_ordinal=0)
+        self.owner.sample(*self.measurement(1,70),ingress_ordinal=1)
+        fault=self.owner.check(utc_ns=500,monotonic_ns=80,boot_id='boot',ingress_ordinal=2)
+        self.assertEqual(fault.reason,'wall_step')
+        result=self.replay()
+        self.assertEqual(result.assessment,fault)
+        self.assertEqual(result.prior_anchors[0].healthy_samples,0)
+
+    def test_check_append_failures_do_not_publish_pin_and_poison_owner(self):
+        self.owner.sample(*self.measurement(0,10),ingress_ordinal=0)
+        pin=self.owner.pin
+        with patch.object(self.journal,'append',side_effect=OSError('injected check fsync failure')):
+            with self.assertRaises(OSError):
+                self.owner.check(utc_ns=1020,monotonic_ns=20,boot_id='boot',ingress_ordinal=0)
+        self.assertEqual(self.owner.pin,pin)
+        self.assertTrue(self.owner.poisoned)
+        self.assertEqual(self.replay().pin,pin)
+        with self.assertRaises(ValueError):self.owner.check(utc_ns=1030,monotonic_ns=30,boot_id='boot',ingress_ordinal=0)
+
+    def test_check_tampering_omission_and_pair_interleaving_are_rejected(self):
+        self.owner.sample(*self.measurement(0,10),ingress_ordinal=0)
+        self.owner.check(utc_ns=1020,monotonic_ns=20,boot_id='boot',ingress_ordinal=0)
+        records=self.records();body=strict_json(records[-1].body)
+        body['assessment']['aligned']=True
+        corrupt=replace(records[-1],body=canonical(body))
+        for candidate in (records[:-1],[records[0],records[2],records[1]],records[:2]+[corrupt]):
+            with self.assertRaises(ValueError):self.replay(candidate)
+
+    def test_check_operations_share_total_log_cap(self):
+        owner=self.owner_for(self.journal,max_assessments=2)
+        owner.sample(*self.measurement(0,10),ingress_ordinal=0)
+        owner.check(utc_ns=1020,monotonic_ns=20,boot_id='boot',ingress_ordinal=0)
+        with self.assertRaises(ValueError):owner.check(utc_ns=1030,monotonic_ns=30,boot_id='boot',ingress_ordinal=0)
+        with self.assertRaises(ValueError):owner.sample(*self.measurement(1,70),ingress_ordinal=0)
+
+    def test_original_sample_only_serialized_log_replays_after_check_extension(self):
+        fixture=json.loads((Path(__file__).parent/'fixtures'/'clock_sample_only_v2.json').read_text())
+        self.assertEqual(fixture['generator_clock_sha256'],
+                         '7485abec4a9519a508a31fab92ce749c80154039ad415d0fe814f1c6163211f7')
+        records=[RawRecord.from_bytes(canonical(value)) for value in fixture['records']]
+        result=self.replay(records,policy=fixture['policy'],expected_pin=ClockPin(**fixture['pin']))
+        self.assertEqual(result.assessment.anchor.clock_epoch,'process:clock:2')
+        self.assertEqual(len(result.prior_anchors),2)
+        self.assertFalse(result.assessment.aligned)
 
 
 if __name__=='__main__':unittest.main()

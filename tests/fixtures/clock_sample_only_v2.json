@@ -1,0 +1,274 @@
+{
+  "generator_commit": "b2f1ab179f8312fe6d30d399a7c160fe84ec3b5e",
+  "generator_clock_sha256": "7485abec4a9519a508a31fab92ce749c80154039ad415d0fe814f1c6163211f7",
+  "policy": {
+    "sample_interval_ns": 60,
+    "max_sample_age_ns": 60,
+    "max_offset_ns": 100,
+    "step_tolerance_ns": 2,
+    "max_epochs": 8
+  },
+  "pin": {
+    "count": 4,
+    "head_sha256": "f42e982e62e34fdca89f4e2845a246f909bc1faeae34fd94463bf5379f1a201e",
+    "last_record_id": "09aec64dd36e282b55ffbe84dcd78cec6e25246319a824d9b8833612ffe397c7"
+  },
+  "records": [
+    {
+      "channel": "clock_measurement",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 35,
+        "data": "b3JpZ2luYWwgcmVmZXJlbmNlLXByb3ZpZGVyIGJ5dGVzIDA=",
+        "encoding": "base64",
+        "sha256": "7cb2ef8bf525b22d7e058ed21411e316fb6e4370075dda9c3a48a7e209259d23"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "measurement",
+        "connection_id": "control:clock-source",
+        "monotonic_ns": 10,
+        "process_session_id": "process",
+        "receive_seq": 0,
+        "receive_utc_ns": 1010
+      },
+      "record_id": "9c88dbd53e37760652e47e0c016449c14903ec44a1b6c8567aeaad0616114f35",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_assessments",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 825,
+        "data": "eyJhc3Nlc3NtZW50Ijp7ImFsaWduZWQiOmZhbHNlLCJhbmNob3IiOnsiY2xvY2tfZXBvY2giOiJwcm9jZXNzOmNsb2NrOjAiLCJlcG9jaF9zdGFydGVkX25zIjoxMCwiZXBvY2hfc3RhcnRlZF9vcmRpbmFsIjowLCJoZWFsdGh5X3NhbXBsZXMiOjEsIm1vbm90b25pY19ucyI6MTAsInByb2Nlc3Nfc2Vzc2lvbl9pZCI6InByb2Nlc3MiLCJ1bmNlcnRhaW50eV9ucyI6MCwidXRjX25zIjoxMDEwfSwiZXZpZGVuY2Vfc2hhMjU2IjoiNmZhN2NkMmVlMDU3YTgwZDJhNDI5MTM5OWRlN2E5MGY1ZmZjNDAyYjA5OGZlOTBkMTcxMGMzMTVhODVhMjFjMiIsImludmFsaWRhdGVkX2Vwb2NoIjpudWxsLCJyZWFzb24iOiJ3YXJtaW5nX3VwIn0sImluZ3Jlc3Nfb3JkaW5hbCI6MCwicG9saWN5Ijp7Im1heF9lcG9jaHMiOjgsIm1heF9vZmZzZXRfbnMiOjEwMCwibWF4X3NhbXBsZV9hZ2VfbnMiOjYwLCJzYW1wbGVfaW50ZXJ2YWxfbnMiOjYwLCJzdGVwX3RvbGVyYW5jZV9ucyI6Mn0sInByZXZpb3VzX3NoYTI1NiI6bnVsbCwic2FtcGxlIjp7ImJvb3RfaWQiOiJib290IiwiZXZpZGVuY2Vfc2hhMjU2IjoiNmZhN2NkMmVlMDU3YTgwZDJhNDI5MTM5OWRlN2E5MGY1ZmZjNDAyYjA5OGZlOTBkMTcxMGMzMTVhODVhMjFjMiIsIm1vbm90b25pY19ucyI6MTAsIm9mZnNldF9ucyI6MCwidW5jZXJ0YWludHlfbnMiOjAsInV0Y19ucyI6MTAxMH0sInNjaGVtYSI6ImRjLmNsb2NrLWFzc2Vzc21lbnQvMiIsInNlcXVlbmNlIjowLCJzb3VyY2VfcmVjb3JkX2lkIjoiOWM4OGRiZDUzZTM3NzYwNjUyZTQ3ZTBjMDE2NDQ5YzE0OTAzZWM0NGExYjZjODU2N2FlYWFkMDYxNjExNGYzNSJ9",
+        "encoding": "base64",
+        "sha256": "f262d616f435daa5e10d5759fd93d0c1334977614847f0fb83f423a1d0bc3392"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "process:clock:0",
+        "connection_id": "control:clock-assessment",
+        "monotonic_ns": 10,
+        "process_session_id": "process",
+        "receive_seq": 0,
+        "receive_utc_ns": 1010
+      },
+      "record_id": "da3aff36629b4764747b540e0bd08bbe22f3d629516286aae64a93698f4d8fe1",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_measurement",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 35,
+        "data": "b3JpZ2luYWwgcmVmZXJlbmNlLXByb3ZpZGVyIGJ5dGVzIDE=",
+        "encoding": "base64",
+        "sha256": "68a5cb849de03d42bb0fd2fd615367d1a30684171f18111f16574de1509b9bff"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "measurement",
+        "connection_id": "control:clock-source",
+        "monotonic_ns": 70,
+        "process_session_id": "process",
+        "receive_seq": 1,
+        "receive_utc_ns": 1070
+      },
+      "record_id": "83e09865596bf399bf28e21c39328ee55a2f810cd4c7ce0693afa1bea7d2226f",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_assessments",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 883,
+        "data": "eyJhc3Nlc3NtZW50Ijp7ImFsaWduZWQiOnRydWUsImFuY2hvciI6eyJjbG9ja19lcG9jaCI6InByb2Nlc3M6Y2xvY2s6MCIsImVwb2NoX3N0YXJ0ZWRfbnMiOjEwLCJlcG9jaF9zdGFydGVkX29yZGluYWwiOjAsImhlYWx0aHlfc2FtcGxlcyI6MiwibW9ub3RvbmljX25zIjo3MCwicHJvY2Vzc19zZXNzaW9uX2lkIjoicHJvY2VzcyIsInVuY2VydGFpbnR5X25zIjowLCJ1dGNfbnMiOjEwNzB9LCJldmlkZW5jZV9zaGEyNTYiOiI1YTAyMDA2NTc4M2UwMGQyN2ZmODRiZGUwYTZjOTFlZmI3NzNjYjNlNjAxNjYyYzI3NTJiYTNmNzYwMThhNTc0IiwiaW52YWxpZGF0ZWRfZXBvY2giOm51bGwsInJlYXNvbiI6ImhlYWx0aHkifSwiaW5ncmVzc19vcmRpbmFsIjowLCJwb2xpY3kiOnsibWF4X2Vwb2NocyI6OCwibWF4X29mZnNldF9ucyI6MTAwLCJtYXhfc2FtcGxlX2FnZV9ucyI6NjAsInNhbXBsZV9pbnRlcnZhbF9ucyI6NjAsInN0ZXBfdG9sZXJhbmNlX25zIjoyfSwicHJldmlvdXNfc2hhMjU2IjoiMTI1ZDZmYjkxOGI5NmRkOTk5OGQ1Njc1Mzc1ODRjMzhkNzJjNWFlOTk5OGY2MTQzZDYyZmYwNDQ1ZjBkYjhhNSIsInNhbXBsZSI6eyJib290X2lkIjoiYm9vdCIsImV2aWRlbmNlX3NoYTI1NiI6IjVhMDIwMDY1NzgzZTAwZDI3ZmY4NGJkZTBhNmM5MWVmYjc3M2NiM2U2MDE2NjJjMjc1MmJhM2Y3NjAxOGE1NzQiLCJtb25vdG9uaWNfbnMiOjcwLCJvZmZzZXRfbnMiOjAsInVuY2VydGFpbnR5X25zIjowLCJ1dGNfbnMiOjEwNzB9LCJzY2hlbWEiOiJkYy5jbG9jay1hc3Nlc3NtZW50LzIiLCJzZXF1ZW5jZSI6MSwic291cmNlX3JlY29yZF9pZCI6IjgzZTA5ODY1NTk2YmYzOTliZjI4ZTIxYzM5MzI4ZWU1NWEyZjgxMGNkNGM3Y2UwNjkzYWZhMWJlYTdkMjIyNmYifQ==",
+        "encoding": "base64",
+        "sha256": "c577b122950bbd7543404974f9136fc54e3396ebe5ad9b68df2ef4cb42d3e93d"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "process:clock:0",
+        "connection_id": "control:clock-assessment",
+        "monotonic_ns": 70,
+        "process_session_id": "process",
+        "receive_seq": 1,
+        "receive_utc_ns": 1070
+      },
+      "record_id": "790fc977a9a5ea2fc30523bbeb20144fe89514f4f4a1435b93efe3eeedb9e09a",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_measurement",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 35,
+        "data": "b3JpZ2luYWwgcmVmZXJlbmNlLXByb3ZpZGVyIGJ5dGVzIDI=",
+        "encoding": "base64",
+        "sha256": "a366a38bff5edcd4579fe854bdcb5a28da05c04a64bd987cffae7e7ca18ac046"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "measurement",
+        "connection_id": "control:clock-source",
+        "monotonic_ns": 140,
+        "process_session_id": "process",
+        "receive_seq": 2,
+        "receive_utc_ns": 1140
+      },
+      "record_id": "0db85c4c978a47c530639d0c5f192a9b2ea3767bb89271da4e57f896dca6b322",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_assessments",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 905,
+        "data": "eyJhc3Nlc3NtZW50Ijp7ImFsaWduZWQiOmZhbHNlLCJhbmNob3IiOnsiY2xvY2tfZXBvY2giOiJwcm9jZXNzOmNsb2NrOjEiLCJlcG9jaF9zdGFydGVkX25zIjoxNDAsImVwb2NoX3N0YXJ0ZWRfb3JkaW5hbCI6MCwiaGVhbHRoeV9zYW1wbGVzIjowLCJtb25vdG9uaWNfbnMiOjE0MCwicHJvY2Vzc19zZXNzaW9uX2lkIjoicHJvY2VzcyIsInVuY2VydGFpbnR5X25zIjowLCJ1dGNfbnMiOjExNDB9LCJldmlkZW5jZV9zaGEyNTYiOiIzOTI0NDhkZDhhZDMyZDkxNzQxNWVjZWNiYzM3NzBlZDM3ODQ4NzJlZDdmNmRlNWU5ZDhiMTU3OWU3YmVhNzY3IiwiaW52YWxpZGF0ZWRfZXBvY2giOiJwcm9jZXNzOmNsb2NrOjAiLCJyZWFzb24iOiJzYW1wbGVfc3RhbGUifSwiaW5ncmVzc19vcmRpbmFsIjowLCJwb2xpY3kiOnsibWF4X2Vwb2NocyI6OCwibWF4X29mZnNldF9ucyI6MTAwLCJtYXhfc2FtcGxlX2FnZV9ucyI6NjAsInNhbXBsZV9pbnRlcnZhbF9ucyI6NjAsInN0ZXBfdG9sZXJhbmNlX25zIjoyfSwicHJldmlvdXNfc2hhMjU2IjoiMDYxMmRmMmU3ODE0YWI3ODUxYTZjOWU0ZTc4Yzk3Mzc3MmY4YWNhYzViYmRmMGU4OGI4ODM2OTY2OGU0OTM4ZSIsInNhbXBsZSI6eyJib290X2lkIjoiYm9vdCIsImV2aWRlbmNlX3NoYTI1NiI6IjM5MjQ0OGRkOGFkMzJkOTE3NDE1ZWNlY2JjMzc3MGVkMzc4NDg3MmVkN2Y2ZGU1ZTlkOGIxNTc5ZTdiZWE3NjciLCJtb25vdG9uaWNfbnMiOjE0MCwib2Zmc2V0X25zIjowLCJ1bmNlcnRhaW50eV9ucyI6MCwidXRjX25zIjoxMTQwfSwic2NoZW1hIjoiZGMuY2xvY2stYXNzZXNzbWVudC8yIiwic2VxdWVuY2UiOjIsInNvdXJjZV9yZWNvcmRfaWQiOiIwZGI4NWM0Yzk3OGE0N2M1MzA2MzlkMGM1ZjE5MmE5YjJlYTM3NjdiYjg5MjcxZGE0ZTU3Zjg5NmRjYTZiMzIyIn0=",
+        "encoding": "base64",
+        "sha256": "718c6523c0f7a7634160a153d0f52ce1484ec78168ca13e071f720c946a97025"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "process:clock:1",
+        "connection_id": "control:clock-assessment",
+        "monotonic_ns": 140,
+        "process_session_id": "process",
+        "receive_seq": 2,
+        "receive_utc_ns": 1140
+      },
+      "record_id": "a6703dedb15d7788ae45cb028b707ba5c45c8bbceaa3fb1ec3d9ae8f1c888064",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_measurement",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 35,
+        "data": "b3JpZ2luYWwgcmVmZXJlbmNlLXByb3ZpZGVyIGJ5dGVzIDM=",
+        "encoding": "base64",
+        "sha256": "2f145231eb4e2da0f7cea4bcefd7aaf29ac190cf9ec47fad71344f269151c263"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "measurement",
+        "connection_id": "control:clock-source",
+        "monotonic_ns": 210,
+        "process_session_id": "process",
+        "receive_seq": 3,
+        "receive_utc_ns": 1210
+      },
+      "record_id": "8aebacfbf367dd36f6ba6ef672323cee921c29ba93d5d779fce97549e6ad2ca7",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    },
+    {
+      "channel": "clock_assessments",
+      "environment": "production",
+      "instrument": null,
+      "kind": "control",
+      "native_fields": {},
+      "native_product": "control",
+      "payload": {
+        "bytes": 905,
+        "data": "eyJhc3Nlc3NtZW50Ijp7ImFsaWduZWQiOmZhbHNlLCJhbmNob3IiOnsiY2xvY2tfZXBvY2giOiJwcm9jZXNzOmNsb2NrOjIiLCJlcG9jaF9zdGFydGVkX25zIjoyMTAsImVwb2NoX3N0YXJ0ZWRfb3JkaW5hbCI6MCwiaGVhbHRoeV9zYW1wbGVzIjowLCJtb25vdG9uaWNfbnMiOjIxMCwicHJvY2Vzc19zZXNzaW9uX2lkIjoicHJvY2VzcyIsInVuY2VydGFpbnR5X25zIjowLCJ1dGNfbnMiOjEyMTB9LCJldmlkZW5jZV9zaGEyNTYiOiIzZDNiODQzZWJjMjgzMzA3OGY3MzBiOThjY2YzOWUwYTQ2NjRjOTg0MmE0NTdhZmIyYmRkZDdkZjRjODA3ZWQwIiwiaW52YWxpZGF0ZWRfZXBvY2giOiJwcm9jZXNzOmNsb2NrOjEiLCJyZWFzb24iOiJzYW1wbGVfc3RhbGUifSwiaW5ncmVzc19vcmRpbmFsIjowLCJwb2xpY3kiOnsibWF4X2Vwb2NocyI6OCwibWF4X29mZnNldF9ucyI6MTAwLCJtYXhfc2FtcGxlX2FnZV9ucyI6NjAsInNhbXBsZV9pbnRlcnZhbF9ucyI6NjAsInN0ZXBfdG9sZXJhbmNlX25zIjoyfSwicHJldmlvdXNfc2hhMjU2IjoiNjMwMTBlZjQzZTE0NzMyM2ZkNTE2ZmUzMTNiY2Q2YTU5MzU1ZTBhOTIxOGUwNDRmNjY5MGVjMjBmOWU4YjgyOCIsInNhbXBsZSI6eyJib290X2lkIjoiYm9vdCIsImV2aWRlbmNlX3NoYTI1NiI6IjNkM2I4NDNlYmMyODMzMDc4ZjczMGI5OGNjZjM5ZTBhNDY2NGM5ODQyYTQ1N2FmYjJiZGRkN2RmNGM4MDdlZDAiLCJtb25vdG9uaWNfbnMiOjIxMCwib2Zmc2V0X25zIjowLCJ1bmNlcnRhaW50eV9ucyI6MCwidXRjX25zIjoxMjEwfSwic2NoZW1hIjoiZGMuY2xvY2stYXNzZXNzbWVudC8yIiwic2VxdWVuY2UiOjMsInNvdXJjZV9yZWNvcmRfaWQiOiI4YWViYWNmYmYzNjdkZDM2ZjZiYTZlZjY3MjMyM2NlZTkyMWMyOWJhOTNkNWQ3NzlmY2U5NzU0OWU2YWQyY2E3In0=",
+        "encoding": "base64",
+        "sha256": "76b7865ee593d4f537bad3b01afda790ff49d82c368fc5fa2c58571d6226bb93"
+      },
+      "provenance": {
+        "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "metadata_sha256": null,
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "universe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "receipt": {
+        "capture_id": "capture",
+        "clock_epoch": "process:clock:2",
+        "connection_id": "control:clock-assessment",
+        "monotonic_ns": 210,
+        "process_session_id": "process",
+        "receive_seq": 3,
+        "receive_utc_ns": 1210
+      },
+      "record_id": "09aec64dd36e282b55ffbe84dcd78cec6e25246319a824d9b8833612ffe397c7",
+      "schema": "dc.raw/2",
+      "venue": "deribit"
+    }
+  ]
+}
