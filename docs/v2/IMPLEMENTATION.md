@@ -34,6 +34,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5m | FIFO seal and immutable pinned snapshot inputs while raw capture remains open | Approved; [evidence](implementation/chunk-05m.json) |
 | 5n | Separate bounded snapshot publisher with immutable deadline/clock/knowledge delivery receipts | Approved after fixes; [evidence](implementation/chunk-05n.json) |
 | 5o | Canonical publisher reports in raw FIFO, idempotent durable archival and bounded report replay | Approved; [evidence](implementation/chunk-05o.json) |
+| 5p | Bounded recurring local minute cutoffs with leased publication handoff and explicit stop/backlog failures | Approved; [evidence](implementation/chunk-05p.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -47,7 +48,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current354 combined tests pass:319 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current365 combined tests pass:330 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -191,3 +192,33 @@ Reports now travel in committed raw segments, but no independent backup service
 or end-to-end receipt reconciliation/coverage CLI has been implemented. Publisher
 clock invalidation markers remain in its store and must be retained on recovery;
 automatic raw clock correction mapping and recurring orchestration remain pending.
+
+
+Chunk5p adds `MinuteCutoffs` over a fresh configured local lane. Each cycle freezes
+a bounded snapshot plan, allocates the next consecutive UTC minute, waits for its
+saved monotonic deadline, then samples health and submits the barrier in the same
+event-loop turn as receipt admission. A delayed wake never moves the barrier.
+Forward jumps preserve missing labels; clock-unhealthy future labels use capped
+monotonic pacing only, never a fabricated admission deadline. Early wakeups are
+rechecked and bounded. Clock reference sampling remains the capture supervisor's
+responsibility; timer checks do not replace measured reference samples.
+
+One closed cutoff/plan can be leased by a publisher consumer until acknowledgement.
+The current cycle may retain one more bounded plan. Handoff acknowledgement frees
+capacity, not proof of delivery. An outstanding handoff at the next close visibly
+halts only that venue and retains both durable closures. The scheduler does not
+drop oldest work, grow a queue, or reduce the declared universe/cadence. Independent
+raw capture remains active through ordinary waiting, publication and clean timer
+stop. The consumer must keep the lease through its bounded downstream handling.
+
+`submit_cutoff_failure` durably resolves a cleanly stopped allocated timer without
+inventing a barrier. Cancellation drains admitted allocation/closure/failure
+commands before returning. Process-clock/callback/timer faults halt the lane with
+runtime/emergency evidence. This is a fresh-scope timer, not restart allocation
+recovery. Production still requires supervisor ordering: stop timers, drain owned
+publication, then stop the lane; hard hung operations need process supervision.
+A two-cycle synthetic integration consumes closures, seals inputs, publishes real
+book snapshots and archives/replays exact delivery reports while raw remains open.
+The production publication-consumer loop, restart allocation resume, automatic
+clock/gap correction mapping, checkpoint capacity and intended-host acceptance
+remain pending; no live collection or deployment is started by these tests.

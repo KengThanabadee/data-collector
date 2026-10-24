@@ -504,6 +504,22 @@ class ArchiveLane:
         self._cutoff_active=dict(cutoff_id=cutoff_id,state='closing')
         return future
 
+    def submit_cutoff_failure(self, cutoff_id, *, utc_ns, monotonic_ns, boot_id):
+        """Resolve an allocated timer stopped before its barrier; no fake close."""
+        integer(cutoff_id,'cutoff identity')
+        if self._cutoff_active!={'cutoff_id':cutoff_id,'state':'allocated'}:
+            raise ValueError('await a successful allocation before failure')
+        future=self._submit_cutoff('fail',dict(cutoff_id=cutoff_id),utc_ns=utc_ns,
+            monotonic_ns=monotonic_ns,boot_id=boot_id)
+        self._cutoff_active=dict(cutoff_id=cutoff_id,state='failing')
+        return future
+
+    def halt_snapshot_schedule(self, reason):
+        """Visible venue-local capture halt when bounded scheduling cannot run."""
+        if reason not in {'snapshot_handoff_backlog','snapshot_schedule_failure','snapshot_schedule_clock_invalid'}:
+            raise ValueError('explicit snapshot schedule failure required')
+        self._failure(reason,global_scope=True)
+
     def _execute_cutoff(self, request):
         """Disk-owner call only: all bound controls share the raw FIFO owner."""
         body=strict_json(request.body);r=request.receipt
@@ -522,9 +538,13 @@ class ArchiveLane:
         if body['operation']=='allocate':
             event=self._cutoffs.allocate(payload['cutoff_utc_ns'],
                 [StreamKey(**s) for s in payload['required_streams']],payload['dependencies'],**args)
-        else:
+        elif body['operation']=='close':
             event=self._cutoffs.close(payload['cutoff_id'],
                 healthy_streams=[StreamKey(**s) for s in payload['healthy_streams']],**args)
+        else:
+            event=self._cutoffs.coordinator.fail(payload['cutoff_id'],'snapshot_schedule_stopped',
+                utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,
+                clock_epoch=self._clock.assessment.anchor.clock_epoch)
         records=self._cutoffs.coordinator.allocations if event['kind']=='allocated' else self._cutoffs.coordinator.resolutions
         reference=records[event['payload']['cutoff_id']]
         return event,reference['record_id'],reference['hash'],self._clock.pin
