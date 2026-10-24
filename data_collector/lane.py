@@ -123,7 +123,7 @@ class DurableDeliveryAck:
 @dataclass(frozen=True, slots=True)
 class DurableRecoveryAck:
     recovery: CutoffRecovery
-    ledger_pin: LedgerPin
+    ledger_pin: LedgerPin | None
     elapsed_ns: int | None
     timing_valid: bool
 
@@ -166,9 +166,10 @@ class ArchiveLane:
         integer(max_recovery_ns,'startup recovery time bound',1)
         if recovery is not None:
             if (not isinstance(recovery,RecoveryRequest) or not isinstance(recovery.cutoff_pin,CutoffPin) or
-                    not recovery.cutoff_pin.count or not isinstance(recovery.ledger_pin,LedgerPin) or
+                    (recovery.ledger_pin is not None and not isinstance(recovery.ledger_pin,LedgerPin)) or
+                    (recovery.cutoff_pin.count and recovery.ledger_pin is None) or
                     type(recovery.segments) is not tuple or not 1<=len(recovery.segments)<=snapshot_limits.max_segments or
-                    recovery.ledger_pin.ledger_id!=cutoff_ledger_id or cutoff_scope is None):
+                    (recovery.ledger_pin is not None and recovery.ledger_pin.ledger_id!=cutoff_ledger_id) or cutoff_scope is None):
                 raise ValueError('bounded pinned cutoff/ledger recovery request required')
             for segment in recovery.segments:
                 if not isinstance(segment,RecoverySegment) or not isinstance(segment.path,Path):raise ValueError('typed recovery segments required')
@@ -404,7 +405,7 @@ class ArchiveLane:
             raise ValueError('one configured startup recovery command required')
         integer(utc_ns,'recovery UTC');integer(monotonic_ns,'recovery monotonic')
         if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('recovery observation bound')
-        body=canonical(dict(cutoff_pin=asdict(self._recovery_request.cutoff_pin),ledger_pin=asdict(self._recovery_request.ledger_pin),
+        body=canonical(dict(cutoff_pin=asdict(self._recovery_request.cutoff_pin),ledger_pin=None if self._recovery_request.ledger_pin is None else asdict(self._recovery_request.ledger_pin),
             segments=[dict(path=str(s.path),context_sha256=s.context_sha256,manifest_sha256=s.manifest_sha256) for s in self._recovery_request.segments]))
         request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
             'control:cutoff-recovery-request',0,utc_ns,monotonic_ns,self._last_observation[2]),
@@ -423,11 +424,12 @@ class ArchiveLane:
         prior=lambda:iter_recovery_prefix(segments,venue=self.identity['venue'],environment=self.identity['environment'],
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
             max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+        expected_ledger=None if value['ledger_pin'] is None else LedgerPin(**value['ledger_pin'])
         ledger=DurableLedger(self.writer,ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
-            prior_records=prior,expected_pin=LedgerPin(**value['ledger_pin']),max_scan_records=self.snapshot_limits.max_records,
+            prior_records=prior,expected_pin=expected_ledger,max_scan_records=self.snapshot_limits.max_records,
             max_scan_bytes=self.snapshot_limits.max_scan_bytes)
-        if ledger.pin()!=LedgerPin(**value['ledger_pin']):raise ValueError('startup ledger knowledge differs from expected pin')
+        if ledger.pin(allow_empty=True)!=expected_ledger:raise ValueError('startup ledger knowledge differs from expected pin')
         result=reconcile_cutoffs(self.writer,segments,CutoffPin(**value['cutoff_pin']),capture_scope=self._cutoff_scope,
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
             utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,clock_epoch=request.receipt.clock_epoch,
@@ -437,7 +439,7 @@ class ArchiveLane:
             expected_prior_pin=CutoffPin(**value['cutoff_pin']))
         self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger,recovery=result)
         for record in prior():self._source_records+=1;self._source_bytes+=len(record.to_bytes())+64
-        return result,ledger.pin()
+        return result,ledger.pin(allow_empty=True)
 
     def submit_clock(self, sample, source):
         """Queue one measured clock pair in FIFO order with ordinary raw writes.
@@ -606,12 +608,12 @@ class ArchiveLane:
             ledger=DurableLedger(self.writer,ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
                 capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
                 provenance=self.provenance)
-            ledger.initialize(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,
-                              clock_epoch=self._clock.assessment.anchor.clock_epoch)
             self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger)
         args=dict(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,boot_id=body['boot_id'])
         payload=body['payload']
         if body['operation']=='allocate':
+            self._cutoffs.ledger.initialize(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,
+                clock_epoch=self._clock.assessment.anchor.clock_epoch)
             event=self._cutoffs.allocate(payload['cutoff_utc_ns'],
                 [StreamKey(**s) for s in payload['required_streams']],payload['dependencies'],**args)
         elif body['operation']=='close':
@@ -889,7 +891,7 @@ class ArchiveLane:
                         self._recovery_result=result
                         self._recovery_ready=valid
                         self._history_count=self._cutoff_allocations_submitted=result.next_cutoff_id
-                        self._cutoff_last_utc=result.next_cutoff_utc_ns-MINUTE_NS
+                        self._cutoff_last_utc=None if result.next_cutoff_utc_ns is None else result.next_cutoff_utc_ns-MINUTE_NS
                         if not valid:self._failure('cutoff_recovery_deadline_or_clock_invalid',global_scope=True)
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(DurableRecoveryAck(result,pin,latency if valid else None,valid))

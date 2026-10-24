@@ -27,7 +27,7 @@ class CutoffRecovery:
     source_pin: CutoffPin
     recovered_pin: CutoffPin
     next_cutoff_id: int
-    next_cutoff_utc_ns: int
+    next_cutoff_utc_ns: int | None
     failed_cutoff_ids: tuple[int,...]
     closed_cutoff_ids: tuple[int,...]
     marker_record_id: str
@@ -39,7 +39,7 @@ class RecoveryRequest:
     """Caller-selected immutable history and authoritative cutoff/ledger tips."""
     segments: tuple[RecoverySegment,...]
     cutoff_pin: CutoffPin
-    ledger_pin: LedgerPin
+    ledger_pin: LedgerPin | None
 
 
 def _read(path,limit):
@@ -96,8 +96,8 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
     from a potentially incomplete directory listing. Prefix objects stay pinned
     on every read. This marker is not a checkpoint or allocation-resume facade.
     """
-    if not isinstance(expected_pin,CutoffPin) or not expected_pin.count or not isinstance(provenance,Provenance):
-        raise ValueError('nonempty authoritative cutoff pin and typed provenance required')
+    if not isinstance(expected_pin,CutoffPin) or not isinstance(provenance,Provenance):
+        raise ValueError('authoritative cutoff pin and typed provenance required')
     for name,value in (('segments',max_segments),('records',max_records),('scan bytes',max_scan_bytes),
                        ('cutoffs',max_cutoffs),('control bytes',max_control_bytes),('projection bytes',max_projection_bytes)):
         integer(value,name,1)
@@ -150,23 +150,27 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
         process_session_id=process_session_id,provenance=provenance,prior_records=prior,
         max_cutoffs=max_cutoffs,max_control_bytes=max_control_bytes,max_projection_bytes=max_projection_bytes,
         expected_prior_pin=expected_pin)
-    if not coordinator.allocations:raise ValueError('recovery requires a known allocation prefix')
     unresolved=tuple(i for i in coordinator.allocations if i not in coordinator.resolutions)
     completed=tuple(strict_json(r.body)['payload']['cutoff_id'] for r in target if r is not marker)
     failed=tuple(sorted(completed+unresolved))
     if len(set(failed))!=len(failed) or completed!=tuple(sorted(completed)) or (completed and unresolved and completed[-1]>=unresolved[0]):
         raise ValueError('noncanonical recovery resolution order')
     closed=tuple(sorted(i for i,v in coordinator.resolutions.items() if 'barrier' in v['payload']))
-    next_id=len(coordinator.allocations);next_utc=coordinator.allocations[next_id-1]['payload']['utc_ns']+MINUTE_NS
-    if next_utc>2**63-1:raise ValueError('recovery cutoff UTC range exhausted')
+    next_id=len(coordinator.allocations)
+    next_utc=coordinator.allocations[next_id-1]['payload']['utc_ns']+MINUTE_NS if next_id else None
+    if next_utc is not None and next_utc>2**63-1:raise ValueError('recovery cutoff UTC range exhausted')
     references=[dict(context_sha256=s.context_sha256,manifest_sha256=s.manifest_sha256) for s in segments]
     def marker_body(pin):
-        return canonical(dict(schema=SCHEMA,scope=capture_scope,source_pin=asdict(expected_pin),recovered_pin=asdict(pin),
-            input_segments=references,failed_cutoff_ids=failed,closed_cutoff_ids=closed,next_cutoff_id=next_id,next_cutoff_utc_ns=next_utc))
+        value=dict(schema=SCHEMA,scope=capture_scope,source_pin=asdict(expected_pin),recovered_pin=asdict(pin),
+            input_segments=references,failed_cutoff_ids=failed,closed_cutoff_ids=closed,next_cutoff_id=next_id,next_cutoff_utc_ns=next_utc)
+        if not next_id:
+            value['preallocation_interruption']=dict(continuity='not_proven',last_closed_cutoff_id=None,
+                first_affected_cutoff_id=None,time_bound='not_inferred')
+        return canonical(value)
     def marker_record(body):
         return RawRecord(Receipt(capture_id,process_session_id,'control:cutoff-recovery:'+capture_scope,0,
             utc_ns,monotonic_ns,clock_epoch),*writer.identity,'control','cutoff_recovery:'+capture_scope,'control',body,provenance)
-    predicted=CutoffPin(coordinator.pin.count+len(unresolved),'f'*64,'f'*64)
+    predicted=CutoffPin(coordinator.pin.count+len(unresolved),'f'*64,'f'*64) if unresolved else coordinator.pin
     preview=marker_body(predicted)
     preview_record=marker if marker is not None else marker_record(preview)
     if len(preview)>max_control_bytes or len(preview_record.to_bytes())>writer.limits.max_record_bytes:

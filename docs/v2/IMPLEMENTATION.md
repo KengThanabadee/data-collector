@@ -39,6 +39,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5r | Pinned cross-process cutoff reconciliation with durable interruption resolutions and recovery marker | Approved after fixes; [evidence](implementation/chunk-05r.json) |
 | 5s | Explicit pinned startup resume through raw lane, minute timer and historical snapshot publication | Approved after fixes; [evidence](implementation/chunk-05s.json) |
 | 5t | Owned capture inventory and automatic pinned startup selection with opened-WAL evidence | Approved after fixes; [evidence](implementation/chunk-05t.json) |
+| 5u | Pinned preallocation restart with explicit uncertainty, absent-ledger verification and fresh first-cutoff publication | Approved; [evidence](implementation/chunk-05u.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -52,7 +53,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current392 combined tests pass:357 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current430 combined tests pass:395 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -377,3 +378,42 @@ mapping, lost publication/report reconciliation, automatic corrections,
 checkpoint/index capacity, full feeds/CLI supervision, independent backup/restore
 and intended-host24h acceptance remain pending. This adds no live collection or
 deployment, and the default startup bounds are limits rather than capacity proof.
+
+
+Chunk5u permits a verified empty cutoff tip without treating unknown history as a
+fresh empty capture. A nonempty raw/clock prefix or even a zero-row preserved
+corrupt-tail prefix remains pinned in the automatic startup request. The fsynced
+recovery marker explicitly records `preallocation_interruption`: continuity is
+not proven, no last close or first affected cutoff is inferred, and UTC bounds
+are not invented. Its next global ID is0 and next UTC label is null; the caller
+chooses the first label from the new process clock. No historical cutoff or
+successful delivery is fabricated. Clean empty history still needs no recovery.
+
+A nullable ledger pin is an exact absence claim, independently compared against
+the entire verified prior prefix before the marker is written. It cannot omit
+existing ledger entries. A nonempty cutoff tip still requires a real ledger pin.
+A ledger initialized before the first cutoff, including an open correction, is
+carried forward unchanged. When no ledger exists, initialization occurs through
+the serialized lane at the actual first allocation; the normal ledger pin API
+continues to reject empty knowledge unless startup explicitly requests absence.
+
+The new process still needs two new clock samples and new process book/metadata
+inputs. Earlier clock health or quote owners cannot supply its alignment or book
+state. The marker's uncertainty describes the interrupted prior process; it is
+not a resolved gap, a cutoff-range correction, a UTC interval certificate or a
+substitute for existing correction rules. A carried open correction continues to
+invalidate its matching first new book until an explicit resolution.
+
+Eight new synthetic tests exercise automatic root selection through lane, timer,
+real snapshot publication and verified readback; old raw bytes/tail evidence and
+open-correction effects remain intact. They also cover old-clock warmup refusal,
+null-ledger omission rejection, nonempty-tip constructor refusal, exact one-record
+marker retry/read-only verification, forged label rejection and repeated restart
+before any allocation. Independent high-reasoning review approved the scope with
+54 focused tests passed. Final full-suite results and exact hashes are recorded
+in the chunk evidence.
+
+Mapping interruption/clock/feed gaps onto existing cutoff ranges, lost snapshot/
+report reconciliation, checkpoint capacity, all-feed transport/CLI supervision,
+legacy root adoption, independent backup/restore and intended-host24h acceptance
+remain pending. No live capture or deployment is started by these tests.

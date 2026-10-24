@@ -218,18 +218,14 @@ class CaptureStore:
         for reference in references:
             manifest=strict_json(self._read(reference.path/'manifest.json',SegmentLimits().max_manifest_bytes))
             uncertain=uncertain or bool(manifest['recovery_evidence'])
-        if not observed:
-            if uncertain:raise ValueError('empty recovered history has raw loss uncertainty')
-            return None
+        if not observed and not uncertain:return None
         coordinator=CutoffCoordinator(empty,capture_scope=self.scope,capture_id=self.capture_id,process_session_id=next_process_session_id,
             provenance=provenance,prior_records=prior)
         ledger=DurableLedger(empty,ledger_id=self.ledger_id,capture_scope=self.scope,capture_id=self.capture_id,
             process_session_id=next_process_session_id,provenance=provenance,prior_records=prior,
             max_scan_records=self.limits.max_records,max_scan_bytes=self.limits.max_scan_bytes)
-        if not coordinator.pin.count:
-            raise ValueError('raw history without cutoff allocation needs explicit startup gap reconciliation')
-        if not ledger.pin().head_hash:raise ValueError('cutoff history lacks validity ledger')
-        return RecoveryRequest(references,coordinator.pin,ledger.pin())
+        ledger_pin=ledger.pin(allow_empty=not coordinator.pin.count)
+        return RecoveryRequest(references,coordinator.pin,ledger_pin)
 
     def _append(self,phase,desc,utc_ns,monotonic_ns,clock_epoch):
         value=dict(schema='dc.capture-session/2',sequence=self._entries,previous_sha256=self._head,phase=phase,descriptor=desc)

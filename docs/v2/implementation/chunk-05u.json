@@ -1,0 +1,18 @@
+{
+  "chunk": "5u",
+  "status": "approved",
+  "reviewer": "dc_chunk5u_preallocation_review",
+  "reasoning_effort": "high",
+  "tests": "Root430 combined full-suite tests passed (395v2+35v1), including8 new preallocation integration/boundary tests and local HTTP fixtures. Root8 new tests and independent reviewer54 preallocation/recovery/startup/resume tests passed with ResourceWarning treated as errors. Exact one-record source/target retry, real first-cutoff publication/readback, old bytes/tail retention, carried open correction, fresh clock warmup, nullable knowledge omission rejection, repeated early restart and nonempty/null constructor refusal covered.",
+  "sources": {
+    "data_collector/recovery.py": "d2b4ae0645ef7790eb1aca5e7d65c7e0e5f19a2aaff4a5ae9fdbbe82199c8e41",
+    "data_collector/ledger.py": "debf7f485971c347d2927ee79973e474297113b5c4c03c1794fd6d7e875250bd",
+    "data_collector/lane.py": "c395a1a71f04a53b9fd87bb2b28031d00f63c01697a47c13a2be50116f24d23e",
+    "data_collector/startup.py": "14e4383d88271770b34cf17d67b3341d1e848be7c21f62504d1180f8021608e6",
+    "tests/test_dc_startup.py": "2bfdbd2f0dcf234be1afece94d9732c56ff030a0617d379c5817c3893966c975",
+    "tests/test_dc_preallocation.py": "f7cee764e13a2b99fcc3d6dd92b2e458d842fdf0148fcd9ea6cc31cde3d5cab4",
+    "docs/v2/IMPLEMENTATION.md": "db23452383bb0d82a2e7fd4d58de5d14fcc0496d45e8d30b4a3e695c489bd506"
+  },
+  "findings_closed": [],
+  "limits": "Local pinned preallocation restart only. A zero-cutoff tip has no next UTC label; marker records prior-process unproven continuity and no invented time/cutoff bounds. Nullable ledger is an exact absence claim rechecked before startup marker; initialized corrections remain pinned, fresh ledger initializes at first allocation. New clock samples/current-process inputs still required. Marker is not gap resolution or a mapped cutoff-range correction. Existing-cutoff interruption/clock/feed mapping, lost publication/report reconciliation, checkpoint capacity, full feeds/CLI/supervision, legacy root adoption, independent backup and intended-host24h acceptance remain pending. No live capture/deployment. PLANS implementation prefix only; research suffix/README excluded."
+}

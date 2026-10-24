@@ -36,11 +36,12 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5r: pinned cross-process cutoff reconciliation, interrupted allocation resolution and durable recovery marker; output-headroom repair independently approved,392 combined tests pass.
 - [x] Chunk5s: explicit pinned startup resume across raw lane, minute timer and snapshot publisher; cross-process close-origin repair independently approved,404 combined tests pass.
 - [x] Chunk5t: owned capture inventory and automatic pinned startup selection, including opened-WAL dependency proofs; missing-WAL repair independently approved,422 combined tests pass.
-- [ ] Remaining startup gap/publication reconciliation and automatic correction mapping remain pending.
+- [x] Chunk5u: retain and resume preallocation raw/corrupt-tail history with explicit uncertainty, exact nullable-ledger verification and fresh first-cutoff publication; independent high-reasoning review approved.
+- [ ] Existing-cutoff interruption/clock/feed gap mapping and lost-publication/report reconciliation remain pending.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current422 combined tests pass:387 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current430 combined tests pass:395 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

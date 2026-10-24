@@ -175,8 +175,9 @@ class DurableLedger:
             raise ValueError('explicit gap/recovery payload required')
         return self._append(payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
 
-    def pin(self):
+    def pin(self, *, allow_empty=False):
         self.refresh()
+        if allow_empty and not self._projection.entry_count:return None
         return self._projection.pin()
 
     def assess(self,capture_scope,target,cutoff_id,validity_as_published,pin):

@@ -237,12 +237,14 @@ class StartupTests(unittest.IsolatedAsyncioTestCase):
         store=self.store()
         with self.assertRaisesRegex(ValueError,'opened WAL proof differs'):store.recover(next_process_session_id='second')
 
-    async def test_preallocation_raw_history_and_registry_session_cap_fail_visibly(self):
+    async def test_preallocation_raw_history_is_pinned_and_registry_session_cap_fails_visibly(self):
         store=self.store(True);prepared=self.prepare(store)
         native=next(RawRecord.from_bytes(e) for e in self.wal.encoded_records(allow_unsealed=True)
                     if RawRecord.from_bytes(e).receipt.connection_id=='meta')
         prepared.writer.append(native);prepared.writer.abort();store.close();store=self.store()
-        with self.assertRaisesRegex(ValueError,'without cutoff allocation'):store.recover(next_process_session_id='second')
+        request=store.recover(next_process_session_id='second')
+        self.assertEqual(request.cutoff_pin.count,0)
+        self.assertIsNone(request.ledger_pin)
         store.close();shutil.rmtree(self.root/'store')
         store=self.store(True,limits=StartupLimits(max_sessions=1));old=self.captured(store)
         before=(self.root/'store'/'registry.wal').read_bytes()
