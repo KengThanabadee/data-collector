@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import redirect_stderr
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 import io
 import json
 from pathlib import Path
@@ -12,6 +12,10 @@ from unittest.mock import patch
 from data_collector.contracts import Provenance, RawRecord, Receipt, StreamKey, canonical, digest, strict_json
 from data_collector.clockcutoffs import verify_clock_binding
 from data_collector.cutoffs import MINUTE_NS
+from data_collector.replay import BookBinding, ReplayLimits, SnapshotPlan
+from data_collector.metadata import MetadataVersion
+from data_collector.snapshots import publish_snapshot, read_snapshot
+from data_collector.validity import FeedTarget
 from data_collector.journal import Journal, JournalLimits
 from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped, PENDING_CLOCK_EPOCH
 from data_collector.queues import ByteQueue, QueueCapacity, QueueLimits, VenueQueues
@@ -32,7 +36,7 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
     def observe(self):
         return self.utc+self.mono[0]-1000,self.mono[0],'epoch'
 
-    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None,cutoffs=False):
+    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None,cutoffs=False,snapshot_limits=None):
         self.counter += 1
         root = self.root/str(self.counter)
         provenance = Provenance('a'*64,'b'*64,'c'*64)
@@ -46,7 +50,8 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         q = queue or ByteQueue(QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768),now_ns=lambda:self.mono[0])
         lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections,
                            clock_policy=clock_policy,cutoff_scope='capture' if cutoffs else None,
-                           cutoff_ledger_id='ledger' if cutoffs else None)
+                           cutoff_ledger_id='ledger' if cutoffs else None,
+                           snapshot_limits=ReplayLimits() if snapshot_limits is None else snapshot_limits)
         lane.test_task = None
         self.addCleanup(writer.abort); self.addCleanup(emergency.close)
         async def cleanup():
@@ -106,13 +111,176 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         return lane.submit_cutoff_close(0,[StreamKey('capture','process','connection')],
             utc_ns=utc,monotonic_ns=mono,boot_id='boot')
 
-    async def ready_cutoffs(self):
+    async def ready_cutoffs(self,**kwargs):
         self.utc=MINUTE_NS-100
-        lane,emergency=self.lane(clock_policy=self.clock_policy(),cutoffs=True);self.start(lane)
+        lane,emergency=self.lane(clock_policy=self.clock_policy(),cutoffs=True,**kwargs);self.start(lane)
         await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
         self.mono[0]+=60
         await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
         return lane,emergency
+
+    async def closed_cutoff(self,lane):
+        await asyncio.wait_for(self.cutoff_request(lane),5)
+        await asyncio.wait_for(lane.submit_received(self.received(lane)),5)
+        self.mono[0]=1100
+        return await asyncio.wait_for(self.cutoff_close(lane),5)
+
+    def snapshot_input_request(self,lane,close_record_id):
+        utc,mono,_=self.observe()
+        return lane.submit_snapshot_inputs(close_record_id,utc_ns=utc,monotonic_ns=mono)
+
+    async def test_sealed_inputs_publish_and_replay_real_book_while_lane_remains_open(self):
+        lane,_=await self.ready_cutoffs()
+        inst=key();ws=StreamKey('capture','process','connection');meta=StreamKey('capture','process','meta')
+        attrs=dict(base_currency='BTC',amount_unit='native',quote_currency='native')
+        metadata=replace(self.received(lane),kind='metadata_version',channel='metadata',
+            receipt=replace(self.received(lane).receipt,connection_id='meta'),
+            body=canonical(dict(schema='dc.metadata/2',effective_at_ns=MINUTE_NS-100,attributes=attrs,supersedes=None)))
+        meta_ack=await asyncio.wait_for(lane.submit_received(metadata),5)
+        version=MetadataVersion(inst,replace(metadata.receipt,clock_epoch=meta_ack.clock_epoch),
+            MINUTE_NS-100,canonical(attrs))
+        plan=SnapshotPlan((BookBinding(FeedTarget(inst,'deribit_full','owner'),ws,meta,version.version_id),),'b'*64)
+        utc,mono,_=self.observe()
+        await asyncio.wait_for(lane.submit_cutoff_allocation(MINUTE_NS,[ws,meta],plan.dependencies,
+            utc_ns=utc,monotonic_ns=mono,boot_id='boot'),5)
+        self.mono[0]=1090
+        channel=f'book.{inst.native_symbol}.100ms'
+        body=canonical(dict(jsonrpc='2.0',method='subscription',params=dict(channel=channel,data=dict(
+            type='snapshot',timestamp=1,instrument_name=inst.native_symbol,change_id=10,
+            bids=[['new',100,2]],asks=[['new',101,3]]))))
+        await asyncio.wait_for(lane.submit_received(replace(self.received(lane),channel=channel,body=body)),5)
+        self.mono[0]=1100;utc,mono,_=self.observe()
+        closed=await asyncio.wait_for(lane.submit_cutoff_close(0,[ws,meta],utc_ns=utc,monotonic_ns=mono,boot_id='boot'),5)
+        inputs=await asyncio.wait_for(self.snapshot_input_request(lane,closed.record_id),5)
+        paths=[segment.path for segment in inputs.segments]
+        store=self.root/'published-live-prefix'
+        result=await asyncio.to_thread(publish_snapshot,store,paths,closed.record_id,plan)
+        self.assertEqual(result['descriptor']['close_sha256'],inputs.close_sha256)
+        self.assertEqual(strict_json(result['payload'])['books'][0]['validity_as_published'],'valid')
+        self.assertEqual(strict_json(result['payload'])['books'][0]['book']['bids'],[['100','2']])
+        self.assertEqual(await asyncio.to_thread(read_snapshot,store,result['snapshot_id'],paths),result)
+        self.assertTrue(lane.health()['accepting'])
+        self.assertFalse(lane.writer.closed)
+        self.mono[0]+=1
+        await asyncio.wait_for(lane.submit_received(self.received(lane,1)),5)
+
+    async def test_snapshot_inputs_seal_before_later_raw_and_retry_pins_first_prefix(self):
+        lane,_=await self.ready_cutoffs()
+        closed=await self.closed_cutoff(lane)
+        request=self.snapshot_input_request(lane,closed.record_id)
+        with self.assertRaises(ValueError):self.snapshot_input_request(lane,closed.record_id)
+        later=lane.submit_received(self.received(lane,1))
+        inputs,later_ack=await asyncio.wait_for(asyncio.gather(request,later),5)
+        self.assertEqual(inputs.close_sha256,closed.raw_sha256)
+        self.assertEqual(inputs.cutoff_id,0)
+        self.assertEqual(inputs.deadline_ns,1100)
+        self.assertTrue(inputs.timing_valid)
+        self.assertEqual(inputs.clock_pin,closed.clock_pin)
+        self.assertTrue(inputs.segments)
+        frozen=[]
+        for segment in inputs.segments:
+            encoded=(segment.path/'manifest.json').read_bytes()
+            self.assertEqual(digest(encoded),segment.manifest_sha256)
+            self.assertEqual(strict_json(encoded)['context_sha256'],segment.context_sha256)
+            frozen.extend(iter_segment_records(segment.path))
+            with self.assertRaises(FrozenInstanceError):segment.manifest_sha256='a'*64
+        self.assertTrue(any(r.record_id==closed.record_id and digest(r.to_bytes())==inputs.close_sha256 for r in frozen))
+        self.assertFalse(any(r.record_id==later_ack.record_id for r in frozen))
+        self.mono[0]+=1
+        await asyncio.wait_for(self.clock_check(lane),5)
+        count=len(lane.writer.committed)
+        retry=await asyncio.wait_for(self.snapshot_input_request(lane,closed.record_id),5)
+        self.assertEqual(retry.segments,inputs.segments)
+        self.assertEqual(retry.clock_pin,inputs.clock_pin)
+        self.assertEqual(len(lane.writer.committed),count)
+        self.assertGreater(lane._clock.pin.count,retry.clock_pin.count)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        self.assertTrue(any(r.record_id==later_ack.record_id for r in self.records(lane)))
+        self.assertFalse(any(r.channel=='snapshot_input_request' for r in self.records(lane)))
+
+    async def test_snapshot_inputs_require_closed_identity_and_bounded_observation(self):
+        disabled,_=self.lane()
+        with self.assertRaises(ValueError):self.snapshot_input_request(disabled,'a'*64)
+        lane,_=await self.ready_cutoffs()
+        with self.assertRaises(ValueError):self.snapshot_input_request(lane,'a'*64)
+        closed=await self.closed_cutoff(lane)
+        before=lane.queue.health()['bytes']
+        with self.assertRaises(ValueError):self.snapshot_input_request(lane,'b'*64)
+        for utc,mono in ((-1,1100),(True,1100),(self.utc,2**63)):
+            with self.assertRaises(ValueError):lane.submit_snapshot_inputs(closed.record_id,utc_ns=utc,monotonic_ns=mono)
+        self.assertEqual(lane.queue.health()['bytes'],before)
+        self.assertEqual(lane.health()['clock']['snapshot_requests_submitted'],0)
+
+    async def test_snapshot_input_seal_failure_is_unconfirmed_and_recoverable(self):
+        lane,emergency=await self.ready_cutoffs()
+        closed=await self.closed_cutoff(lane)
+        with patch.object(lane.writer,'rotate',side_effect=OSError('injected seal failure')),redirect_stderr(io.StringIO()):
+            request=self.snapshot_input_request(lane,closed.record_id)
+            later=lane.submit_received(self.received(lane,1))
+            await asyncio.wait_for(lane.test_task,5)
+        for future in (request,later):
+            with self.assertRaises(DurabilityUnknown):await future
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertTrue(event['payload']['clock']['snapshot_inputs_pending'])
+        self.assertEqual(event['payload']['clock']['last_closed_record_id'],closed.record_id)
+        recovered=recover_session(lane.writer.directory,lane.writer.directory.parent.parent/'archive')
+        records=[r for path in recovered for r in iter_segment_records(path)]
+        close=next(r for r in records if r.record_id==closed.record_id)
+        self.assertEqual(digest(close.to_bytes()),closed.raw_sha256)
+        verify_clock_binding(lambda:iter(records),close)
+
+    async def test_cancelled_snapshot_seal_drains_later_raw_without_exposing_mutable_wal(self):
+        lane,_=await self.ready_cutoffs()
+        closed=await self.closed_cutoff(lane)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.rotate
+        def gated():
+            entered.set()
+            if not release.wait(3):raise OSError('test gate timeout')
+            return original()
+        with patch.object(lane.writer,'rotate',side_effect=gated):
+            request=self.snapshot_input_request(lane,closed.record_id)
+            later=lane.submit_received(self.received(lane,1))
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            request.cancel();lane.test_task.cancel();await asyncio.sleep(0)
+            self.assertFalse(lane.test_task.done())
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(lane.test_task,5)
+        later_ack=await later
+        _,references,_=lane._snapshot_inputs
+        frozen=[r for ref in references for r in iter_segment_records(ref.path)]
+        self.assertTrue(any(r.record_id==closed.record_id for r in frozen))
+        self.assertFalse(any(r.record_id==later_ack.record_id for r in frozen))
+        self.assertFalse(lane.health()['clock']['snapshot_inputs_pending'])
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_snapshot_prefix_bounds_fail_before_extra_seal(self):
+        for limits in (ReplayLimits(max_records=1),ReplayLimits(max_scan_bytes=1),ReplayLimits(max_segments=1)):
+            with self.subTest(limits=limits):
+                self.mono[0]=1000
+                lane,_=await self.ready_cutoffs(snapshot_limits=limits)
+                closed=await self.closed_cutoff(lane)
+                await lane._disk(lane.writer.rotate)
+                await asyncio.wait_for(lane.submit_received(self.received(lane,1)),5)
+                count=len(lane.writer.committed)
+                with redirect_stderr(io.StringIO()):
+                    future=self.snapshot_input_request(lane,closed.record_id)
+                    await asyncio.wait_for(lane.test_task,5)
+                with self.assertRaises(DurabilityUnknown):await future
+                self.assertEqual(len(lane.writer.committed),count)
+                self.assertIsNone(lane._snapshot_inputs)
+
+    async def test_snapshot_input_queue_overflow_drains_previously_accepted_raw(self):
+        q=ByteQueue(QueueLimits(max_bytes=32768,max_items=1,max_item_bytes=8192),now_ns=lambda:self.mono[0])
+        lane,_=await self.ready_cutoffs(queue=q)
+        closed=await self.closed_cutoff(lane)
+        later=lane.submit_received(self.received(lane,1))
+        with self.assertRaises(QueueCapacity):self.snapshot_input_request(lane,closed.record_id)
+        await asyncio.wait_for(later,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'snapshot_input_queue_admission_failed')
+        self.assertEqual(lane.health()['clock']['snapshot_requests_submitted'],0)
+        self.assertEqual(lane.queue.budget.used,0)
 
     async def test_cutoff_configuration_and_invalid_requests_do_not_consume_queue_state(self):
         base,emergency_path=self.lane()

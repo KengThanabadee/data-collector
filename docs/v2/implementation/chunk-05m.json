@@ -1,0 +1,14 @@
+{
+  "chunk": "5m",
+  "status": "approved",
+  "reviewer": "dc_chunk5m_snapshot_inputs_review",
+  "reasoning_effort": "high",
+  "tests": "Root287 v2 tests pass. Reviewer independently passed54 lane tests and an extra retry-after-scan-bound/request-count/stopped-ingress/queue-release test. Fixture publishes and reads an actual synthetic metadata/book snapshot from sealed inputs while the lane remains open. Final status/count bookkeeping confirmed.",
+  "sources": {
+    "data_collector/lane.py": "602659d6853d73c610fdc022160146600d9407c0134187551b09312d94bdfdb1",
+    "tests/test_dc_lane.py": "1d019090f9c4e18b13ef9c2a03734064f87bc529bdf6108616ba4912bc368edd",
+    "docs/v2/IMPLEMENTATION.md": "aac3e9802e94ddd1812f61d78a7c5fe3c4b401f2fc6b20174d5c6f737df2ae6b"
+  },
+  "findings_closed": [],
+  "limits": "Pinned committed input acquisition only: frozen context/manifest references and close hash, not recurring/runtime publication or5s delivery certification. Conservative framed-byte/count caps remain explicit; checkpoint capacity, automatic corrections, all-feed runtime and intended-host acceptance remain pending. The prior315-test combined run verified280v2+35v1; no new322-test combined claim. PLANS implementation prefix reviewed; research suffix/README excluded."
+}

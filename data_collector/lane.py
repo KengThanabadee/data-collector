@@ -21,6 +21,7 @@ from .queues import ByteQueue, QueueBacklog, QueueCapacity
 from .journal import Journal
 from .clock import ClockAssessment, ClockSample
 from .clocklog import ClockPin, DurableClock, SOURCE, CONTROL, validate_clock_source
+from .replay import ReplayLimits
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -66,6 +67,27 @@ class DurableCutoffAck:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class SnapshotSegmentInput:
+    path: Path
+    context_sha256: str
+    manifest_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class DurableSnapshotInputs:
+    """Immutable committed input set; not a published snapshot or deadline proof."""
+    close_record_id: str
+    close_sha256: str
+    cutoff_id: int
+    deadline_ns: int
+    segments: tuple[SnapshotSegmentInput, ...]
+    replay_limits: ReplayLimits
+    clock_pin: ClockPin
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
@@ -76,6 +98,7 @@ class _Pending:
     clock_check: bool = False
     stamp_clock: bool = False
     cutoff_operation: str | None = None
+    snapshot_inputs: bool = False
 
 
 class ArchiveLane:
@@ -88,7 +111,7 @@ class ArchiveLane:
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
                  clock_tolerance_ns=100_000_000, clock_policy=None,
-                 cutoff_scope=None, cutoff_ledger_id=None):
+                 cutoff_scope=None, cutoff_ledger_id=None,snapshot_limits=ReplayLimits()):
         if not isinstance(queue, ByteQueue):
             raise ValueError('typed byte queue required')
         status = queue.health()
@@ -96,6 +119,7 @@ class ArchiveLane:
             raise ValueError('fresh empty byte queue required')
         integer(max_connections, 'connection count bound', 1)
         integer(clock_tolerance_ns, 'wall/monotonic clock tolerance', 1)
+        if not isinstance(snapshot_limits,ReplayLimits):raise ValueError('typed snapshot replay limits required')
         if (cutoff_scope is None) != (cutoff_ledger_id is None):
             raise ValueError('explicit cutoff scope and ledger identity required together')
         if cutoff_scope is not None:
@@ -106,6 +130,7 @@ class ArchiveLane:
             _contract_policy(clock_policy)
             namespaces=[SOURCE,CONTROL,'control:runtime:'+writer.identity[0],
                 'control:emergency:'+writer.identity[0],'control:clock-check-request','control:cutoff-request',
+                'control:snapshot-input-request',
                 'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
             if len(set(namespaces))!=len(namespaces):
                 raise ValueError('cutoff and runtime control namespaces must be distinct')
@@ -141,6 +166,10 @@ class ArchiveLane:
         self._cutoff_commands_submitted = self._cutoff_allocations_submitted = 0
         self._cutoff_last_utc = self._cutoff_active = None
         self._cutoff_deadline_ns = None
+        self._last_closed = self._snapshot_inputs = None
+        self._snapshot_inputs_pending = False
+        self._snapshot_requests_submitted = 0
+        self.snapshot_limits = snapshot_limits
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='dc-'+identity['venue'])
         self._pending = {}
         self._submitted, self._durable = {}, {}
@@ -464,6 +493,66 @@ class ArchiveLane:
         reference=records[event['payload']['cutoff_id']]
         return event,reference['record_id'],reference['hash'],self._clock.pin
 
+    def submit_snapshot_inputs(self, close_record_id, *, utc_ns, monotonic_ns):
+        """Queue a seal and freeze immutable inputs for the latest closed cutoff.
+
+        The caller may publish/replay the returned segments on a separate worker
+        while raw capture continues. A retry for the same close retains the first
+        frozen input set and clock pin, even after later raw/clock controls arrive.
+        Only one request is in flight; no publication or five-second guarantee is
+        implied by this durable-input acknowledgement.
+        """
+        if self._stopping or self._terminal:raise LaneStopped('venue archive ingress stopped')
+        sha256(close_record_id,'snapshot close identity')
+        if self._last_closed is None or self._last_closed['close_record_id']!=close_record_id:
+            raise ValueError('latest durable closed cutoff required for snapshot inputs')
+        if self._snapshot_inputs_pending:raise ValueError('one snapshot input request at a time')
+        integer(utc_ns,'snapshot request UTC');integer(monotonic_ns,'snapshot request monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('snapshot request clock bound')
+        if self._snapshot_requests_submitted>=10000:
+            self._failure('snapshot_input_request_bound',global_scope=True)
+            raise QueueCapacity('snapshot input request count bound; rotate scope')
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
+            'control:snapshot-input-request',self._snapshot_requests_submitted,utc_ns,monotonic_ns,
+            self._last_observation[2]),*self.writer.identity,'control','snapshot_input_request','control',
+            canonical(self._last_closed),self.provenance)
+        if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:
+            self._failure('receipt_monotonic_regression',request,global_scope=True)
+            raise LaneStopped('snapshot request regressed behind admitted ingress')
+        future=asyncio.get_running_loop().create_future()
+        try:
+            ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('snapshot_input_queue_admission_failed',request,global_scope=True)
+            raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,
+            timing_epoch=self._last_observation[2],snapshot_inputs=True)
+        self._snapshot_inputs_pending=True
+        self._snapshot_requests_submitted+=1
+        self._last_submitted_mono=monotonic_ns
+        self._wakeup.set()
+        return future
+
+    def _seal_snapshot_inputs(self, request):
+        """Disk-owner call: seal before exposing any path to a live publisher."""
+        value=strict_json(request.body)
+        if self._snapshot_inputs is not None and self._snapshot_inputs[0]==value:
+            return self._snapshot_inputs
+        expected=len(self.writer.committed)+int(bool(self.writer.active.state.records))
+        if (expected>self.snapshot_limits.max_segments or self.writer.state.records>self.snapshot_limits.max_records or
+                self.writer.state.valid_bytes>self.snapshot_limits.max_scan_bytes):
+            raise QueueCapacity('snapshot committed prefix bound; checkpoint/session required')
+        self.writer.rotate()
+        paths=tuple(self.writer.committed)
+        if not paths or len(paths)>self.snapshot_limits.max_segments or len(paths)!=len(self.writer.references):
+            raise ValueError('bounded committed snapshot inputs required')
+        # The close was produced by this lane. The rotating writer verifies all
+        # sealed bytes; later publication verifies its exact close hash/plan.
+        references=tuple(SnapshotSegmentInput(path,ref['context_sha256'],ref['manifest_sha256'])
+                         for path,ref in zip(paths,self.writer.references))
+        self._snapshot_inputs=(value,references,self._clock.pin)
+        return self._snapshot_inputs
+
     def stop(self, reason='operator_stop'):
         if reason not in {'operator_stop','budget_complete','shutdown'}:
             raise ValueError('explicit graceful stop reason required')
@@ -495,7 +584,10 @@ class ArchiveLane:
             checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin),
             cutoff_commands_submitted=self._cutoff_commands_submitted,
             cutoff_scope=self._cutoff_scope,cutoff_allocations_submitted=self._cutoff_allocations_submitted,
-            active_cutoff=None if self._cutoff_active is None else dict(self._cutoff_active))
+            active_cutoff=None if self._cutoff_active is None else dict(self._cutoff_active),
+            last_closed_record_id=None if self._last_closed is None else self._last_closed['close_record_id'],
+            snapshot_requests_submitted=self._snapshot_requests_submitted,
+            snapshot_inputs_pending=self._snapshot_inputs_pending)
 
     def _timing(self, lease, receipt, *, epoch=None):
         stamp, valid, _ = self._observation()
@@ -572,12 +664,24 @@ class ArchiveLane:
                     if lease.late or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
+                    if pending.snapshot_inputs:
+                        value,paths,pin=await self._disk(self._seal_snapshot_inputs,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        result=DurableSnapshotInputs(**value,segments=paths,clock_pin=pin,replay_limits=self.snapshot_limits,
+                            receive_to_durable_ns=latency,timing_valid=timely)
+                        self._snapshot_inputs_pending=False
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(result)
+                        continue
                     if pending.cutoff_operation is not None:
                         event,record_id,raw_hash,pin=await self._disk(self._execute_cutoff,record)
                         latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
                         self._cutoff_active=(dict(cutoff_id=event['payload']['cutoff_id'],state='allocated')
                                              if event['kind']=='allocated' else None)
                         self._cutoff_deadline_ns=event['payload'].get('deadline_ns') if event['kind']=='allocated' else None
+                        if event['kind']=='closed':
+                            self._last_closed=dict(close_record_id=record_id,close_sha256=raw_hash,
+                                cutoff_id=event['payload']['cutoff_id'],deadline_ns=event['payload']['barrier']['deadline_ns'])
                         result=DurableCutoffAck(event,record_id,raw_hash,pin,latency,timely)
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
