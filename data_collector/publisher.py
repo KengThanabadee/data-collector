@@ -23,9 +23,7 @@ from .segments import SegmentLimits, _mkdir, iter_segment_records
 from .snapshots import PublicationLimits, publish_snapshot, read_snapshot
 from .validity import LedgerEntry, ValidityLedger
 
-DELIVERY_NS = 5_000_000_000
-REASONS = frozenset({'on_time','input_timing_invalid','process_clock_invalid',
-                     'publication_deadline_missed','clock_alignment_unavailable','publication_failed'})
+from .deliveries import DELIVERY_NS, delivery_base, validate_delivery
 
 
 class PublisherBusy(ValueError):
@@ -151,32 +149,6 @@ def _quality(inputs, evidence, observation):
     return 'on_time'
 
 
-def _receipt_fields(saved, origin):
-    if saved['reason'] not in REASONS or saved['outcome'] not in {'published','failed'}:
-        raise ValueError('delivery reason/outcome')
-    if (saved['outcome']=='published')!=(saved['reason']=='on_time'):raise ValueError('delivery reason conflicts with outcome')
-    if saved['snapshot_id'] is not None:sha256(saved['snapshot_id'],'delivery snapshot')
-    if saved['outcome']=='published' and saved['snapshot_id'] is None:raise ValueError('published snapshot missing')
-    error=saved['error_type']
-    if error is not None:
-        text(error,'delivery error type')
-        if len(error)>128:raise ValueError('delivery error type bound')
-    if (error is not None)!=(saved['reason']=='publication_failed'):raise ValueError('delivery error/reason mismatch')
-    for name in ('started','completed'):
-        observation=saved[name]
-        if (not isinstance(observation,dict) or set(observation)!={'utc_ns','monotonic_ns','process_timing_epoch','valid'} or
-                type(observation['valid']) is not bool):raise ValueError('delivery observation shape')
-        values=[observation[k] for k in ('utc_ns','monotonic_ns','process_timing_epoch')]
-        if any(v is None for v in values):
-            if observation['valid'] or any(v is not None for v in values):raise ValueError('delivery missing clock observation')
-            continue
-        for field in ('utc_ns','monotonic_ns'):
-            integer(observation[field],'delivery '+field)
-            if observation[field]>2**63-1:raise ValueError('delivery observation range')
-        text(observation['process_timing_epoch'],'delivery process epoch')
-        if len(canonical(observation['process_timing_epoch']))>130:raise ValueError('delivery process epoch bound')
-        if observation['valid'] and observation['process_timing_epoch']!=origin.process_timing_epoch:
-            raise ValueError('delivery clock origin changed')
 
 
 class SnapshotPublisher:
@@ -264,11 +236,7 @@ class SnapshotPublisher:
             if self._clock_failed:self._closing=True
 
     def _base(self, inputs, plan):
-        return dict(schema='dc.snapshot-delivery/2',origin=asdict(inputs.origin),close_record_id=inputs.close_record_id,
-            close_sha256=inputs.close_sha256,cutoff_id=inputs.cutoff_id,cutoff_deadline_ns=inputs.deadline_ns,
-            publication_deadline_ns=inputs.deadline_ns+DELIVERY_NS,input_clock_pin=asdict(inputs.clock_pin),
-            input_segments=[dict(context_sha256=s.context_sha256,manifest_sha256=s.manifest_sha256) for s in inputs.segments],
-            plan_sha256=digest(canonical(asdict(plan))))
+        return delivery_base(inputs,plan)
 
     def _result(self, path, body):
         value=strict_json(body)
@@ -306,12 +274,11 @@ class SnapshotPublisher:
         path=self.root/'deliveries'/(inputs.close_record_id+'.json');base=self._base(inputs,plan)
         limits=PublicationLimits(replay=inputs.replay_limits)
         if path.exists():
-            body=_read(path,self.max_receipt_bytes);saved=strict_json(body)
+            body=_read(path,self.max_receipt_bytes);saved=validate_delivery(body,max_bytes=self.max_receipt_bytes)
             if canonical(saved)!=body or any(saved.get(k)!=v for k,v in base.items()):
                 raise ValueError('immutable delivery input conflict')
             if set(saved)!=set(base)|{'started','completed','outcome','reason','snapshot_id','error_type'}:
                 raise ValueError('delivery receipt shape')
-            _receipt_fields(saved,inputs.origin)
             if saved['outcome']=='published':
                 evidence=_verify(inputs,plan)
                 if (saved['reason']!='on_time' or saved['error_type'] is not None or
@@ -352,7 +319,7 @@ class SnapshotPublisher:
         value=dict(base,started=started,completed=completed,outcome='published' if reason=='on_time' else 'failed',
             reason=reason,snapshot_id=snapshot_id,error_type=error)
         body=canonical(value)
-        if len(body)>self.max_receipt_bytes:raise ValueError('delivery receipt byte bound')
+        validate_delivery(body,max_bytes=self.max_receipt_bytes)
         _mkdir(path.parent);_publish_bytes(path,body)
         return self._result(path,body)
 

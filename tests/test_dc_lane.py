@@ -16,6 +16,7 @@ from data_collector.replay import BookBinding, ReplayLimits, SnapshotPlan
 from data_collector.metadata import MetadataVersion
 from data_collector.snapshots import publish_snapshot, read_snapshot
 from data_collector.publisher import SnapshotPublisher
+from data_collector.deliveries import delivery_base, replay_delivery_reports
 from data_collector.validity import FeedTarget
 from data_collector.journal import Journal, JournalLimits
 from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped, PENDING_CLOCK_EPOCH
@@ -177,6 +178,115 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await asyncio.to_thread(read_snapshot,store/'snapshots',result['snapshot_id'],paths),result)
         self.assertTrue(lane.health()['accepting'])
         self.assertFalse(lane.writer.closed)
+        receipt=delivered.receipt_path.read_bytes()
+        self.mono[0]+=1;utc,mono,_=self.observe()
+        ack=await asyncio.wait_for(lane.submit_snapshot_delivery(inputs,receipt,utc_ns=utc,monotonic_ns=mono),5)
+        self.assertTrue(ack.timing_valid)
+        self.assertEqual(ack.receipt_sha256,delivered.receipt_sha256)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        records=self.records(lane)
+        reports=replay_delivery_reports(records,origin=inputs.origin)
+        self.assertEqual((reports[0].outcome,reports[0].receipt_sha256),('published',digest(receipt)))
+        archived=next(r for r in records if r.record_id==ack.record_id)
+        self.assertEqual(archived.body,receipt)
+        self.assertGreater(archived.receipt.monotonic_ns,strict_json(receipt)['completed']['monotonic_ns'])
+
+    async def delivery_fixture(self):
+        lane,emergency=await self.ready_cutoffs()
+        closed=await self.closed_cutoff(lane)
+        inputs=await self.snapshot_input_request(lane,closed.record_id)
+        stamp=dict(utc_ns=self.observe()[0],monotonic_ns=self.mono[0],process_timing_epoch='epoch',valid=True)
+        body=canonical(dict(delivery_base(inputs),plan_sha256='e'*64,started=stamp,completed=stamp,
+            outcome='failed',reason='publication_failed',snapshot_id=None,error_type='OSError'))
+        return lane,emergency,inputs,body
+
+    def delivery_request(self,lane,inputs,body):
+        utc,mono,_=self.observe()
+        return lane.submit_snapshot_delivery(inputs,body,utc_ns=utc,monotonic_ns=mono)
+
+    async def test_delivery_reports_are_fifo_idempotent_and_exact_after_restore(self):
+        lane,_,inputs,body=await self.delivery_fixture()
+        first=self.delivery_request(lane,inputs,body)
+        later=lane.submit_received(self.received(lane,1))
+        ack,raw_ack=await asyncio.gather(first,later)
+        self.mono[0]+=1
+        retry=await self.delivery_request(lane,inputs,body)
+        self.assertEqual((retry.record_id,retry.raw_sha256,retry.receive_seq),(ack.record_id,ack.raw_sha256,0))
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        records=self.records(lane)
+        reports=replay_delivery_reports(records,origin=inputs.origin)
+        self.assertEqual(len(reports),1)
+        self.assertLess(next(i for i,r in enumerate(records) if r.record_id==ack.record_id),
+                        next(i for i,r in enumerate(records) if r.record_id==raw_ack.record_id))
+        restored=recover_session(lane.writer.directory,lane.writer.directory.parent.parent/'archive')
+        self.assertEqual(replay_delivery_reports((r for p in restored for r in iter_segment_records(p)),origin=inputs.origin),reports)
+        self.assertEqual(lane.health()['clock']['delivery_handoffs_without_report'],0)
+
+    async def test_bad_or_conflicting_delivery_is_rejected_before_queue_admission(self):
+        lane,_,inputs,body=await self.delivery_fixture()
+        before=lane.queue.health()['bytes']
+        for data in (body+b' ',canonical(dict(strict_json(body),close_sha256='f'*64)),b'x'*65537):
+            with self.assertRaises(ValueError):self.delivery_request(lane,inputs,data)
+        with self.assertRaises(ValueError):self.delivery_request(lane,replace(inputs,timing_valid=False),body)
+        with self.assertRaises(ValueError):self.delivery_request(lane,replace(inputs,segments=inputs.segments*1025),body)
+        self.assertEqual(lane.queue.health()['bytes'],before)
+        first=self.delivery_request(lane,inputs,body)
+        with self.assertRaises(ValueError):self.delivery_request(lane,inputs,canonical(dict(strict_json(body),error_type='ValueError')))
+        await first
+        self.assertTrue(lane.health()['accepting'])
+
+    async def test_delivery_admission_clock_and_request_bound_fail_visibly(self):
+        lane,_,inputs,body=await self.delivery_fixture()
+        for utc,mono in ((True,1100),(self.utc,-1),(2**63,1100),(self.utc,1099)):
+            with self.assertRaises(ValueError):lane.submit_snapshot_delivery(inputs,body,utc_ns=utc,monotonic_ns=mono)
+        self.assertEqual(lane.health()['clock']['delivery_requests_submitted'],0)
+        lane._delivery_requests_submitted=10000
+        with self.assertRaises(QueueCapacity):self.delivery_request(lane,inputs,body)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'snapshot_delivery_request_bound')
+
+    async def test_cancelled_delivery_write_drains_and_retains_original_raw_report(self):
+        lane,_,inputs,body=await self.delivery_fixture()
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        append=lane.writer.append
+        def gated(record):
+            if record.channel.startswith('snapshot_deliveries:'):
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return append(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            report=self.delivery_request(lane,inputs,body)
+            later=lane.submit_received(self.received(lane,1))
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            report.cancel();lane.test_task.cancel();await asyncio.sleep(0)
+            self.assertFalse(lane.test_task.done());release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(lane.test_task,5)
+        self.assertTrue((await later).timing_valid)
+        reports=replay_delivery_reports(self.records(lane),origin=inputs.origin)
+        self.assertEqual(reports[0].receipt_sha256,digest(body))
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_delivery_write_failure_is_unconfirmed_and_emergency_reports_missing_outcome(self):
+        lane,emergency,inputs,body=await self.delivery_fixture();append=lane.writer.append
+        def broken(record):
+            if record.channel.startswith('snapshot_deliveries:'):raise OSError('report write failed')
+            return append(record)
+        with patch.object(lane.writer,'append',side_effect=broken),redirect_stderr(io.StringIO()):
+            report=self.delivery_request(lane,inputs,body)
+            await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await report
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertEqual(event['payload']['clock']['delivery_handoffs_without_report'],1)
+        self.assertEqual(event['payload']['clock']['delivery_requests_submitted'],1)
+
+    async def test_delivery_queue_overflow_stops_ingress_and_preserves_missing_report_count(self):
+        lane,_,inputs,body=await self.delivery_fixture()
+        with patch.object(lane.queue,'offer',side_effect=QueueCapacity('full')):
+            with self.assertRaises(QueueCapacity):self.delivery_request(lane,inputs,body)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'snapshot_delivery_queue_admission_failed')
+        self.assertEqual(lane.health()['clock']['delivery_handoffs_without_report'],1)
 
     async def test_snapshot_inputs_seal_before_later_raw_and_retry_pins_first_prefix(self):
         lane,_=await self.ready_cutoffs()

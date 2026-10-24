@@ -22,6 +22,7 @@ from .journal import Journal
 from .clock import ClockAssessment, ClockSample
 from .clocklog import ClockPin, DurableClock, SOURCE, CONTROL, validate_clock_source
 from .replay import ReplayLimits
+from .deliveries import delivery_base, validate_delivery
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -105,6 +106,17 @@ class DurableSnapshotInputs:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DurableDeliveryAck:
+    """Durable publisher report, not independently verified snapshot validity."""
+    record_id: str
+    raw_sha256: str
+    receipt_sha256: str
+    receive_seq: int
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
@@ -116,6 +128,7 @@ class _Pending:
     stamp_clock: bool = False
     cutoff_operation: str | None = None
     snapshot_inputs: bool = False
+    snapshot_delivery: bool = False
 
 
 class ArchiveLane:
@@ -148,11 +161,12 @@ class ArchiveLane:
             namespaces=[SOURCE,CONTROL,'control:runtime:'+writer.identity[0],
                 'control:emergency:'+writer.identity[0],'control:clock-check-request','control:cutoff-request',
                 'control:snapshot-input-request',
+                'control:snapshot-delivery-request','control:snapshot-deliveries:'+cutoff_scope,
                 'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
             if len(set(namespaces))!=len(namespaces):
                 raise ValueError('cutoff and runtime control namespaces must be distinct')
         control_bound = max_connections * 8192 + 65536
-        control_streams = (3 if clock_policy is not None else 1)+(3 if cutoff_scope is not None else 0)
+        control_streams = (3 if clock_policy is not None else 1)+(4 if cutoff_scope is not None else 0)
         if max_connections + control_streams > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
@@ -186,6 +200,11 @@ class ArchiveLane:
         self._last_closed = self._snapshot_inputs = None
         self._snapshot_inputs_pending = False
         self._snapshot_requests_submitted = 0
+        self._delivery_handoffs = {}
+        self._delivery_receipts = {}
+        self._delivery_requests_submitted = 0
+        self._deliveries = {}
+        self._delivery_bytes = 0
         self.snapshot_limits = snapshot_limits
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='dc-'+identity['venue'])
         self._pending = {}
@@ -572,6 +591,81 @@ class ArchiveLane:
         self._snapshot_inputs=(value,references,self._clock.pin)
         return self._snapshot_inputs
 
+    def submit_snapshot_delivery(self, inputs, receipt_body, *, utc_ns, monotonic_ns):
+        """Archive exact canonical publisher report after this lane's handoff.
+
+        Call with fresh archive-admission clocks, not the older publication
+        completion clocks. Reported success is a claim; artifact verification
+        and correction mapping remain separate. No filesystem read on ingress.
+        """
+        if self._stopping or self._terminal:raise LaneStopped('venue archive ingress stopped')
+        if not isinstance(inputs,DurableSnapshotInputs):raise ValueError('typed delivery inputs required')
+        value=validate_delivery(receipt_body)
+        if (not isinstance(inputs.origin,SnapshotOrigin) or not isinstance(inputs.clock_pin,ClockPin) or
+                type(inputs.timing_valid) is not bool or type(inputs.segments) is not tuple or
+                len(inputs.segments)>min(self.snapshot_limits.max_segments,1024)):
+            raise ValueError('bounded delivery input identity required')
+        sha256(inputs.close_record_id,'delivery close');sha256(inputs.close_sha256,'delivery close hash')
+        for segment in inputs.segments:
+            if not isinstance(segment,SnapshotSegmentInput):raise ValueError('typed delivery segment required')
+            sha256(segment.context_sha256,'delivery context');sha256(segment.manifest_sha256,'delivery manifest')
+        base=delivery_base(inputs)
+        if any(value[name]!=item for name,item in base.items()):raise ValueError('delivery differs from pinned inputs')
+        handoff=self._delivery_handoffs.get(inputs.close_record_id)
+        if handoff is None or handoff!=(digest(canonical(base)),inputs.timing_valid):
+            raise ValueError('delivery requires this lane immutable handoff')
+        if value['outcome']=='published' and not inputs.timing_valid:raise ValueError('untimely handoff cannot report success')
+        receipt_hash=digest(receipt_body)
+        if inputs.close_record_id in self._delivery_receipts and self._delivery_receipts[inputs.close_record_id]!=receipt_hash:
+            raise ValueError('immutable delivery report conflicts')
+        integer(utc_ns,'delivery archive UTC');integer(monotonic_ns,'delivery archive monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('delivery archive clock bound')
+        if value['completed']['valid'] and monotonic_ns<value['completed']['monotonic_ns']:
+            raise ValueError('delivery admission precedes reported completion')
+        if self._delivery_requests_submitted>=10000:
+            self._failure('snapshot_delivery_request_bound',global_scope=True)
+            raise QueueCapacity('delivery request count bound; rotate scope')
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
+            'control:snapshot-delivery-request',self._delivery_requests_submitted,utc_ns,monotonic_ns,
+            self._last_observation[2]),*self.writer.identity,'control','snapshot_delivery_request','control',
+            receipt_body,self.provenance)
+        maximum=replace(request,receipt=replace(request.receipt,connection_id='control:snapshot-deliveries:'+self._cutoff_scope,
+            receive_seq=9999,clock_epoch=self.identity['process_session_id']+':clock:1023'),
+            channel='snapshot_deliveries:'+self._cutoff_scope)
+        if len(maximum.to_bytes())>self.writer.limits.max_record_bytes:raise ValueError('delivery raw envelope byte bound')
+        if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:
+            self._failure('receipt_monotonic_regression',request,global_scope=True)
+            raise LaneStopped('delivery request regressed behind admitted ingress')
+        future=asyncio.get_running_loop().create_future()
+        try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('snapshot_delivery_queue_admission_failed',request,global_scope=True)
+            raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,
+            timing_epoch=self._last_observation[2],snapshot_delivery=True)
+        self._delivery_requests_submitted+=1
+        self._delivery_receipts[inputs.close_record_id]=receipt_hash
+        self._last_submitted_mono=monotonic_ns
+        self._wakeup.set()
+        return future
+
+    def _append_delivery(self, request):
+        """Raw disk owner only: immutable report identity and idempotent retries."""
+        value=validate_delivery(request.body);close=value['close_record_id'];body_hash=digest(request.body)
+        if close in self._deliveries:
+            old=self._deliveries[close]
+            if old[2]!=body_hash:raise ValueError('immutable delivery report conflicts')
+            return old
+        if len(self._deliveries)>=10000 or self._delivery_bytes+len(request.body)>64*1024*1024:
+            raise QueueCapacity('delivery report retained byte/count bound')
+        record=replace(request,receipt=replace(request.receipt,
+            connection_id='control:snapshot-deliveries:'+self._cutoff_scope,receive_seq=len(self._deliveries),
+            clock_epoch=self._clock.assessment.anchor.clock_epoch),channel='snapshot_deliveries:'+self._cutoff_scope)
+        self.writer.append(record)
+        result=(record.record_id,digest(record.to_bytes()),body_hash,record.receipt.receive_seq)
+        self._deliveries[close]=result;self._delivery_bytes+=len(request.body)
+        return result
+
     def stop(self, reason='operator_stop'):
         if reason not in {'operator_stop','budget_complete','shutdown'}:
             raise ValueError('explicit graceful stop reason required')
@@ -606,7 +700,9 @@ class ArchiveLane:
             active_cutoff=None if self._cutoff_active is None else dict(self._cutoff_active),
             last_closed_record_id=None if self._last_closed is None else self._last_closed['close_record_id'],
             snapshot_requests_submitted=self._snapshot_requests_submitted,
-            snapshot_inputs_pending=self._snapshot_inputs_pending)
+            snapshot_inputs_pending=self._snapshot_inputs_pending,
+            delivery_requests_submitted=self._delivery_requests_submitted,delivery_reports_durable=len(self._deliveries),
+            delivery_handoffs_without_report=len(self._delivery_handoffs)-len(self._deliveries))
 
     def _timing(self, lease, receipt, *, epoch=None):
         stamp, valid, _ = self._observation()
@@ -683,12 +779,19 @@ class ArchiveLane:
                     if lease.late or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
+                    if pending.snapshot_delivery:
+                        fields=await self._disk(self._append_delivery,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(DurableDeliveryAck(*fields,latency,timely))
+                        continue
                     if pending.snapshot_inputs:
                         value,paths,pin=await self._disk(self._seal_snapshot_inputs,record)
                         latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
                         fields=dict(value);origin=SnapshotOrigin(**fields.pop('origin'))
                         result=DurableSnapshotInputs(**fields,origin=origin,segments=paths,clock_pin=pin,replay_limits=self.snapshot_limits,
                             receive_to_durable_ns=latency,timing_valid=timely)
+                        self._delivery_handoffs[result.close_record_id]=(digest(canonical(delivery_base(result))),result.timing_valid)
                         self._snapshot_inputs_pending=False
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)

@@ -33,6 +33,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5l | Clock-bound cutoff allocation/closure commands through the shared raw FIFO | Approved; [evidence](implementation/chunk-05l.json) |
 | 5m | FIFO seal and immutable pinned snapshot inputs while raw capture remains open | Approved; [evidence](implementation/chunk-05m.json) |
 | 5n | Separate bounded snapshot publisher with immutable deadline/clock/knowledge delivery receipts | Approved after fixes; [evidence](implementation/chunk-05n.json) |
+| 5o | Canonical publisher reports in raw FIFO, idempotent durable archival and bounded report replay | Approved; [evidence](implementation/chunk-05o.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -46,7 +47,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current341 combined tests pass:306 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current354 combined tests pass:319 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -152,8 +153,9 @@ and its original timestamps; no receipt means an old artifact cannot retrospecti
 prove on-time delivery. The synthetic open-lane integration proves raw continues
 while this publisher is blocked, then verifies the delivered snapshot.
 
-Delivery receipts currently live in the publisher store. They still require raw
-control/backup/coverage integration and recurring orchestration. A process
+Delivery receipts live in the publisher store; chunk5o below also archives exact
+reports in raw. Backup/coverage integration and recurring orchestration remain
+pending. A process
 supervisor must enforce hard bounds for a permanently hung worker; Python threads
 are not forcibly stopped. Full-prefix replay/checkpoint capacity and intended-host
 acceptance remain unproven; this chunk does not enable unbounded live capture.
@@ -166,3 +168,26 @@ observation is checked, including completion after a publication exception.
 Previously successful historical receipts keep their original proof. Marker
 I/O uncertainty stops this owner; recovery must preserve the output root and
 its invalidation markers. Raw-control correction mapping remains pending.
+
+
+Chunk5o adds `ArchiveLane.submit_snapshot_delivery(inputs, receipt_bytes, ...)`.
+It accepts canonical `dc.snapshot-delivery/2` bytes matching an issued immutable
+handoff, retains first-report identity across retries, and queues one dedicated
+raw control stream in FIFO order with capture. New archive-admission timestamps
+remain distinct from original publisher start/completion. Reports are archived
+unchanged in `snapshot_deliveries:<scope>`; duplicate retries return the original
+record identity without appending another report. Conflicting reports fail before
+queue admission. Queue, receipt/envelope, total report bytes, request counts and
+handoff identities are bounded. Cancellation drains accepted writes; uncertain
+writes use the existing emergency path with missing-report counts.
+
+`deliveries.py` shares canonical receipt validation with the publisher and provides
+bounded raw report replay with strict namespace/origin/order checks. Reports retain
+publisher claims; report replay alone does not prove referenced artifact contents,
+closure/clock dependencies, or historical five-second timeliness. The integration
+fixture verifies an actual published snapshot separately, archives its exact
+receipt while raw remains open, and restores/replays the raw report afterward.
+Reports now travel in committed raw segments, but no independent backup service
+or end-to-end receipt reconciliation/coverage CLI has been implemented. Publisher
+clock invalidation markers remain in its store and must be retained on recovery;
+automatic raw clock correction mapping and recurring orchestration remain pending.

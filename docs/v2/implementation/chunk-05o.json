@@ -1,0 +1,17 @@
+{
+  "chunk": "5o",
+  "status": "approved",
+  "reviewer": "dc_chunk5o_delivery_archive_review",
+  "reasoning_effort": "high",
+  "tests": "Root354 combined tests passed (319v2+35v1), including local HTTP loopback tests under approved execution. Independent reviewer85 focused tests and3 adversarial probes passed: forged unissued handoff rejected before admission; post-fsync OSError remains unconfirmed with exactly one recoverable report;64MiB cumulative report cap fails visibly without false ack.",
+  "sources": {
+    "data_collector/deliveries.py": "6bb2e99989ef3a9928ddf0d72ebe067bb4969de9981fecb6cb29f94c130d7bb5",
+    "data_collector/lane.py": "107c3eea389f3315e993e8516414c2c2a9a8f3cee3b8f6e0369d9609e81e8b65",
+    "data_collector/publisher.py": "117abccf6af666763a5b59422e0f156192b5ada7d5b698bd386616d6cad219b8",
+    "tests/test_dc_deliveries.py": "d683673d7e4a0abba3aa812622e2232baac7c86c5a2755f6f3cbf149d0849692",
+    "tests/test_dc_lane.py": "898163e5220d1e13b9fcaf1975dcf90ed26bb4f26ef38c1507b2b7a8a11fe288",
+    "docs/v2/IMPLEMENTATION.md": "1f036d795eec2d8b88584f281e7a518dbf94156ed6ac3ff6c8280109c0ea5150"
+  },
+  "findings_closed": [],
+  "limits": "Canonical raw publisher claims, not independent proof of referenced snapshot contents or timeliness. Exact reports inherit raw segment recovery; no backup service or coverage/reconciliation CLI yet. Receipt64KiB/envelope/queue bounds,10000 requests/handoffs/reports and64MiB cumulative report bytes remain explicit. Publisher clock invalidation markers must remain in retained publisher store until raw clock correction integration. Recurring scheduling, automatic corrections, checkpoints, all-feed continuous runtime, intended-host capacity and24h acceptance remain pending. PLANS prefix reviewed; unrelated research suffix/README excluded."
+}
