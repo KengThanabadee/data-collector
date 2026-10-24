@@ -29,6 +29,12 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 
 Current259 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
+## Cryptofeed reuse evaluation — active
+
+- [x] CF01: isolate pinned Cryptofeed3.0.2, verify exact offline raw/book replay and abrupt-exit behavior; fresh high-reasoning review approved.
+- [ ] CF02: reviewed actively bounded live Deribit BTC/ETH options/perpetual capture, reconnect and replay.
+- [ ] Record full-spec reuse decision and implement the selected boundary in reviewed chunks.
+
 ## V2 specification and implementation handoff — 23 October 2026
 
 - [x] Adopt the reviewed three-exchange Data Collector/DC scope; keep downstream BSAD/direct-ML research separate.

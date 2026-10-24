@@ -43,3 +43,7 @@ Current v2 verification includes native decoding, archive verification, durable 
 Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current259 v2 tests pass; existing35 v1 tests were verified earlier as described above.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
+
+## Cryptofeed reuse assessment
+
+CF01 offline evaluation is approved; see [assessment plan](CRYPTOFEED_EVALUATION.md), [review](implementation/chunk-CF01.json), and [independent synthetic evidence](implementation/cryptofeed-offline.json). The production v2 scope stays unchanged. Live qualification and adoption decision remain pending; the library has not been added to production dependencies.

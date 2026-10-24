@@ -1,0 +1,14 @@
+{
+  "chunk": "CF01",
+  "status": "approved",
+  "reviewer": "dc_cryptofeed_cf01_review",
+  "reasoning_effort": "high",
+  "tests": "Independent offline harness passes:6 exact payloads,2 epochs,1 rotation,2 equal native books,gap rejection,0 recorder fsync,abrupt-exit loss. Selected upstream unit tests12pass/61deselected. Production v2 previously259passing, no production changes.",
+  "sources": {
+    "experiments/cryptofeed_probe.py": "b3d7a26156051f5d082bdac4802fec99997b0b44721ef343a704ca844b0a05ef",
+    "docs/v2/CRYPTOFEED_EVALUATION.md": "5a62ce115bce95a7a67722106ce6f15bcf52ed93433b5c52e2f4bec2f4b636a6",
+    "docs/v2/implementation/cryptofeed-offline.json": "8d5f2d2c0286d9cba590864c47f15b98023b3a6c8530a8a397731d6af6ba76ad"
+  },
+  "findings_closed": [],
+  "limits": "Pinned Cryptofeed3.0.2 offline synthetic assessment only; no dependency adoption or production change. Live harness must actively enforce bounds. Live data, coverage and licensing/integration decision pending."
+}

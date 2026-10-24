@@ -1,0 +1,123 @@
+{
+  "crash": {
+    "callback_completed_before_exit": true,
+    "exit_code": 23,
+    "file_bytes": 0,
+    "reader_error": "truncated pcap header",
+    "recovered_messages": 0,
+    "synthetic": true
+  },
+  "environment": {
+    "dependencies": [
+      "aiodns==4.0.4",
+      "aiohappyeyeballs==2.7.1",
+      "aiohttp==3.14.5",
+      "aiosignal==1.4.0",
+      "attrs==26.1.0",
+      "cffi==2.1.1",
+      "cryptofeed @ file:///tmp/dc-cryptofeed-source-20261024",
+      "frozenlist==1.8.0",
+      "idna==3.20",
+      "iniconfig==2.3.1",
+      "msgspec==0.22.0",
+      "multidict==7.1.0",
+      "order_book==1.1.0",
+      "packaging==26.3",
+      "pluggy==1.7.0",
+      "propcache==0.5.4",
+      "pycares==5.2.1",
+      "pycparser==3.12",
+      "Pygments==2.21.0",
+      "pytest==9.1.1",
+      "pytest-asyncio==1.4.0",
+      "pytest-timeout==2.4.0",
+      "PyYAML==6.0.3",
+      "uvloop==0.23.0",
+      "websockets==17.3",
+      "yarl==1.25.1"
+    ],
+    "installed_source_hashes": {
+      "_json.py": "ae06e6c58473c2d2f7614595749c4707ddb2c9322f386dc7cbbad601687703a0",
+      "capture/_zstd.py": "bb62aeb65130318acbb76fb486f9b72db206cd5ed44d1b91ba8151563e4184ca",
+      "capture/pcap.py": "ce4d600c44bd61d2d0d3f334d1a274f0cb18bd02c27e284d4ed88ba5e9ee62d4",
+      "capture/playback.py": "fde084b8f390072479a5f20e8659fc8653cd1eb6e7354900e311eb3c7580ce64",
+      "capture/recorder.py": "5f82d9c5d5d0f9f04e0be32ed12c88a357aa3420aa73958befdb8898c6f4287c",
+      "connection.py": "64a8d254edbcdb943ae18be7dd3142c03b4f2373e37b7956e8cbd225faf7891f",
+      "connection_handler.py": "c7784303a29fd2288682d906b079e1e6066bf2845ba680196dca6fd505807fbb",
+      "exchange.py": "b64dc47011a735c73a0f98abd019de0c0e6349ebefaf3839106d2e1f25f5ce25",
+      "exchanges/binance.py": "921fc431b53e579430fa59c457b2c9183db2ee9588b42262b799ff4ab3422710",
+      "exchanges/binance_delivery.py": "db92ae816b76cb40e0a510ab9a29e29929587923811cb156cdd64b4078cf941c",
+      "exchanges/bybit.py": "286660bcaedd644fdf7424659871df5044165f58173ed8aa1728449b55e31e4c",
+      "exchanges/deribit.py": "34618adb83bd97c79ee0bafa7ddf11c89aaecd50f4069c52b5ab3d59f3a1c60a",
+      "feed.py": "c66fff83e8c0e2543a1f49588dce4dfb41e1ca17011cfd81d17ef281d06336c6",
+      "feedhandler.py": "d8a9e18c5ddd7568bc4e56da943d55420c3c7f1dc654c82208be306918b3c28f",
+      "symbols.py": "0e0b8b0d279f0bb58018ad9bb92ef3fb7221b1e6486730a942e604605ed9e565",
+      "types.pyx": "eb42c865103b4195b2907d545865961816b709c1839fd86316eaf150022ba8d5"
+    },
+    "license": "AGPL-3.0-or-later with attribution term",
+    "python": "3.14.6 | packaged by Anaconda, Inc. | (main, Jul  9 2026, 14:30:20) [Clang 20.1.8 ]",
+    "source_license_sha256": "e43efa771be8126a2576ce33dbca5a027d93da1c2748ce4ecc6101068f0170c5",
+    "upstream_commit": "f2daed5c75f4514669e2da54a4cbb8d1f5037a47",
+    "version": "3.0.2"
+  },
+  "harness_sha256": "b3d7a26156051f5d082bdac4802fec99997b0b44721ef343a704ca844b0a05ef",
+  "limits": {
+    "artifact_bytes": 67108864,
+    "wall_seconds": 60
+  },
+  "mode": "offline",
+  "native_replay": {
+    "equal_callback_states": true,
+    "final_book": {
+      "asks": [
+        [
+          "101.0",
+          "3.0"
+        ]
+      ],
+      "bids": [
+        [
+          "100.0",
+          "4.0"
+        ]
+      ],
+      "sequence": 11,
+      "symbol": "BTC-USD-PERP"
+    },
+    "order_regressions": 0,
+    "replay_messages": 2,
+    "sequence_gap_detected": true,
+    "states": 2
+  },
+  "raw_roundtrip": {
+    "connection_epochs": 2,
+    "durability_claim": "callback completion is not a durable acknowledgement",
+    "exact_payloads": true,
+    "files": [
+      {
+        "bytes": 2323,
+        "name": "roundtrip.pcap",
+        "sha256": "6438e82ab4a5ada8bbc1598c6a25d367bd41762a3a76add4124181a7d3276185"
+      },
+      {
+        "bytes": 1340,
+        "name": "roundtrip.1.pcap",
+        "sha256": "3bb6cf7e7051c9e328f770c5677a05b066b7b1735abe5def80ad5706b00508e7"
+      }
+    ],
+    "fsync_calls": 0,
+    "payload_sha256": [
+      "e222b91be83a72c3f4838f128377a5cf953665fa41623c8f487cd7f2a25f0628",
+      "2da45f2cd1f9c8e69a67abf7a6b26c282533d0a7686787a9533265418680d4d2",
+      "46c6296d9e8cae1c8d1dc32b71379884f313205c2dac7787583fd82afa13d2ed",
+      "e222b91be83a72c3f4838f128377a5cf953665fa41623c8f487cd7f2a25f0628",
+      "2da45f2cd1f9c8e69a67abf7a6b26c282533d0a7686787a9533265418680d4d2",
+      "46c6296d9e8cae1c8d1dc32b71379884f313205c2dac7787583fd82afa13d2ed"
+    ],
+    "received_messages": 6,
+    "rotations": 1
+  },
+  "schema": "dc.cryptofeed-evaluation/1",
+  "status": "passed",
+  "synthetic": true
+}
