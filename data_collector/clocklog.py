@@ -108,6 +108,14 @@ class DurableClock:
     @property
     def pin(self):return self._pin
 
+    @property
+    def prior_anchors(self):
+        return self._monitor.prior_anchors
+
+    @property
+    def policy(self):
+        return dict(self._policy)
+
     def sample(self, sample, source, *, ingress_ordinal):
         if self.poisoned:
             raise ValueError('clock owner poisoned; recover and start fresh session')

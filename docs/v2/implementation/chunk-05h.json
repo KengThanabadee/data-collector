@@ -1,0 +1,20 @@
+{
+  "chunk": "05h",
+  "status": "approved",
+  "reviewer": "dc_chunk5h_boundcutoffs_review",
+  "reasoning_effort": "high",
+  "tests": "259 full v2 tests pass; reviewer independently verified 97 scoped/neighboring tests including 10002-control replay and rehashed inconsistent-deadline probe",
+  "sources": {
+    "data_collector/clockcutoffs.py": "3c3e42258970c29e9278a0937e9d0bb92f18cdc29c446ef165231e07c2ea2373",
+    "data_collector/clocklog.py": "b81c9fb4f0de970cccd0699c3de1b4b8aa5dcabaa7de7c3ab6fb3dc0d4eceae0",
+    "data_collector/replay.py": "d53c194bcd3610f93a51610c979b14113a22426f26ddd178cae0dfb976314785",
+    "tests/test_dc_clockcutoffs.py": "6418e2a2a4ab4fa6a20378283651e61727843900f7cb0f729a9b456b41e2e041",
+    "tests/fixtures/rejected_clock_policy_v2.json": "a25a7429c8509d0ddcc4181905f53756b6404d8ae86925fd1f26284ae44bff15"
+  },
+  "findings_closed": [
+    "Enforce offset100ms and reference interval/age60s policy ceilings during live binding and replay",
+    "Match live/replay clock control count bounds using bounded raw scan limit",
+    "Validate standalone control namespaces and stored immutable allocation deadline/schedule observation"
+  ],
+  "limits": "Synchronous same-owner clock-bound local cutoff creation and independent pinned-clock replay verification. Async integration, measured publication deadlines, interrupted-scope recovery, automatic correction ranges and production readiness remain pending."
+}

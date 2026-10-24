@@ -182,6 +182,9 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
             allocated=coordinator.allocations[cutoff_id]['payload']
             closed=coordinator.resolutions[cutoff_id]
             if closed['record_id']!=close_record_id or closed['hash']!=digest(close.to_bytes()):raise ValueError('cutoff closure dependency mismatch')
+            if 'clock_binding' in closed['payload']['barrier']:
+                from .clockcutoffs import verify_clock_binding
+                verify_clock_binding(prefix,close,max_records=limits.max_records,max_scan_bytes=limits.max_scan_bytes)
             if allocated['dependencies']!=plan.dependencies:raise ValueError('plan differs from allocated dependency versions')
             pin=LedgerPin(**closed['payload']['ledger_pin'])
             ledger=DurableLedger(empty,ledger_id=pin.ledger_id,capture_scope=scope,capture_id=close.receipt.capture_id,
