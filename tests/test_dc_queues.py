@@ -145,5 +145,16 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(retry.clock_valid)
         q.ack(retry)
 
+    async def test_associated_waiter_metadata_stays_charged_through_lease(self):
+        q=ByteQueue(QueueLimits(max_bytes=1024,max_items=2,max_item_bytes=200))
+        with self.assertRaises(ValueError):q.offer(b'x',extra_bytes=-1)
+        q.offer(b'x'*100,extra_bytes=400)
+        self.assertEqual(q.budget.used,1012)
+        lease=await q.get()
+        with self.assertRaises(QueueCapacity):q.offer(b'y')
+        self.assertEqual(q.budget.used,1012)
+        q.ack(lease)
+        self.assertEqual(q.budget.used,0)
+
 
 if __name__ == '__main__': unittest.main()

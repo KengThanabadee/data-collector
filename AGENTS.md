@@ -11,18 +11,21 @@
 
 ## Build, Test, and Development Commands
 
-Use Python 3.12 from the repository root:
+Use Python 3.12 from the repository root. Create the environment and install pinned dependencies:
 
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m pip wheel --no-deps . -w dist
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m unittest tests.test_dc_snapshots -v
-.venv/bin/python -m option_collector status --json
 ```
 
-These commands prepare dependencies, build a wheel, run all or focused tests, and inspect local status. `collect-once` performs a real public-API capture; it does not start continuous collection. Planned v2 CLI commands are not yet available.
+Run these with `.venv/bin/python`:
+
+- `-m pip wheel --no-deps . -w dist`: build a distributable wheel.
+- `-m unittest discover -s tests -v`: run all repository tests.
+- `-m unittest tests.test_dc_snapshots -v`: run a focused suite.
+- `-m option_collector status --json`: inspect local collector status.
+
+The v1 `collect-once` command performs a real public-API capture. Planned v2 CLI commands are not yet available.
 
 ## Coding Style & Naming Conventions
 
@@ -32,9 +35,9 @@ Use four-space indentation, `snake_case` functions/modules, `PascalCase` classes
 
 Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, temporary directories, and deterministic clocks. HTTP tests require loopback access; live exchange probes remain separate. Cover changed invariants, failure paths, replay determinism, and v1 compatibility. There is no percentage coverage threshold; production acceptance follows `docs/v2/ACCEPTANCE.md`.
 
-## Commit, Pull Request & Agent Workflow
+## Commit & Pull Request Guidelines
 
-History uses descriptive imperative subjects, such as `Implement reviewed DC v2 archive and snapshot foundations`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
+History uses descriptive imperative subjects, such as `Add reviewed rotating WAL session writer`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
 
 Implement bounded chunks, obtain a fresh high-reasoning agent review, fix findings, and obtain re-review before dependent work. Record approval and source hashes in `docs/v2/implementation/`. Commit only approved versions; keep unfinished work separate.
 

@@ -106,17 +106,22 @@ class ByteQueue:
         entry = self._entry if self._entry is not None else self._pending[0] if self._pending else None
         return 0 if entry is None else now - entry.enqueued_ns
 
-    def offer(self, payload):
+    @property
+    def queued_count(self):
+        return len(self._pending)
+
+    def offer(self, payload, *, extra_bytes=0):
         if not self._open:
             raise QueueClosed('ingress queue closed')
         if type(payload) is not bytes:
             raise ValueError('immutable serialized payload bytes required')
+        integer(extra_bytes, 'associated queued metadata bytes')
         if len(payload) > self.limits.max_item_bytes:
             raise QueueCapacity('application/expanded record exceeds item cap')
         now = self._now()
         if self._oldest_age(now) >= self.limits.max_age_ns:
             raise QueueBacklog('ingress persist backlog reached hard deadline')
-        cost = len(payload) + 512
+        cost = len(payload) + 512 + extra_bytes
         if self._used + cost > self.limits.max_bytes or len(self._pending) + int(self._leased is not None) >= self.limits.max_items:
             raise QueueCapacity('venue ingress queue cap')
         entry = _Entry(payload, self._ordinal, now, cost)

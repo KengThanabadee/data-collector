@@ -17,10 +17,11 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk4f: portable original/assessed exports with pinned ledger replay; high-reasoning review approved.
 - [x] Chunk4g: session-wide WAL rotation/recovery with pre-admission resource bounds; high-reasoning review approved after fixes.
 - [x] Chunk5a: retained-byte venue queues and priority shared REST quotas; high-reasoning review approved after fixes.
+- [x] Chunk5b: serialized per-venue archive worker, durable raw acknowledgements, emergency loss controls and clock-fault regressions; high-reasoning re-review approved.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current182 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current198 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## V2 specification and implementation handoff — 23 October 2026
 

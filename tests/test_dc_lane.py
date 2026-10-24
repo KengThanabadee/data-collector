@@ -1,0 +1,317 @@
+import asyncio
+from contextlib import redirect_stderr
+from dataclasses import replace
+import io
+import json
+from pathlib import Path
+import tempfile
+import threading
+import unittest
+from unittest.mock import patch
+
+from data_collector.contracts import Provenance, RawRecord, Receipt, digest, strict_json
+from data_collector.journal import Journal, JournalLimits
+from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped
+from data_collector.queues import ByteQueue, QueueCapacity, QueueLimits, VenueQueues
+from data_collector.segments import SegmentLimits, iter_segment_records
+from data_collector.writer import SessionWriter, recover_session
+from tests.test_dc_contracts import raw, key
+
+
+class LaneTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name); self.counter = 0
+        self.mono = [1000]
+        self.utc = 1_700_000_000_000_000_000
+
+    def observe(self):
+        return self.utc+self.mono[0]-1000,self.mono[0],'epoch'
+
+    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4):
+        self.counter += 1
+        root = self.root/str(self.counter)
+        provenance = Provenance('a'*64,'b'*64,'c'*64)
+        writer = SessionWriter(root/'wal',root/'archive',venue=venue,environment='production',capture_id='capture',
+            process_session_id='process',provenance=provenance,started_utc_ns=self.utc,now_ns=lambda:self.mono[0],
+            limits=JournalLimits(max_record_bytes=131072,target_bytes=12000,max_streams=16),
+            segment_limits=SegmentLimits(max_record_bytes=131072,max_uncompressed_bytes=262144,max_compressed_bytes=262144))
+        emergency_path = root/'emergency.wal'
+        emergency = Journal(emergency_path,venue=venue,environment='production',create=True,
+                            limits=JournalLimits(max_record_bytes=131072))
+        q = queue or ByteQueue(QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768),now_ns=lambda:self.mono[0])
+        lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections)
+        lane.test_task = None
+        self.addCleanup(writer.abort); self.addCleanup(emergency.close)
+        async def cleanup():
+            lane.stop()
+            task = lane.test_task
+            if task is None:task = asyncio.create_task(lane.run())
+            await asyncio.wait_for(asyncio.gather(task,return_exceptions=True),5)
+        self.addAsyncCleanup(cleanup)
+        return lane,emergency_path
+
+    def record(self, lane, seq=0, *, connection='connection', body=None):
+        record = raw(seq, **({'body':body} if body is not None else {}))
+        stamp = self.observe()
+        return replace(record,venue=lane.identity['venue'],instrument=key(venue=lane.identity['venue']),
+            receipt=Receipt('capture','process',connection,seq,*stamp))
+
+    def start(self, lane):
+        task = asyncio.create_task(lane.run()); lane.test_task=task
+        return task
+
+    def records(self, lane):
+        return [record for path in lane.segments for record in iter_segment_records(path)]
+
+    def controls(self, lane):
+        return [strict_json(r.body) for r in self.records(lane) if r.channel=='runtime_events']
+
+    async def test_raw_acknowledgement_matches_archived_bytes_and_ingress_order(self):
+        lane,_ = self.lane()
+        originals = [self.record(lane,n) for n in range(3)]
+        futures = [lane.submit(record) for record in originals]
+        self.start(lane)
+        acks = await asyncio.wait_for(asyncio.gather(*futures),5)
+        lane.stop('budget_complete'); report = await asyncio.wait_for(lane.test_task,5)
+        native = [r for r in self.records(lane) if r.receipt.connection_id=='connection']
+        self.assertEqual([r.body for r in native],[r.body for r in originals])
+        self.assertEqual([a.ingress_ordinal for a in acks],[0,1,2])
+        self.assertEqual([a.raw_sha256 for a in acks],[digest(r.to_bytes()) for r in native])
+        self.assertTrue(all(a.timing_valid for a in acks))
+        self.assertEqual(report['durable_records'],3)
+        self.assertIsNone(report['writer_error'])
+        self.assertEqual(report['failure_controls_durable'],0)
+        self.assertEqual(self.controls(lane)[-1]['payload']['reason'],'budget_complete')
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_capacity_halts_only_rejected_connection_and_persists_open_loss_control(self):
+        q = ByteQueue(QueueLimits(max_bytes=32768,max_items=1,max_item_bytes=8192),now_ns=lambda:self.mono[0])
+        lane,_ = self.lane(queue=q)
+        first = lane.submit(self.record(lane))
+        with self.assertRaises(QueueCapacity): lane.submit(self.record(lane,1))
+        with self.assertRaises(LaneStopped): lane.submit(self.record(lane,1))
+        self.start(lane); await asyncio.wait_for(first,5)
+        other = lane.submit(self.record(lane,connection='fresh-connection'))
+        await asyncio.wait_for(other,5)
+        lane.stop(); report = await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(report['durable_records'],2)
+        self.assertEqual(report['failed_connections'],1)
+        self.assertIsNone(report['venue_failure'])
+        failure = next(v for v in self.controls(lane) if v['kind']=='ingress_halted')['payload']
+        self.assertEqual(failure['scope'],'connection')
+        self.assertTrue(failure['interval_open'])
+        self.assertEqual(failure['rejected']['receipt']['receive_seq'],1)
+        self.assertEqual(failure['reason'],'queue_capacity')
+
+    async def test_full_connection_failure_map_is_bounded_even_without_accepted_messages(self):
+        q = ByteQueue(QueueLimits(max_bytes=32768,max_items=4,max_item_bytes=4096),now_ns=lambda:self.mono[0])
+        lane,_ = self.lane(queue=q)
+        for index in range(4):
+            with self.assertRaises(QueueCapacity):lane.submit(self.record(lane,connection=str(index),body=b'x'*5000))
+        with self.assertRaises(QueueCapacity):lane.submit(self.record(lane,connection='beyond',body=b'x'*5000))
+        self.start(lane); report = await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(report['failed_connections'],4)
+        self.assertEqual(report['durable_records'],0)
+        self.assertEqual(report['venue_failure'],'session_connection_bound')
+        self.assertEqual(report['failure_controls_durable'],5)
+
+    async def test_cancelled_client_future_does_not_drop_accepted_raw_message(self):
+        lane,_ = self.lane()
+        future = lane.submit(self.record(lane)); future.cancel()
+        lane.stop(); self.start(lane)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual([r.receipt.receive_seq for r in self.records(lane) if r.kind=='ws_message'],[0])
+        self.assertEqual(lane.health()['unconfirmed_records'],0)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_writer_failure_reports_uncertainty_and_uses_independent_control_wal(self):
+        lane,emergency = self.lane()
+        future = lane.submit(self.record(lane))
+        stderr = io.StringIO()
+        with patch.object(lane.writer,'append',side_effect=OSError('injected disk failure')),redirect_stderr(stderr):
+            self.start(lane); report = await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        self.assertEqual(report['unconfirmed_records'],1)
+        self.assertGreater(lane.queue.budget.used,0)
+        self.assertIsNotNone(report['emergency_control_id'])
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            events=[strict_json(RawRecord.from_bytes(v).body)
+                    for v in journal.encoded_records(allow_unsealed=True)]
+        self.assertEqual(events[0]['kind'],'writer_unconfirmed')
+        self.assertEqual(events[0]['payload']['watermarks'][0]['last_submitted_seq'],0)
+        self.assertIsNone(events[0]['payload']['watermarks'][0]['last_durable'])
+        self.assertIn('"emergency_durable":true',stderr.getvalue())
+
+    async def test_complete_but_unacknowledged_frame_can_be_recovered_without_false_success(self):
+        lane,_ = self.lane()
+        original=lane.writer.append
+        def fail_after_fsync(record):
+            original(record)
+            raise OSError('failed after actual durable append')
+        future=lane.submit(self.record(lane))
+        with patch.object(lane.writer,'append',side_effect=fail_after_fsync),redirect_stderr(io.StringIO()):
+            self.start(lane); report=await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        self.assertEqual(report['durable_records'],0)
+        base=lane.writer.directory.parent.parent
+        recovered=recover_session(lane.writer.directory,base/'archive')
+        records=[r for path in recovered for r in iter_segment_records(path)]
+        self.assertEqual(len(records),1)
+        self.assertEqual(records[0].record_id,self.record(lane).record_id)
+
+    async def test_both_disks_failed_emit_health_without_claiming_durable_failure_control(self):
+        lane,_=self.lane(); future=lane.submit(self.record(lane)); stderr=io.StringIO()
+        with patch.object(lane.writer,'append',side_effect=OSError()),patch.object(lane.emergency_writer,'append',side_effect=OSError()),redirect_stderr(stderr):
+            self.start(lane); report=await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        self.assertIsNone(report['emergency_control_id'])
+        self.assertEqual(report['failure_controls_durable'],0)
+        self.assertIn('"emergency_durable":false',stderr.getvalue())
+
+    async def test_cancellation_waits_for_inflight_disk_operation_before_closing_owner(self):
+        lane,_=self.lane(); entered=threading.Event(); release=threading.Event()
+        self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.kind=='ws_message':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        future=lane.submit(self.record(lane))
+        with patch.object(lane.writer,'append',side_effect=gated):
+            task=self.start(lane)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            task.cancel(); await asyncio.sleep(0)
+            self.assertFalse(task.done()); self.assertFalse(lane.writer.closed)
+            self.assertFalse(future.done()); self.assertGreater(lane.queue.budget.used,0)
+            task.cancel(); await asyncio.sleep(0)
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(task,5)
+        self.assertTrue((await future).timing_valid)
+        self.assertTrue(lane.writer.closed)
+        self.assertEqual(len([r for r in self.records(lane) if r.kind=='ws_message']),1)
+        self.assertEqual(lane.health()['venue_failure'],'worker_cancelled')
+
+    async def test_receive_to_durable_deadline_failure_keeps_raw_and_reports_measured_latency(self):
+        lane,_=self.lane(); entered=threading.Event(); release=threading.Event(); self.addCleanup(release.set)
+        original=lane.writer.append
+        def slow(record):
+            if record.kind=='ws_message':entered.set(); release.wait(3)
+            return original(record)
+        future=lane.submit(self.record(lane))
+        with patch.object(lane.writer,'append',side_effect=slow):
+            self.start(lane); self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            self.mono[0]+=5_000_000_000; release.set()
+            ack=await asyncio.wait_for(future,5)
+            await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertEqual(ack.receive_to_durable_ns,5_000_000_000)
+        self.assertEqual(lane.health()['venue_failure'],'receive_durable_deadline_or_clock_invalid')
+        self.assertEqual(len([r for r in self.records(lane) if r.kind=='ws_message']),1)
+
+    async def test_clock_sampler_failure_preserves_raw_with_explicit_unknown_control_time(self):
+        broken=[False]
+        def observe():
+            if broken[0]:raise ValueError('injected clock error')
+            return self.observe()
+        lane,_=self.lane(observe=observe); future=lane.submit(self.record(lane)); broken[0]=True
+        self.start(lane); ack=await asyncio.wait_for(future,5); await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        for event in self.controls(lane):
+            self.assertFalse(event['control_time_valid'])
+            self.assertEqual(event['control_time_source'],'last_healthy_observation')
+
+    async def test_faulty_venue_does_not_stop_another_lanes_thread_or_queue(self):
+        limits=QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768)
+        fleet=VenueQueues({'deribit':limits,'bybit':limits},aggregate_bytes=262144,now_ns=lambda:self.mono[0])
+        bad,_=self.lane(queue=fleet.queues['deribit'])
+        good,_=self.lane(venue='bybit',queue=fleet.queues['bybit'])
+        failed=bad.submit(self.record(bad)); saved=good.submit(self.record(good))
+        with patch.object(bad.writer,'append',side_effect=OSError()),redirect_stderr(io.StringIO()):
+            self.start(bad); self.start(good)
+            await asyncio.wait_for(saved,5)
+            good.stop(); await asyncio.wait_for(good.test_task,5)
+            await asyncio.wait_for(bad.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await failed
+        self.assertIsNone(good.health()['writer_error'])
+        self.assertEqual(good.health()['durable_records'],1)
+        self.assertEqual(fleet.budget.used,bad.queue.health()['bytes'])
+
+    async def test_epoch_change_or_wall_step_invalidates_timing_but_preserves_raw(self):
+        for change in ('epoch', 'wall'):
+            with self.subTest(change=change):
+                stamp = [self.observe()]
+                lane,_ = self.lane(observe=lambda:stamp[0])
+                future = lane.submit(self.record(lane))
+                utc, mono, epoch = stamp[0]
+                stamp[0] = (utc, mono, 'changed') if change == 'epoch' else (utc+100_000_001, mono, epoch)
+                self.start(lane)
+                ack = await asyncio.wait_for(future,5)
+                await asyncio.wait_for(lane.test_task,5)
+                self.assertFalse(ack.timing_valid)
+                self.assertIsNone(ack.receive_to_durable_ns)
+                self.assertFalse(lane.health()['accepting'])
+                self.assertEqual(lane.health()['durable_records'],1)
+                self.assertTrue(any(event['kind']=='ingress_halted' for event in self.controls(lane)))
+                self.assertTrue(all(not event['control_time_valid'] for event in self.controls(lane)))
+                self.assertEqual(len([r for r in self.records(lane) if r.kind=='ws_message']),1)
+
+    async def test_observation_monotonic_regression_latches_even_with_nonnegative_latency(self):
+        stamp = [self.observe()]
+        lane,_ = self.lane(observe=lambda:stamp[0])
+        future = lane.submit(self.record(lane))
+        stamp[0] = (self.utc+1000,2000,'epoch')
+        self.assertTrue(lane._observation()[1])
+        stamp[0] = (self.utc+500,1500,'epoch')
+        self.start(lane)
+        ack = await asyncio.wait_for(future,5)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        stamp[0] = (self.utc+2000,3000,'epoch')
+        self.assertFalse(lane._observation()[1])
+
+    async def test_queue_clock_fault_during_write_invalidates_inflight_ack(self):
+        lane,_ = self.lane()
+        entered, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+        original = lane.writer.append
+        def gated(record):
+            if record.kind=='ws_message':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        future = lane.submit(self.record(lane))
+        def broken():raise ValueError('injected queue clock failure')
+        with patch.object(lane.writer,'append',side_effect=gated):
+            self.start(lane)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            with patch.object(lane.queue,'now_ns',side_effect=broken):
+                with self.assertRaises(ValueError):lane.submit(self.record(lane,1))
+            release.set()
+            ack = await asyncio.wait_for(future,5)
+            await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        self.assertEqual(lane.health()['venue_failure'],'queue_clock_or_closed')
+        self.assertEqual(lane.health()['durable_records'],1)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_pending_connection_loss_control_survives_primary_control_write_failure(self):
+        q=ByteQueue(QueueLimits(max_bytes=32768,max_items=1,max_item_bytes=8192),now_ns=lambda:self.mono[0])
+        lane,emergency=self.lane(queue=q)
+        future=lane.submit(self.record(lane))
+        with self.assertRaises(QueueCapacity):lane.submit(self.record(lane,1))
+        with patch.object(lane.writer,'append',side_effect=OSError()),redirect_stderr(io.StringIO()):
+            self.start(lane); await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            record=RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True)))
+        events=strict_json(record.body)['payload']['unpersisted_controls']
+        self.assertEqual(events[0]['reason'],'queue_capacity')
+        self.assertEqual(events[0]['rejected']['receipt']['receive_seq'],1)
+
+
+if __name__=='__main__':unittest.main()
