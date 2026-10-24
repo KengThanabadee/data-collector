@@ -1,0 +1,15 @@
+{
+  "chunk": "05c",
+  "status": "approved",
+  "reviewer": "dc_chunk5c_clock_review",
+  "reasoning_effort": "high",
+  "tests": "210 full v2 tests pass; 34 clock/cutoff tests independently pass",
+  "sources": {
+    "data_collector/clock.py": "7485abec4a9519a508a31fab92ce749c80154039ad415d0fe814f1c6163211f7",
+    "tests/test_dc_clock.py": "92a295cc5f9ac70568c67dcebff978aef38a7d37a360a6ff93a3bf6dbf668912"
+  },
+  "findings_closed": [
+    "Shared monotonic high-water mark across sample and anchor APIs prevents stale alignment from becoming healthy after a regression; fault remains sticky until a fresh process session"
+  ],
+  "limits": "Measured clock state machine only. Explicit reference offset/uncertainty evidence, bounded epoch history, two spaced healthy observations, stale-anchor invalidation and raw UTC preservation. Assessment persistence, correction-ledger mapping, OS/NTP sampling, transport integration and production acceptance remain pending."
+}
