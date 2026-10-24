@@ -109,6 +109,11 @@ class DurableClock:
     def pin(self):return self._pin
 
     @property
+    def assessment(self):
+        """Last fully committed immutable assessment, or None before a sample."""
+        return self._assessment
+
+    @property
     def prior_anchors(self):
         return self._monitor.prior_anchors
 

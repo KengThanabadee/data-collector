@@ -20,6 +20,8 @@ from .journal import Journal
 from .clock import ClockAssessment, ClockSample
 from .clocklog import ClockPin, DurableClock, validate_clock_source
 
+PENDING_CLOCK_EPOCH = 'pending:alignment'
+
 
 class LaneStopped(ValueError):
     pass
@@ -36,6 +38,7 @@ class DurableAck:
     ingress_ordinal: int
     receive_to_durable_ns: int | None
     timing_valid: bool
+    clock_epoch: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +57,7 @@ class _Pending:
     clock_sample: ClockSample | None = None
     timing_epoch: str | None = None
     clock_check: bool = False
+    stamp_clock: bool = False
 
 
 class ArchiveLane:
@@ -165,11 +169,33 @@ class ArchiveLane:
         self._wakeup.set()
 
     def submit(self, record):
+        """Admit an already labelled raw record; caller owns its epoch label."""
+        return self._submit(record, stamp_clock=False)
+
+    def submit_received(self, record):
+        """Stamp alignment at the serialized durable FIFO position.
+
+        Supply exact receive clocks and PENDING_CLOCK_EPOCH, not a guessed or
+        cached alignment label. A measured sample must already be admitted.
+        The disk owner selects the last preceding committed clock assessment;
+        a failed clock write prevents dependent raw acknowledgements. This is
+        an epoch assignment, not a freshness check or proof of UTC alignment.
+        The acknowledgement reports the stored epoch and expanded raw hash.
+        """
+        if self._clock is None or not self._clock_submitted:
+            raise ValueError('admit a measured clock sample before received raw')
+        if not isinstance(record, RawRecord) or record.receipt.clock_epoch != PENDING_CLOCK_EPOCH:
+            raise ValueError('explicit pending alignment receipt required')
+        return self._submit(record, stamp_clock=True)
+
+    def _submit(self, record, *, stamp_clock):
         if self._stopping or self._terminal:
             raise LaneStopped('venue archive ingress stopped')
         if not isinstance(record, RawRecord):
             raise ValueError('typed raw record required')
         r = record.receipt
+        if not stamp_clock and r.clock_epoch == PENDING_CLOCK_EPOCH:
+            raise ValueError('pending alignment receipts require submit_received')
         if (record.venue, record.environment, r.capture_id, r.process_session_id,
             record.provenance.source_sha256, record.provenance.config_sha256) != (
                 self.identity['venue'], self.identity['environment'], self.identity['capture_id'], self.identity['process_session_id'],
@@ -196,6 +222,11 @@ class ArchiveLane:
             raise ValueError('reserved collector ingress ordinal')
         # Bound the actual expanded envelope before admitting its original bytes.
         maximum = replace(record, native_fields_json=canonical(dict(fields, collector_ingress_ordinal=2**63-1)))
+        if stamp_clock:
+            # ClockMonitor permits up to1024 epochs and a128-byte session ID.
+            # Preflight the eventual envelope, not its shorter pending label.
+            maximum = replace(maximum, receipt=replace(r,
+                clock_epoch=self.identity['process_session_id']+':clock:1023'))
         if self._admission_count >= 2**63 or len(maximum.to_bytes()) > self.writer.limits.max_record_bytes:
             self._failure('expanded_record_bound', record)
             raise QueueCapacity('expanded ingress record exceeds writer bound')
@@ -212,7 +243,8 @@ class ArchiveLane:
         # alignment must not by itself stop durable raw capture. Retain the
         # legacy receipt/observer equality rule when measured clocks are off.
         timing_epoch = self._last_observation[2] if self._clock is not None else None
-        self._pending[ticket] = _Pending(record.record_id, r, future, timing_epoch=timing_epoch)
+        self._pending[ticket] = _Pending(record.record_id, r, future,
+                                        timing_epoch=timing_epoch, stamp_clock=stamp_clock)
         self._submitted[stream] = r.receive_seq
         self._last_submitted_mono = r.monotonic_ns
         self._admission_count += 1
@@ -406,6 +438,12 @@ class ArchiveLane:
                         self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
                         continue
+                    if pending.stamp_clock:
+                        assessment = self._clock.assessment
+                        if assessment is None:
+                            raise DurabilityUnknown('preceding clock assessment is not committed')
+                        record = replace(record, receipt=replace(record.receipt,
+                            clock_epoch=assessment.anchor.clock_epoch))
                     stored = await self._disk(self.ingress.append, record)
                     latency,timing_valid = self._timing(lease,stored.receipt,epoch=pending.timing_epoch)
                     receipt = dict(stream=asdict(stored.receipt.stream_key), receive_seq=stored.receipt.receive_seq,
@@ -418,7 +456,8 @@ class ArchiveLane:
                     self._pending.pop(lease.ordinal)
                     if not pending.future.done():
                         pending.future.set_result(DurableAck(stored.record_id, receipt['raw_sha256'],
-                            strict_json(stored.native_fields_json)['collector_ingress_ordinal'], latency, timing_valid))
+                            strict_json(stored.native_fields_json)['collector_ingress_ordinal'], latency, timing_valid,
+                            stored.receipt.clock_epoch))
                     continue
                 if self._stopping:
                     break

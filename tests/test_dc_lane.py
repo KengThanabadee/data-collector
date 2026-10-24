@@ -9,9 +9,9 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from data_collector.contracts import Provenance, RawRecord, Receipt, digest, strict_json
+from data_collector.contracts import Provenance, RawRecord, Receipt, canonical, digest, strict_json
 from data_collector.journal import Journal, JournalLimits
-from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped
+from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped, PENDING_CLOCK_EPOCH
 from data_collector.queues import ByteQueue, QueueCapacity, QueueLimits, VenueQueues
 from data_collector.segments import SegmentLimits, iter_segment_records
 from data_collector.writer import SessionWriter, recover_session
@@ -87,6 +87,119 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         utc,mono,_=self.observe()
         return lane.submit_clock_check(utc_ns=kwargs.get('utc_ns',utc),monotonic_ns=kwargs.get('monotonic_ns',mono),
                                        boot_id=kwargs.get('boot_id','boot'))
+
+    def received(self,lane,seq=0):
+        record=self.record(lane,seq)
+        return replace(record,receipt=replace(record.receipt,clock_epoch=PENDING_CLOCK_EPOCH))
+
+    async def test_received_epochs_follow_queued_clock_boundaries_without_waiting_for_disk(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        first_sample=lane.submit_clock(*self.clock_request(lane))
+        originals=[self.received(lane)]
+        first=lane.submit_received(originals[-1])
+        self.mono[0]+=60
+        second_sample=lane.submit_clock(*self.clock_request(lane,1))
+        originals.append(self.received(lane,1))
+        second=lane.submit_received(originals[-1])
+        self.mono[0]+=61
+        check=self.clock_check(lane)
+        originals.append(self.received(lane,2))
+        third=lane.submit_received(originals[-1])
+        self.assertIsNone(lane._clock.assessment)
+        self.assertEqual(lane._clock.pin.count,0)
+        self.start(lane)
+        a,raw_a,b,raw_b,c,raw_c=await asyncio.wait_for(
+            asyncio.gather(first_sample,first,second_sample,second,check,third),5)
+        self.assertTrue(b.assessment.aligned)
+        self.assertFalse(c.assessment.aligned)
+        self.assertEqual([ack.clock_epoch for ack in (raw_a,raw_b,raw_c)],
+            [a.assessment.anchor.clock_epoch,b.assessment.anchor.clock_epoch,c.assessment.anchor.clock_epoch])
+        self.assertNotEqual(raw_a.clock_epoch,raw_c.clock_epoch)
+        self.assertEqual(c.assessment.anchor.epoch_started_ordinal,2)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        native=[r for r in self.records(lane) if r.kind=='ws_message']
+        for original,stored,ack in zip(originals,native,(raw_a,raw_b,raw_c)):
+            self.assertEqual(stored.receipt,replace(original.receipt,clock_epoch=ack.clock_epoch))
+            self.assertEqual(stored.body,original.body)
+            self.assertEqual(stored.record_id,original.record_id)
+            self.assertEqual(digest(stored.to_bytes()),ack.raw_sha256)
+            self.assertTrue(ack.timing_valid)
+        self.assertEqual([ack.ingress_ordinal for ack in (raw_a,raw_b,raw_c)],[0,1,2])
+        self.assertEqual(self.clock_replay(lane).assessment,c.assessment)
+        self.assertTrue(all(r.receipt.clock_epoch!=PENDING_CLOCK_EPOCH for r in self.records(lane)))
+
+    async def test_received_stamping_rejects_disabled_unmeasured_or_prelabelled_input(self):
+        disabled,_=self.lane()
+        with self.assertRaises(ValueError):disabled.submit_received(self.received(disabled))
+        with self.assertRaises(ValueError):disabled.submit(self.received(disabled))
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        with self.assertRaises(ValueError):lane.submit_received(self.received(lane))
+        sample=lane.submit_clock(*self.clock_request(lane))
+        before=lane.queue.health()['bytes']
+        with self.assertRaises(ValueError):lane.submit(self.received(lane))
+        with self.assertRaises(ValueError):lane.submit_received(self.record(lane))
+        with self.assertRaises(ValueError):lane.submit_received(None)
+        self.assertEqual(lane.queue.health()['bytes'],before)
+        self.start(lane);await asyncio.wait_for(sample,5)
+
+    async def test_failed_preceding_clock_write_never_acknowledges_pending_epoch(self):
+        lane,emergency=self.lane(clock_policy=self.clock_policy())
+        sample=lane.submit_clock(*self.clock_request(lane))
+        future=lane.submit_received(self.received(lane))
+        original=lane.writer.append
+        def fail(record):
+            if record.channel=='clock_assessments':raise OSError('injected clock assessment write failure')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=fail),redirect_stderr(io.StringIO()):
+            self.start(lane);await asyncio.wait_for(lane.test_task,5)
+        for pending in (sample,future):
+            with self.assertRaises(DurabilityUnknown):await pending
+        self.assertIsNone(lane._clock.assessment)
+        self.assertEqual(lane.health()['durable_records'],0)
+        self.assertEqual(lane.health()['unconfirmed_records'],2)
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertEqual(event['payload']['clock']['pin']['count'],0)
+        self.assertEqual(event['payload']['unconfirmed_records'],2)
+
+    async def test_cancelled_received_future_still_archives_committed_epoch(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        sample=lane.submit_clock(*self.clock_request(lane))
+        original=self.received(lane)
+        future=lane.submit_received(original);future.cancel()
+        lane.stop();self.start(lane);await asyncio.wait_for(lane.test_task,5)
+        assessment=(await sample).assessment
+        native=[r for r in self.records(lane) if r.kind=='ws_message']
+        self.assertEqual(len(native),1)
+        self.assertEqual(native[0].receipt,replace(original.receipt,clock_epoch=assessment.anchor.clock_epoch))
+        self.assertEqual(native[0].body,original.body)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_received_admission_preflights_larger_final_clock_label(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        sample=lane.submit_clock(*self.clock_request(lane))
+        record=self.received(lane)
+        maximum_pending=replace(record,native_fields_json=canonical(dict(collector_ingress_ordinal=2**63-1)))
+        original_limit=lane.writer.limits
+        with patch.object(lane.writer,'limits',replace(original_limit,max_record_bytes=len(maximum_pending.to_bytes()))):
+            with self.assertRaises(QueueCapacity):lane.submit_received(record)
+        self.assertEqual(lane.health()['unconfirmed_records'],1)
+        self.start(lane);await asyncio.wait_for(sample,5)
+
+    async def test_received_stamping_does_not_claim_freshness_without_a_check(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        self.mono[0]+=60
+        aligned=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        self.mono[0]+=61
+        # FIFO labelling alone uses the last committed assessment. A freshness
+        # check at a cutoff must still downgrade this expired reference.
+        raw=await asyncio.wait_for(lane.submit_received(self.received(lane)),5)
+        self.assertEqual(raw.clock_epoch,aligned.assessment.anchor.clock_epoch)
+        checked=await asyncio.wait_for(self.clock_check(lane),5)
+        self.assertFalse(checked.assessment.aligned)
+        self.assertNotEqual(raw.clock_epoch,checked.assessment.anchor.clock_epoch)
+        self.assertTrue(raw.timing_valid)
 
     async def test_measured_epoch_recovery_does_not_change_process_timing_epoch(self):
         lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
