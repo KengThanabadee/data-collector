@@ -15,6 +15,8 @@ from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped
 from data_collector.queues import ByteQueue, QueueCapacity, QueueLimits, VenueQueues
 from data_collector.segments import SegmentLimits, iter_segment_records
 from data_collector.writer import SessionWriter, recover_session
+from data_collector.clock import ClockSample
+from data_collector.clocklog import SOURCE, replay_clock
 from tests.test_dc_contracts import raw, key
 
 
@@ -28,7 +30,7 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
     def observe(self):
         return self.utc+self.mono[0]-1000,self.mono[0],'epoch'
 
-    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4):
+    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None):
         self.counter += 1
         root = self.root/str(self.counter)
         provenance = Provenance('a'*64,'b'*64,'c'*64)
@@ -40,7 +42,8 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         emergency = Journal(emergency_path,venue=venue,environment='production',create=True,
                             limits=JournalLimits(max_record_bytes=131072))
         q = queue or ByteQueue(QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768),now_ns=lambda:self.mono[0])
-        lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections)
+        lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections,
+                           clock_policy=clock_policy)
         lane.test_task = None
         self.addCleanup(writer.abort); self.addCleanup(emergency.close)
         async def cleanup():
@@ -66,6 +69,120 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
 
     def controls(self, lane):
         return [strict_json(r.body) for r in self.records(lane) if r.channel=='runtime_events']
+
+    def clock_policy(self):
+        return dict(sample_interval_ns=60,max_sample_age_ns=60,max_offset_ns=100,step_tolerance_ns=2,max_epochs=8)
+
+    def clock_request(self,lane,sequence=0):
+        utc,mono,_=self.observe()
+        source=RawRecord(Receipt('capture','process',SOURCE,sequence,utc,mono,'measurement'),
+            lane.identity['venue'],'production','control','clock_measurement','control',b'original clock provider output',lane.provenance)
+        return ClockSample(utc,mono,0,0,'boot',digest(source.to_bytes())),source
+
+    def clock_replay(self,lane):
+        return replay_clock(self.records(lane),venue=lane.identity['venue'],environment='production',capture_id='capture',
+            process_session_id='process',provenance=lane.provenance,policy=self.clock_policy(),expected_pin=lane._clock.pin)
+
+    async def test_clock_writes_share_fifo_with_raw_and_replay_after_finalization(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        first=lane.submit(self.record(lane))
+        clock=lane.submit_clock(*self.clock_request(lane))
+        second=lane.submit(self.record(lane,1))
+        self.start(lane)
+        a,measurement,b=await asyncio.wait_for(asyncio.gather(first,clock,second),5)
+        self.assertEqual([a.ingress_ordinal,b.ingress_ordinal],[0,1])
+        self.assertEqual(measurement.assessment.anchor.epoch_started_ordinal,1)
+        self.assertTrue(measurement.timing_valid)
+        self.mono[0]+=60
+        later=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        self.assertTrue(later.assessment.aligned)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        records=self.records(lane)
+        self.assertEqual([r.receipt.connection_id for r in records[:4]],
+                         ['connection',SOURCE,'control:clock-assessment','connection'])
+        self.assertEqual(self.clock_replay(lane).assessment,later.assessment)
+        self.assertEqual(lane.health()['clock']['pin']['count'],2)
+        self.assertEqual(lane.health()['durable_records'],2)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_clock_requests_require_enabled_policy_and_exact_evidence(self):
+        disabled,_=self.lane()
+        with self.assertRaises(ValueError):disabled.submit_clock(*self.clock_request(disabled))
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        sample,source=self.clock_request(lane)
+        with self.assertRaises(ValueError):lane.submit_clock(sample,replace(source,body=b'changed'))
+        self.assertEqual(lane.queue.budget.used,0)
+        self.assertEqual(lane.health()['clock']['submitted'],0)
+
+    async def test_clock_control_write_failure_is_unconfirmed_with_emergency_clock_pin(self):
+        lane,emergency=self.lane(clock_policy=self.clock_policy())
+        future=lane.submit_clock(*self.clock_request(lane))
+        original=lane.writer.append
+        def fail(record):
+            if record.channel=='clock_assessments':raise OSError('injected clock control failure')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=fail),redirect_stderr(io.StringIO()):
+            self.start(lane);await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        self.assertEqual(lane.health()['clock']['pin']['count'],0)
+        self.assertEqual(lane.health()['unconfirmed_records'],1)
+        self.assertGreater(lane.queue.budget.used,0)
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertEqual(event['payload']['clock']['submitted'],1)
+        self.assertEqual(event['payload']['clock']['pin']['count'],0)
+
+    async def test_cancellation_during_clock_pair_never_interleaves_failure_controls(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.channel=='clock_assessments':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        future=lane.submit_clock(*self.clock_request(lane))
+        with patch.object(lane.writer,'append',side_effect=gated):
+            task=self.start(lane);self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            future.cancel();task.cancel();await asyncio.sleep(0)
+            self.assertFalse(task.done());self.assertGreater(lane.queue.budget.used,0)
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(task,5)
+        self.assertEqual([r.receipt.connection_id for r in self.records(lane)[:2]],
+                         [SOURCE,'control:clock-assessment'])
+        self.assertEqual(self.clock_replay(lane).pin.count,1)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_queue_clock_fault_during_clock_write_invalidates_completion_timing(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.channel=='clock_assessments':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        future=lane.submit_clock(*self.clock_request(lane))
+        with patch.object(lane.writer,'append',side_effect=gated):
+            self.start(lane);self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            with patch.object(lane.queue,'now_ns',side_effect=ValueError('clock error')):
+                with self.assertRaises(ValueError):lane.submit(self.record(lane))
+            release.set()
+            ack=await asyncio.wait_for(future,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        self.assertEqual(self.clock_replay(lane).pin.count,1)
+
+    async def test_clock_overflow_halts_lane_and_drains_previously_accepted_raw(self):
+        q=ByteQueue(QueueLimits(max_bytes=32768,max_items=1,max_item_bytes=8192),now_ns=lambda:self.mono[0])
+        lane,_=self.lane(queue=q,clock_policy=self.clock_policy())
+        raw_future=lane.submit(self.record(lane))
+        with self.assertRaises(QueueCapacity):lane.submit_clock(*self.clock_request(lane))
+        self.start(lane);await asyncio.wait_for(raw_future,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'clock_queue_admission_failed')
+        self.assertEqual(lane.health()['clock']['submitted'],0)
+        self.assertEqual(lane.health()['durable_records'],1)
+        self.assertEqual(lane.queue.budget.used,0)
 
     async def test_raw_acknowledgement_matches_archived_bytes_and_ingress_order(self):
         lane,_ = self.lane()

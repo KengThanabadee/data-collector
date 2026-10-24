@@ -20,10 +20,11 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5b: serialized per-venue archive worker, durable raw acknowledgements, emergency loss controls and clock-fault regressions; high-reasoning re-review approved.
 - [x] Chunk5c: measured clock-health epochs, freshness and two-sample recovery; shared monotonic regression guards reviewed and approved.
 - [x] Chunk5d: fsynced clock measurement/assessment pairs and pinned deterministic replay; independent high-reasoning review and real fsync-failure probes approved.
+- [x] Chunk5e: measured clock requests share the bounded async raw FIFO and disk owner; independent high-reasoning review approved cancellation, failure, overflow and replay tests.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current219 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current225 v2 tests pass. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## V2 specification and implementation handoff — 23 October 2026
 

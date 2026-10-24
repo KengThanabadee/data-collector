@@ -8,6 +8,7 @@ import asyncio
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, replace
+from functools import partial
 from pathlib import Path
 import time
 import sys
@@ -16,6 +17,8 @@ from .contracts import Provenance, RawRecord, Receipt, canonical, digest, intege
 from .cutoffs import IngressWriter
 from .queues import ByteQueue, QueueBacklog, QueueCapacity
 from .journal import Journal
+from .clock import ClockAssessment, ClockSample
+from .clocklog import ClockPin, DurableClock, validate_clock_source
 
 
 class LaneStopped(ValueError):
@@ -35,11 +38,21 @@ class DurableAck:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DurableClockAck:
+    assessment: ClockAssessment
+    pin: ClockPin
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
     receipt: Receipt
     future: asyncio.Future
+    clock_sample: ClockSample | None = None
+    timing_epoch: str | None = None
 
 
 class ArchiveLane:
@@ -51,7 +64,7 @@ class ArchiveLane:
     A process supervisor must enforce the hard stop for a permanently hung disk.
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
-                 clock_tolerance_ns=100_000_000):
+                 clock_tolerance_ns=100_000_000, clock_policy=None):
         if not isinstance(queue, ByteQueue):
             raise ValueError('typed byte queue required')
         status = queue.health()
@@ -60,7 +73,7 @@ class ArchiveLane:
         integer(max_connections, 'connection count bound', 1)
         integer(clock_tolerance_ns, 'wall/monotonic clock tolerance', 1)
         control_bound = max_connections * 8192 + 65536
-        if max_connections + 1 > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
+        if max_connections + (3 if clock_policy is not None else 1) > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
                 emergency_writer.state.records or emergency_writer.limits.max_record_bytes < control_bound):
@@ -81,6 +94,9 @@ class ArchiveLane:
         self.clock_tolerance_ns = clock_tolerance_ns
         self.max_connections = max_connections
         self.ingress = IngressWriter(writer, identity['capture_id'], identity['process_session_id'], max_streams=max_connections)
+        self._clock = None if clock_policy is None else DurableClock(writer,capture_id=identity['capture_id'],
+            process_session_id=identity['process_session_id'],provenance=self.provenance,policy=clock_policy)
+        self._clock_submitted = 0
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='dc-'+identity['venue'])
         self._pending = {}
         self._submitted, self._durable = {}, {}
@@ -196,6 +212,38 @@ class ArchiveLane:
         self._wakeup.set()
         return future
 
+    def submit_clock(self, sample, source):
+        """Queue one measured clock pair in FIFO order with ordinary raw writes.
+
+        The returned assessment is historical measured alignment; consumers must
+        also check timing_valid and current freshness before using its anchor.
+        Source acquisition/parser trust and snapshot integration remain separate.
+        """
+        if self._stopping or self._terminal:
+            raise LaneStopped('venue archive ingress stopped')
+        if self._clock is None:
+            raise ValueError('explicit clock policy required to enable measured clock writes')
+        if self._clock_submitted >= self._clock.max_assessments:
+            self._failure('clock_log_bound',global_scope=True)
+            raise QueueCapacity('clock assessment bound; rotate process session')
+        validate_clock_source(source,sample,self.writer.identity,self.identity['capture_id'],
+                              self.identity['process_session_id'],self.provenance,self._clock_submitted)
+        if self._last_submitted_mono is not None and sample.monotonic_ns < self._last_submitted_mono:
+            self._failure('receipt_monotonic_regression',source,global_scope=True)
+            raise LaneStopped('clock request regressed behind admitted ingress')
+        future = asyncio.get_running_loop().create_future()
+        try:
+            ticket = self.queue.offer(source.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel()
+            self._failure('clock_queue_admission_failed',source,global_scope=True)
+            raise
+        self._pending[ticket] = _Pending(source.record_id,source.receipt,future,sample,self._last_observation[2])
+        self._clock_submitted += 1
+        self._last_submitted_mono = sample.monotonic_ns
+        self._wakeup.set()
+        return future
+
     def stop(self, reason='operator_stop'):
         if reason not in {'operator_stop','budget_complete','shutdown'}:
             raise ValueError('explicit graceful stop reason required')
@@ -221,6 +269,26 @@ class ArchiveLane:
     def _watermarks(self):
         return [dict(stream=asdict(stream), last_submitted_seq=seq,
                      last_durable=self._durable.get(stream)) for stream, seq in sorted(self._submitted.items(), key=lambda value:str(value[0]))]
+
+    def _clock_status(self):
+        return None if self._clock is None else dict(submitted=self._clock_submitted,pin=asdict(self._clock.pin))
+
+    def _timing(self, lease, receipt, *, epoch=None):
+        stamp, valid, _ = self._observation()
+        latency = stamp[1]-receipt.monotonic_ns
+        try:
+            queue_valid = self.queue.health()['clock_valid']
+        except Exception:
+            queue_valid = False
+        valid = (lease.clock_valid and queue_valid and valid and latency >= 0 and
+                 stamp[2] == (receipt.clock_epoch if epoch is None else epoch) and
+                 abs((stamp[0]-receipt.receive_utc_ns)-latency) <= self.clock_tolerance_ns)
+        if not valid:
+            self._clock_failed = True
+        timely = valid and not lease.late and latency < self.queue.limits.max_age_ns
+        if not timely:
+            self._failure('receive_durable_deadline_or_clock_invalid',global_scope=True)
+        return latency if valid else None,timely
 
     async def _control(self, kind, payload):
         stamp, valid, source = self._observation()
@@ -248,7 +316,7 @@ class ArchiveLane:
             control_time_source=source,
             payload=dict(writer_error=self.writer_error, first_failure=self._global_failure,
                          unpersisted_controls=[event for event in self._controls if event is not self._global_failure],
-                         watermarks=self._watermarks(), unconfirmed_records=len(self._pending))))
+                         watermarks=self._watermarks(), clock=self._clock_status(), unconfirmed_records=len(self._pending))))
         record = RawRecord(Receipt(self.identity['capture_id'], self.identity['process_session_id'],
                            'control:emergency:'+self.identity['venue'], 0, *stamp),
                            self.identity['venue'], self.identity['environment'], 'control', 'runtime_events', 'control',
@@ -277,21 +345,17 @@ class ArchiveLane:
                     if lease.late or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
+                    if pending.clock_sample is not None:
+                        assessment = await self._disk(partial(self._clock.sample,pending.clock_sample,record,
+                                                              ingress_ordinal=self.ingress.ordinal))
+                        latency,timely = self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        result = DurableClockAck(assessment,self._clock.pin,latency,timely)
+                        self.queue.ack(lease)
+                        self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(result)
+                        continue
                     stored = await self._disk(self.ingress.append, record)
-                    stamp, clock_valid, _ = self._observation()
-                    latency = stamp[1]-stored.receipt.monotonic_ns
-                    try:
-                        queue_clock_valid = self.queue.health()['clock_valid']
-                    except Exception:
-                        queue_clock_valid = False
-                    clock_valid = (lease.clock_valid and queue_clock_valid and clock_valid and latency >= 0 and
-                                   stamp[2] == stored.receipt.clock_epoch and
-                                   abs((stamp[0]-stored.receipt.receive_utc_ns)-latency) <= self.clock_tolerance_ns)
-                    if not clock_valid:
-                        self._clock_failed = True
-                    timing_valid = clock_valid and not lease.late and latency < self.queue.limits.max_age_ns
-                    if not timing_valid:
-                        self._failure('receive_durable_deadline_or_clock_invalid', global_scope=True)
+                    latency,timing_valid = self._timing(lease,stored.receipt)
                     receipt = dict(stream=asdict(stored.receipt.stream_key), receive_seq=stored.receipt.receive_seq,
                                    record_id=stored.record_id, raw_sha256=digest(stored.to_bytes()),
                                    monotonic_ns=stored.receipt.monotonic_ns, receive_utc_ns=stored.receipt.receive_utc_ns,
@@ -302,7 +366,7 @@ class ArchiveLane:
                     self._pending.pop(lease.ordinal)
                     if not pending.future.done():
                         pending.future.set_result(DurableAck(stored.record_id, receipt['raw_sha256'],
-                            strict_json(stored.native_fields_json)['collector_ingress_ordinal'], latency if clock_valid else None, timing_valid))
+                            strict_json(stored.native_fields_json)['collector_ingress_ordinal'], latency, timing_valid))
                     continue
                 if self._stopping:
                     break
@@ -315,7 +379,7 @@ class ArchiveLane:
             if self._pending:
                 raise DurabilityUnknown('pending receipts remain outside the owned queue; cannot finalize capture')
             await self._control('capture_stopped', dict(reason=self._stop_reason, watermarks=self._watermarks(),
-                                                        failures=len(self._failed_connections)+int(self._global_failure is not None)))
+                                                        clock=self._clock_status(), failures=len(self._failed_connections)+int(self._global_failure is not None)))
             # A final control-time observation can itself discover a clock fault.
             while self._controls:
                 event = self._controls[0]
@@ -351,4 +415,4 @@ class ArchiveLane:
                     venue_failure=None if self._global_failure is None else self._global_failure['reason'],
                     writer_error=self.writer_error, runtime_controls_durable=len(self.control_records),
                     failure_controls_durable=self._failure_control_count+int(self.emergency_control_id is not None),
-                    emergency_control_id=self.emergency_control_id, segments=len(self.segments))
+                    emergency_control_id=self.emergency_control_id, clock=self._clock_status(),segments=len(self.segments))

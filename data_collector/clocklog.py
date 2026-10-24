@@ -48,7 +48,7 @@ def _policy(value):
     return policy
 
 
-def _source(source, sample, identity, capture, session, provenance, sequence):
+def validate_clock_source(source, sample, identity, capture, session, provenance, sequence):
     if not isinstance(source, RawRecord) or not isinstance(sample, ClockSample):
         raise ValueError('typed clock sample and source raw required')
     if ((source.venue,source.environment) != identity or source.provenance != provenance or
@@ -105,7 +105,7 @@ class DurableClock:
             raise ValueError('clock owner poisoned; recover and start fresh session')
         if self._pin.count >= self.max_assessments:
             raise ValueError('clock log bound; checkpoint/session rotation required')
-        _source(source,sample,self.journal.identity,self.capture,self.session,self.provenance,self._pin.count)
+        validate_clock_source(source,sample,self.journal.identity,self.capture,self.session,self.provenance,self._pin.count)
         candidate = deepcopy(self._monitor)
         try:
             assessment = candidate.sample(sample,ingress_ordinal=ingress_ordinal)
@@ -158,7 +158,7 @@ def replay_clock(records, *, venue, environment, capture_id, process_session_id,
                 raise ValueError('missing measurement or clock assessment bound')
             body = strict_json(record.body)
             sample = ClockSample(**body['sample'])
-            _source(pending,sample,(venue,environment),capture_id,process_session_id,provenance,count)
+            validate_clock_source(pending,sample,(venue,environment),capture_id,process_session_id,provenance,count)
             result = monitor.sample(sample,ingress_ordinal=body['ingress_ordinal'])
             expected = _record(sample,result,pending,body['ingress_ordinal'],policy,count,pin.head_sha256)
             if record.to_bytes() != expected.to_bytes():raise ValueError('clock control replay mismatch')
