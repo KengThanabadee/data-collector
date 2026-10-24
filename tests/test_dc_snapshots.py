@@ -48,6 +48,18 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(json.loads(first['payload'])['books'][0]['validity_as_published'],'valid')
         self.assertEqual(first['descriptor']['publication_ledger_pin']['sequence'],0)
 
+    def test_expected_close_hash_is_checked_before_new_or_repeated_commit(self):
+        segment,close,plan=self.fixture()
+        with self.assertRaisesRegex(ValueError,'pinned acquisition hash'):
+            publish_snapshot(self.store,[segment],close,plan,expected_close_sha256='f'*64)
+        self.assertFalse(self.store.exists())
+        original=publish_snapshot(self.store,[segment],close,plan)
+        index=(self.store/'closures'/(close+'.json')).read_bytes()
+        with self.assertRaisesRegex(ValueError,'pinned acquisition hash'):
+            publish_snapshot(self.store,[segment],close,plan,expected_close_sha256='f'*64)
+        self.assertEqual((self.store/'closures'/(close+'.json')).read_bytes(),index)
+        self.assertEqual(read_snapshot(self.store,original['snapshot_id'],[segment]),original)
+
     def test_late_gap_before_publication_is_known_but_values_stay_original(self):
         segment,close,plan=self.fixture();later,pin=self.correction(segment,plan)
         result=publish_snapshot(self.store,[segment,later],close,plan)

@@ -206,17 +206,20 @@ def read_snapshot(root,snapshot_id,segments,*,limits=PublicationLimits()):
     return result
 
 
-def publish_snapshot(root,segments,close_record_id,plan,*,limits=PublicationLimits()):
+def publish_snapshot(root,segments,close_record_id,plan,*,limits=PublicationLimits(),expected_close_sha256=None):
     """Manifest then close index commit; retries retain the first pinned publication.
 
     A different plan/content for an already published close is an error. No object
     is overwritten, including after crashes. Unindexed objects remain provisional.
     """
     sha256(close_record_id,'close_record_id');paths=_paths(segments,limits.replay);root=Path(root)
+    if expected_close_sha256 is not None:sha256(expected_close_sha256,'expected close hash')
     index_path=root/'closures'/(close_record_id+'.json')
     if index_path.exists():
         index=strict_json(_bounded_bytes(index_path,limits.max_manifest_bytes))
         existing=read_snapshot(root,index['snapshot_id'],paths,limits=limits)
+        if expected_close_sha256 is not None and existing['descriptor']['close_sha256']!=expected_close_sha256:
+            raise ValueError('snapshot close differs from pinned acquisition hash')
         if existing['descriptor']['close_record_id']!=close_record_id or canonical(existing['descriptor']['plan'])!=canonical(asdict(plan)):
             raise ValueError('different snapshot plan/content for published close')
         # A previous link may have survived while the caller never observed its
@@ -224,6 +227,8 @@ def publish_snapshot(root,segments,close_record_id,plan,*,limits=PublicationLimi
         _commit(root,existing,limits)
         return existing
     base=materialize_snapshot(paths,close_record_id,plan,limits=limits.replay)
+    if expected_close_sha256 is not None and base['descriptor']['close_sha256']!=expected_close_sha256:
+        raise ValueError('snapshot close differs from pinned acquisition hash')
     result=_publication(base,paths,limits=limits.replay)
     _commit(root,result,limits)
     return read_snapshot(root,result['snapshot_id'],paths,limits=limits)

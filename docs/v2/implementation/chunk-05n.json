@@ -1,0 +1,20 @@
+{
+  "chunk": "5n",
+  "status": "approved",
+  "reviewer": "dc_chunk5n_publisher_review",
+  "reasoning_effort": "high",
+  "tests": "Root full suite341 passed (306 v2 +35 v1), including loopback HTTP server under approved local-test execution. Reviewer independently passed83 focused tests plus late-before-step, direct owner cancellation and real two-close clock probes.",
+  "sources": {
+    "data_collector/publisher.py": "1a7a9b430dc50748dd0fe167e346298dc6c70344103c919dd20d924f49d2443b",
+    "data_collector/lane.py": "a24e306dd8e806ba3604bb6efcb621e348cc016184556c2581c63c92044e8b66",
+    "data_collector/snapshots.py": "5dcd79d0b0ecf32e9c78e521064f008367b74a280bc634af7ef4edc70ea68309",
+    "tests/test_dc_publisher.py": "e3c9e81e44d9dd465ecb8b73a0f848ab1a39a031aa9f5e001c6e871dd58e0756",
+    "tests/test_dc_lane.py": "7ad0f15833babb860829671e6b8715368a3a7d955b05db440e280fe8620010e5",
+    "tests/test_dc_snapshots.py": "5ae9625ba8bf748cf159a0f97cc99e57a1dfef6d83fdb66ba35447fc70f6f90f",
+    "docs/v2/IMPLEMENTATION.md": "5c303b6ea9de7709688fc8003644894a064d5fe1b51c961992e74d42b208a570"
+  },
+  "findings_closed": [
+    "P1 publisher-detected UTC steps now persist origin/raw-epoch invalidation across jobs and same-root reopening; new raw epoch requires replay-proven two-sample alignment. All verified observations are assessed even after publication exceptions."
+  ],
+  "limits": "Bounded local publisher only; completion observation measures committed/verified snapshot before delivery-receipt fsync. Raw-control/backup/coverage receipt integration, recurring scheduling, automatic corrections, checkpoints, all-feed runtime, intended-host capacity and24h soak remain pending. Hard worker hangs need process supervision. Original successful historical receipt bytes remain immutable. Preserve publisher root and clock-invalidation markers during recovery. PLANS implementation prefix reviewed; research suffix/README excluded."
+}

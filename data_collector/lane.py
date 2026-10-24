@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 import sys
 
-from .contracts import Provenance, RawRecord, Receipt, StreamKey, canonical, digest, integer, sha256, strict_json, text
+from .contracts import VENUES, Provenance, RawRecord, Receipt, StreamKey, canonical, digest, integer, sha256, strict_json, text
 from .cutoffs import CutoffCoordinator, IngressWriter, MINUTE_NS
 from .clockcutoffs import ClockBoundCutoffs, _contract_policy
 from .ledger import DurableLedger
@@ -68,6 +68,22 @@ class DurableCutoffAck:
 
 
 @dataclass(frozen=True, slots=True)
+class SnapshotOrigin:
+    venue: str
+    environment: str
+    capture_id: str
+    process_session_id: str
+    capture_scope: str
+    process_timing_epoch: str
+
+    def __post_init__(self):
+        for name,value in asdict(self).items():
+            text(value,name)
+            if len(canonical(value))>130:raise ValueError('snapshot origin byte bound')
+        if self.venue not in VENUES:raise ValueError('snapshot origin venue')
+
+
+@dataclass(frozen=True, slots=True)
 class SnapshotSegmentInput:
     path: Path
     context_sha256: str
@@ -81,6 +97,7 @@ class DurableSnapshotInputs:
     close_sha256: str
     cutoff_id: int
     deadline_ns: int
+    origin: SnapshotOrigin
     segments: tuple[SnapshotSegmentInput, ...]
     replay_limits: ReplayLimits
     clock_pin: ClockPin
@@ -515,7 +532,9 @@ class ArchiveLane:
         request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
             'control:snapshot-input-request',self._snapshot_requests_submitted,utc_ns,monotonic_ns,
             self._last_observation[2]),*self.writer.identity,'control','snapshot_input_request','control',
-            canonical(self._last_closed),self.provenance)
+            canonical(dict(self._last_closed,origin=asdict(SnapshotOrigin(*self.writer.identity,
+                self.identity['capture_id'],self.identity['process_session_id'],self._cutoff_scope,
+                self._last_observation[2])))),self.provenance)
         if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:
             self._failure('receipt_monotonic_regression',request,global_scope=True)
             raise LaneStopped('snapshot request regressed behind admitted ingress')
@@ -667,7 +686,8 @@ class ArchiveLane:
                     if pending.snapshot_inputs:
                         value,paths,pin=await self._disk(self._seal_snapshot_inputs,record)
                         latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
-                        result=DurableSnapshotInputs(**value,segments=paths,clock_pin=pin,replay_limits=self.snapshot_limits,
+                        fields=dict(value);origin=SnapshotOrigin(**fields.pop('origin'))
+                        result=DurableSnapshotInputs(**fields,origin=origin,segments=paths,clock_pin=pin,replay_limits=self.snapshot_limits,
                             receive_to_durable_ns=latency,timing_valid=timely)
                         self._snapshot_inputs_pending=False
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)

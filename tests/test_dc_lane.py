@@ -15,6 +15,7 @@ from data_collector.cutoffs import MINUTE_NS
 from data_collector.replay import BookBinding, ReplayLimits, SnapshotPlan
 from data_collector.metadata import MetadataVersion
 from data_collector.snapshots import publish_snapshot, read_snapshot
+from data_collector.publisher import SnapshotPublisher
 from data_collector.validity import FeedTarget
 from data_collector.journal import Journal, JournalLimits
 from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped, PENDING_CLOCK_EPOCH
@@ -154,15 +155,28 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         inputs=await asyncio.wait_for(self.snapshot_input_request(lane,closed.record_id),5)
         paths=[segment.path for segment in inputs.segments]
         store=self.root/'published-live-prefix'
-        result=await asyncio.to_thread(publish_snapshot,store,paths,closed.record_id,plan)
+        publisher=SnapshotPublisher(store,inputs.origin,observe=self.observe);self.addAsyncCleanup(publisher.close)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        def blocked(*args,**kwargs):
+            entered.set()
+            if not release.wait(3):raise OSError('test gate timeout')
+            return publish_snapshot(*args,**kwargs)
+        with patch('data_collector.publisher.publish_snapshot',side_effect=blocked):
+            delivery=publisher.submit(inputs,plan)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            self.mono[0]+=1
+            raw_ack=await asyncio.wait_for(lane.submit_received(self.received(lane,1)),5)
+            self.assertTrue(raw_ack.timing_valid)
+            self.assertFalse(delivery.done())
+            release.set();delivered=await asyncio.wait_for(delivery,5)
+        self.assertEqual(delivered.outcome,'published')
+        result=await asyncio.to_thread(read_snapshot,store/'snapshots',delivered.snapshot_id,paths)
         self.assertEqual(result['descriptor']['close_sha256'],inputs.close_sha256)
         self.assertEqual(strict_json(result['payload'])['books'][0]['validity_as_published'],'valid')
         self.assertEqual(strict_json(result['payload'])['books'][0]['book']['bids'],[['100','2']])
-        self.assertEqual(await asyncio.to_thread(read_snapshot,store,result['snapshot_id'],paths),result)
+        self.assertEqual(await asyncio.to_thread(read_snapshot,store/'snapshots',result['snapshot_id'],paths),result)
         self.assertTrue(lane.health()['accepting'])
         self.assertFalse(lane.writer.closed)
-        self.mono[0]+=1
-        await asyncio.wait_for(lane.submit_received(self.received(lane,1)),5)
 
     async def test_snapshot_inputs_seal_before_later_raw_and_retry_pins_first_prefix(self):
         lane,_=await self.ready_cutoffs()
@@ -174,6 +188,9 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(inputs.close_sha256,closed.raw_sha256)
         self.assertEqual(inputs.cutoff_id,0)
         self.assertEqual(inputs.deadline_ns,1100)
+        self.assertEqual(inputs.origin.process_timing_epoch,'epoch')
+        self.assertEqual(inputs.origin.process_session_id,'process')
+        self.assertEqual(inputs.origin.capture_scope,'capture')
         self.assertTrue(inputs.timing_valid)
         self.assertEqual(inputs.clock_pin,closed.clock_pin)
         self.assertTrue(inputs.segments)

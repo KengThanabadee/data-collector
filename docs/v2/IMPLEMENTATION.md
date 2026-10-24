@@ -32,6 +32,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5k | Continue measured-mode raw capture through UTC steps while retaining process timing faults | Approved; [evidence](implementation/chunk-05k.json) |
 | 5l | Clock-bound cutoff allocation/closure commands through the shared raw FIFO | Approved; [evidence](implementation/chunk-05l.json) |
 | 5m | FIFO seal and immutable pinned snapshot inputs while raw capture remains open | Approved; [evidence](implementation/chunk-05m.json) |
+| 5n | Separate bounded snapshot publisher with immutable deadline/clock/knowledge delivery receipts | Approved after fixes; [evidence](implementation/chunk-05n.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -45,7 +46,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current287 v2 tests pass; the previous combined315-test run verified280 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current341 combined tests pass:306 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -125,5 +126,43 @@ integration fixture publishes and verifies a real metadata/book snapshot from
 the returned inputs while the lane continues accepting raw.
 
 These inputs are not a runtime publication or proof of the5s publication deadline.
-Automatic delivery outcome records, recurring scheduling, correction mapping,
-checkpoint acceleration and intended-host/full-universe acceptance remain pending.
+The separate publisher below consumes this handoff; raw-control integration,
+recurring scheduling, correction mapping, checkpoint acceleration and
+intended-host/full-universe acceptance remain pending.
+
+Chunk5n adds `SnapshotPublisher`: one retained job on a dedicated worker, exclusive
+output-root ownership, input-metadata/job/receipt byte bounds, and shutdown that
+drains an owned job before releasing its lock. Caller cancellation cannot turn an
+unfinished write into success. `SnapshotOrigin` binds inputs to the configured
+local process/clock domain. This is not a cross-host/process publisher protocol.
+
+Before publishing, it verifies the pinned segment/context hashes, exact close,
+complete clock pin and publication-start correction knowledge. Newly invalidated
+or stale alignment, process-clock faults and late starts prevent successful
+delivery. Publication also pins the expected close hash before new or repeated
+commit. Existing snapshots that exclude newly known corrections are not certified
+as current delivery, while their original bytes remain unchanged.
+
+An immutable `dc.snapshot-delivery/2` receipt records the observed completion of
+snapshot commit plus verification against the original deadline+5s. That artifact
+completion observation precedes the receipt's own fsync. Files can survive a late
+or failed attempt; their presence alone is not on-time delivery evidence. A receipt
+write error is unconfirmed, not success. Retries retain a verified first receipt
+and its original timestamps; no receipt means an old artifact cannot retrospectively
+prove on-time delivery. The synthetic open-lane integration proves raw continues
+while this publisher is blocked, then verifies the delivered snapshot.
+
+Delivery receipts currently live in the publisher store. They still require raw
+control/backup/coverage integration and recurring orchestration. A process
+supervisor must enforce hard bounds for a permanently hung worker; Python threads
+are not forcibly stopped. Full-prefix replay/checkpoint capacity and intended-host
+acceptance remain unproven; this chunk does not enable unbounded live capture.
+
+Publisher-detected UTC steps persist an immutable bounded marker keyed by local
+origin and raw clock epoch. Restoring UTC or reopening the same output root
+cannot recertify that epoch. A different epoch must have two replay-proven
+healthy reference samples before fresh aligned delivery. Every verified job
+observation is checked, including completion after a publication exception.
+Previously successful historical receipts keep their original proof. Marker
+I/O uncertainty stops this owner; recovery must preserve the output root and
+its invalidation markers. Raw-control correction mapping remains pending.

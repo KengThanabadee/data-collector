@@ -29,11 +29,12 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5k: continue measured-mode raw capture through UTC wall steps with monotonic integrity/deadline guards; independent high-reasoning review approved.
 - [x] Chunk5l: clock-bound cutoff allocation/closure commands share the raw FIFO; independent high-reasoning review approved,315 combined v1/v2 tests pass.
 - [x] Chunk5m: seal and pin immutable snapshot inputs through the raw FIFO while capture stays open; independent high-reasoning review approved,287 v2 tests pass.
+- [x] Chunk5n: bounded separate snapshot publisher and durable deadline/clock/knowledge outcome receipts; persistent UTC-step invalidation repaired, high-reasoning re-review approved,341 combined tests pass.
 - [ ] Recurring cutoff timers/publication and automatic correction mapping remain pending.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current287 v2 tests pass;35 v1 tests passed in the previous combined315-test run. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current341 combined tests pass:306 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 
