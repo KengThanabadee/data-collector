@@ -23,6 +23,9 @@ from .clock import ClockAssessment, ClockSample
 from .clocklog import ClockPin, DurableClock, SOURCE, CONTROL, validate_clock_source
 from .replay import ReplayLimits
 from .deliveries import delivery_base, validate_delivery
+from .recovery import CutoffRecovery, RecoveryRequest, RecoverySegment, iter_recovery_prefix, reconcile_cutoffs
+from .cutoffs import CutoffPin
+from .validity import LedgerPin
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -117,6 +120,14 @@ class DurableDeliveryAck:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DurableRecoveryAck:
+    recovery: CutoffRecovery
+    ledger_pin: LedgerPin
+    elapsed_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
@@ -129,6 +140,7 @@ class _Pending:
     cutoff_operation: str | None = None
     snapshot_inputs: bool = False
     snapshot_delivery: bool = False
+    recovery: bool = False
 
 
 class ArchiveLane:
@@ -141,7 +153,8 @@ class ArchiveLane:
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
                  clock_tolerance_ns=100_000_000, clock_policy=None,
-                 cutoff_scope=None, cutoff_ledger_id=None,snapshot_limits=ReplayLimits()):
+                 cutoff_scope=None, cutoff_ledger_id=None,snapshot_limits=ReplayLimits(),recovery=None,
+                 max_recovery_ns=300_000_000_000):
         if not isinstance(queue, ByteQueue):
             raise ValueError('typed byte queue required')
         status = queue.health()
@@ -150,6 +163,17 @@ class ArchiveLane:
         integer(max_connections, 'connection count bound', 1)
         integer(clock_tolerance_ns, 'wall/monotonic clock tolerance', 1)
         if not isinstance(snapshot_limits,ReplayLimits):raise ValueError('typed snapshot replay limits required')
+        integer(max_recovery_ns,'startup recovery time bound',1)
+        if recovery is not None:
+            if (not isinstance(recovery,RecoveryRequest) or not isinstance(recovery.cutoff_pin,CutoffPin) or
+                    not recovery.cutoff_pin.count or not isinstance(recovery.ledger_pin,LedgerPin) or
+                    type(recovery.segments) is not tuple or not 1<=len(recovery.segments)<=snapshot_limits.max_segments or
+                    recovery.ledger_pin.ledger_id!=cutoff_ledger_id or cutoff_scope is None):
+                raise ValueError('bounded pinned cutoff/ledger recovery request required')
+            for segment in recovery.segments:
+                if not isinstance(segment,RecoverySegment) or not isinstance(segment.path,Path):raise ValueError('typed recovery segments required')
+                if len(str(segment.path).encode())>4096:raise ValueError('recovery path bound')
+                sha256(segment.context_sha256,'recovery context');sha256(segment.manifest_sha256,'recovery manifest')
         if (cutoff_scope is None) != (cutoff_ledger_id is None):
             raise ValueError('explicit cutoff scope and ledger identity required together')
         if cutoff_scope is not None:
@@ -162,11 +186,12 @@ class ArchiveLane:
                 'control:emergency:'+writer.identity[0],'control:clock-check-request','control:cutoff-request',
                 'control:snapshot-input-request',
                 'control:snapshot-delivery-request','control:snapshot-deliveries:'+cutoff_scope,
+                'control:cutoff-recovery-request','control:cutoff-recovery:'+cutoff_scope,
                 'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
             if len(set(namespaces))!=len(namespaces):
                 raise ValueError('cutoff and runtime control namespaces must be distinct')
         control_bound = max_connections * 8192 + 65536
-        control_streams = (3 if clock_policy is not None else 1)+(4 if cutoff_scope is not None else 0)
+        control_streams = (3 if clock_policy is not None else 1)+(4 if cutoff_scope is not None else 0)+int(recovery is not None)
         if max_connections + control_streams > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
@@ -194,6 +219,10 @@ class ArchiveLane:
         self._clock_checks_submitted = 0
         self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
         self._cutoffs = None
+        self._recovery_request=recovery;self._recovery_result=None
+        self._recovery_submitted=False;self._recovery_ready=recovery is None
+        self.max_recovery_ns=max_recovery_ns
+        self._history_count=self._source_records=self._source_bytes=0
         self._cutoff_commands_submitted = self._cutoff_allocations_submitted = 0
         self._cutoff_last_utc = self._cutoff_active = None
         self._cutoff_deadline_ns = None
@@ -293,6 +322,7 @@ class ArchiveLane:
         return self._submit(record, stamp_clock=True)
 
     def _submit(self, record, *, stamp_clock):
+        self._require_recovery()
         if self._stopping or self._terminal:
             raise LaneStopped('venue archive ingress stopped')
         if not isinstance(record, RawRecord):
@@ -356,6 +386,7 @@ class ArchiveLane:
         return future
 
     def _require_clock(self):
+        self._require_recovery()
         if self._stopping or self._terminal:
             raise LaneStopped('venue archive ingress stopped')
         if self._clock is None:
@@ -363,6 +394,50 @@ class ArchiveLane:
         if self._clock_submitted+self._clock_checks_submitted+self._cutoff_commands_submitted >= self._clock.max_assessments:
             self._failure('clock_log_bound',global_scope=True)
             raise QueueCapacity('clock operation bound; rotate process session')
+
+    def _require_recovery(self):
+        if not self._recovery_ready:raise ValueError('await durable cutoff recovery before live ingress')
+
+    def submit_recovery(self, *, utc_ns,monotonic_ns):
+        if self._stopping or self._terminal:raise LaneStopped('venue archive ingress stopped')
+        if self._recovery_request is None or self._recovery_submitted:
+            raise ValueError('one configured startup recovery command required')
+        integer(utc_ns,'recovery UTC');integer(monotonic_ns,'recovery monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('recovery observation bound')
+        body=canonical(dict(cutoff_pin=asdict(self._recovery_request.cutoff_pin),ledger_pin=asdict(self._recovery_request.ledger_pin),
+            segments=[dict(path=str(s.path),context_sha256=s.context_sha256,manifest_sha256=s.manifest_sha256) for s in self._recovery_request.segments]))
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
+            'control:cutoff-recovery-request',0,utc_ns,monotonic_ns,self._last_observation[2]),
+            *self.writer.identity,'control','cutoff_recovery_request','control',body,self.provenance)
+        future=asyncio.get_running_loop().create_future()
+        try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('cutoff_recovery_queue_admission_failed',global_scope=True);raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,timing_epoch=self._last_observation[2],recovery=True)
+        self._recovery_submitted=True;self._last_submitted_mono=monotonic_ns;self._wakeup.set()
+        return future
+
+    def _resume_cutoffs(self,request):
+        value=strict_json(request.body)
+        segments=tuple(RecoverySegment(Path(s['path']),s['context_sha256'],s['manifest_sha256']) for s in value['segments'])
+        prior=lambda:iter_recovery_prefix(segments,venue=self.identity['venue'],environment=self.identity['environment'],
+            capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
+            max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+        ledger=DurableLedger(self.writer,ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
+            capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
+            prior_records=prior,expected_pin=LedgerPin(**value['ledger_pin']),max_scan_records=self.snapshot_limits.max_records,
+            max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+        if ledger.pin()!=LedgerPin(**value['ledger_pin']):raise ValueError('startup ledger knowledge differs from expected pin')
+        result=reconcile_cutoffs(self.writer,segments,CutoffPin(**value['cutoff_pin']),capture_scope=self._cutoff_scope,
+            capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
+            utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,clock_epoch=request.receipt.clock_epoch,
+            max_segments=self.snapshot_limits.max_segments,max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+        coordinator=CutoffCoordinator(self.writer,capture_scope=self._cutoff_scope,capture_id=self.identity['capture_id'],
+            process_session_id=self.identity['process_session_id'],provenance=self.provenance,prior_records=prior,
+            expected_prior_pin=CutoffPin(**value['cutoff_pin']))
+        self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger,recovery=result)
+        for record in prior():self._source_records+=1;self._source_bytes+=len(record.to_bytes())+64
+        return result,ledger.pin()
 
     def submit_clock(self, sample, source):
         """Queue one measured clock pair in FIFO order with ordinary raw writes.
@@ -559,6 +634,7 @@ class ArchiveLane:
         Only one request is in flight; no publication or five-second guarantee is
         implied by this durable-input acknowledgement.
         """
+        self._require_recovery()
         if self._stopping or self._terminal:raise LaneStopped('venue archive ingress stopped')
         sha256(close_record_id,'snapshot close identity')
         if self._last_closed is None or self._last_closed['close_record_id']!=close_record_id:
@@ -597,9 +673,10 @@ class ArchiveLane:
         value=strict_json(request.body)
         if self._snapshot_inputs is not None and self._snapshot_inputs[0]==value:
             return self._snapshot_inputs
-        expected=len(self.writer.committed)+int(bool(self.writer.active.state.records))
-        if (expected>self.snapshot_limits.max_segments or self.writer.state.records>self.snapshot_limits.max_records or
-                self.writer.state.valid_bytes>self.snapshot_limits.max_scan_bytes):
+        old=() if self._recovery_request is None else self._recovery_request.segments
+        expected=len(old)+len(self.writer.committed)+int(bool(self.writer.active.state.records))
+        if (expected>self.snapshot_limits.max_segments or self._source_records+self.writer.state.records>self.snapshot_limits.max_records or
+                self._source_bytes+self.writer.state.valid_bytes>self.snapshot_limits.max_scan_bytes):
             raise QueueCapacity('snapshot committed prefix bound; checkpoint/session required')
         self.writer.rotate()
         paths=tuple(self.writer.committed)
@@ -609,6 +686,7 @@ class ArchiveLane:
         # sealed bytes; later publication verifies its exact close hash/plan.
         references=tuple(SnapshotSegmentInput(path,ref['context_sha256'],ref['manifest_sha256'])
                          for path,ref in zip(paths,self.writer.references))
+        references=tuple(SnapshotSegmentInput(s.path,s.context_sha256,s.manifest_sha256) for s in old)+references
         self._snapshot_inputs=(value,references,self._clock.pin)
         return self._snapshot_inputs
 
@@ -718,6 +796,9 @@ class ArchiveLane:
             checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin),
             cutoff_commands_submitted=self._cutoff_commands_submitted,
             cutoff_scope=self._cutoff_scope,cutoff_allocations_submitted=self._cutoff_allocations_submitted,
+            cutoff_history_count=self._history_count,recovery_ready=self._recovery_ready,
+            recovery_submitted=self._recovery_submitted,recovery_marker_id=None if self._recovery_result is None else self._recovery_result.marker_record_id,
+            recovery_next_utc_ns=None if self._recovery_result is None else self._recovery_result.next_cutoff_utc_ns,
             active_cutoff=None if self._cutoff_active is None else dict(self._cutoff_active),
             last_closed_record_id=None if self._last_closed is None else self._last_closed['close_record_id'],
             snapshot_requests_submitted=self._snapshot_requests_submitted,
@@ -797,9 +878,22 @@ class ArchiveLane:
                         self._failure('worker_cancelled', global_scope=True)
                         continue
                     pending = self._pending[lease.ordinal]
-                    if lease.late or not lease.clock_valid:
+                    if (lease.late and not pending.recovery) or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
+                    if pending.recovery:
+                        result,pin=await self._disk(self._resume_cutoffs,record)
+                        stamp,valid,_=self._observation();latency=stamp[1]-record.receipt.monotonic_ns
+                        valid=(valid and lease.clock_valid and self.queue.health()['clock_valid'] and
+                            stamp[2]==pending.timing_epoch and 0<=latency<=self.max_recovery_ns)
+                        self._recovery_result=result
+                        self._recovery_ready=valid
+                        self._history_count=self._cutoff_allocations_submitted=result.next_cutoff_id
+                        self._cutoff_last_utc=result.next_cutoff_utc_ns-MINUTE_NS
+                        if not valid:self._failure('cutoff_recovery_deadline_or_clock_invalid',global_scope=True)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(DurableRecoveryAck(result,pin,latency if valid else None,valid))
+                        continue
                     if pending.snapshot_delivery:
                         fields=await self._disk(self._append_delivery,record)
                         latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)

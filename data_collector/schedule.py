@@ -3,7 +3,7 @@
 This owns timer allocations, not socket/clock sampling or publication workers.
 One leased closure retains its plan until acknowledged by its consumer. Backlog
 halts the venue visibly; it never drops a minute, grows a queue or reduces scope.
-Fresh local scope only: restart allocation recovery is a separate supervisor gate.
+Requires a fresh local scope or acknowledged pinned startup recovery.
 """
 import asyncio
 from dataclasses import dataclass
@@ -41,8 +41,10 @@ class MinuteCutoffs:
         clock=lane.health()['clock']
         if (first_cutoff_utc_ns%MINUTE_NS or first_cutoff_utc_ns>2**63-1-MINUTE_NS or max_cutoffs>10000 or
                 len(boot_id.encode())>128 or clock is None or clock['cutoff_scope'] is None or
-                clock['cutoff_allocations_submitted'] or not lane.health()['accepting']):
-            raise ValueError('fresh configured local minute scope required')
+                clock['cutoff_allocations_submitted']!=clock['cutoff_history_count'] or not clock['recovery_ready'] or
+                (clock['recovery_next_utc_ns'] is not None and first_cutoff_utc_ns!=clock['recovery_next_utc_ns']) or
+                not lane.health()['accepting']):
+            raise ValueError('fresh or recovered configured local minute scope required')
         if wait_until is not None and not callable(wait_until):raise ValueError('cooperative async timer required')
         self.lane,self.plan,self.healthy_streams,self.boot_id=lane,plan,healthy_streams,boot_id
         self.first_cutoff,self.max_cutoffs,self.max_plan_bytes=first_cutoff_utc_ns,max_cutoffs,max_plan_bytes

@@ -37,6 +37,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5p | Bounded recurring local minute cutoffs with leased publication handoff and explicit stop/backlog failures | Approved; [evidence](implementation/chunk-05p.json) |
 | 5q | Owned timer/seal/publish/raw-report pipeline with deferred cancellation and durable handoff acknowledgement | Approved; [evidence](implementation/chunk-05q.json) |
 | 5r | Pinned cross-process cutoff reconciliation with durable interruption resolutions and recovery marker | Approved after fixes; [evidence](implementation/chunk-05r.json) |
+| 5s | Explicit pinned startup resume through raw lane, minute timer and historical snapshot publication | Approved after fixes; [evidence](implementation/chunk-05s.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -294,3 +295,39 @@ startup selection of the authoritative prefix, raw-lane/clock-bound timer resume
 late snapshot/report reconciliation and automatic clock/gap correction mapping
 remain pending. Full capture, checkpoint capacity, independent backup/restore and
 intended-host acceptance remain unfinished; no live service is started here.
+
+
+Chunk5s integrates an explicit `RecoveryRequest` into the serialized raw lane.
+The caller supplies pinned immutable old-process segments and authoritative
+cutoff and validity-ledger tips. Live ingress, measured clock requests and minute
+timers remain gated until a durable startup acknowledgement verifies both tips,
+resolves interrupted allocations and records the recovery marker. Startup has its
+own bounded300s timing budget while live ingress is closed; this does not relax
+the normal raw receive-to-durable deadline. Unconfirmed or late recovery retains
+its evidence and halts the lane visibly.
+
+The resumed timer requires the exact next UTC label and continues global cutoff
+IDs. The new process must acquire two new measured clock samples; old healthy
+samples do not align a different boot. Ledger entries retain their global chain,
+while receipt sequences restart per process/control stream. Historical segment
+references remain pinned in new snapshot inputs. The publisher verifies the
+recovery marker against that exact prefix without writing, allows historical
+process source/config to differ from the current process, enforces current-process
+source/config consistency, and uses only the new process clock pin.
+Old quote owners are not silently promoted into the new process's native book.
+
+Synthetic integration covers interrupted and all-closed histories, new owner/book
+publication, carried gap corrections, incorrect cutoff/ledger pins, startup gates,
+new clock warmup, startup timing limits and cancellation of both client and raw
+owner during recovery. Independent review reproduced an old unbound close being
+certified under a new process origin when provenance and clock labels collided.
+The publisher now explicitly rejects a selected close whose venue/environment/
+capture/process differs from its origin. A regression verifies direct rejection
+and a failed publisher receipt without a snapshot artifact. Final full-suite and
+independent re-review results are recorded in the evidence file. These tests start
+no live capture or deployment.
+
+Automatic authoritative prefix/root selection, lost publication/report recovery,
+automatic correction mapping, bounded checkpoint capacity, complete feeds and
+transport supervision, independent backup/restore and intended-host24h acceptance
+remain pending. Explicit pinned runtime resume does not establish those gates.

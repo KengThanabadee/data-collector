@@ -1,0 +1,20 @@
+{
+  "chunk": "5s",
+  "status": "approved",
+  "reviewer": "dc_chunk5s_resume_review",
+  "reasoning_effort": "high",
+  "tests": "Root404 combined tests passed (369v2+35v1), including local HTTP fixtures and12 new startup-resume/origin regression tests. Root12 resume tests and independent reviewer46 recovery/resume/publisher tests also passed with ResourceWarning treated as errors.",
+  "sources": {
+    "data_collector/recovery.py": "bb5409f20511b23dcd20c692c13d96e13db1ae6f47257763ad39240154b3acea",
+    "data_collector/clockcutoffs.py": "035bbbc643f11b52ce015c63f1a6166c0014117915d37b84c8257152d3f78cb7",
+    "data_collector/lane.py": "cae857835dc6a62975d5df333f09d259b1270b95243dd00079c02db7a44d16da",
+    "data_collector/schedule.py": "a766ef8b698ef348c55fb2b4200c24317706406d10f9b1dc7e6c6120d8ebe009",
+    "data_collector/publisher.py": "58ebe66045b2e9c69280f4484bc54106d03bb57134f6197fca51fe9282a7d10b",
+    "tests/test_dc_resume.py": "bb63fb47e82ed8ba3f7dea8bbb39b0ddae9507f2ef892159f858ff2f203890c2",
+    "docs/v2/IMPLEMENTATION.md": "26116915a2742fda7474e3c6c0669c8ccf79c77350a14e062c43e9bfb7948306"
+  },
+  "findings_closed": [
+    "P2 historical unbound close could be certified under a new process origin if provenance, epoch label and monotonic deadline collided. Publisher now explicitly verifies the selected close venue/environment/capture/process against its origin. Exact regression verifies direct input rejection and a failed publisher receipt without snapshot artifact."
+  ],
+  "limits": "Explicit caller-selected pinned old-process segments and authoritative cutoff/ledger tips only. Startup APIs gate live ingress until acknowledged recovery; new clock warmup required. Historical inputs and corrections carried; new process book ownership remains separate. Automatic authoritative prefix/root selection, lost publication/report reconciliation, correction mapping, checkpoint capacity, all-feed runtime, independent backup and intended-host24h acceptance pending. No live capture/deployment. PLANS implementation prefix only; research suffix/README excluded."
+}

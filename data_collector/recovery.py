@@ -10,6 +10,7 @@ from pathlib import Path
 from .contracts import Provenance,RawRecord,Receipt,StreamKey,canonical,digest,integer,sha256,strict_json,text
 from .cutoffs import CONTROL_SCHEMA,CutoffCoordinator,CutoffPin,MINUTE_NS
 from .segments import SegmentLimits,iter_segment_records
+from .validity import LedgerPin
 
 SCHEMA='dc.cutoff-recovery/2'
 
@@ -33,10 +34,56 @@ class CutoffRecovery:
     marker_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class RecoveryRequest:
+    """Caller-selected immutable history and authoritative cutoff/ledger tips."""
+    segments: tuple[RecoverySegment,...]
+    cutoff_pin: CutoffPin
+    ledger_pin: LedgerPin
+
+
 def _read(path,limit):
     with path.open('rb') as source:body=source.read(limit+1)
     if len(body)>limit:raise ValueError('cutoff recovery metadata byte bound')
     return body
+
+
+def iter_recovery_prefix(segments, *, venue, environment, capture_id, process_session_id,
+                         max_records=200000,max_scan_bytes=256*1024*1024):
+    """Read pinned old-process segments under conservative per-pass bounds."""
+    count=size=0
+    for segment in segments:
+        remaining=max_scan_bytes-size
+        if remaining<=0:raise ValueError('cutoff recovery metadata scan bound')
+        context=_read(segment.path/'context.json',min(65536,remaining))
+        remaining-=len(context)
+        if remaining<=0:raise ValueError('cutoff recovery metadata scan bound')
+        manifest=_read(segment.path/'manifest.json',min(SegmentLimits().max_manifest_bytes,remaining))
+        if digest(context)!=segment.context_sha256 or digest(manifest)!=segment.manifest_sha256:
+            raise ValueError('cutoff recovery pinned metadata differs or exceeds bound')
+        value=strict_json(context)
+        if (value['venue'],value['environment'],value['capture_id'])!=(venue,environment,capture_id) or value['process_session_id']==process_session_id:
+            raise ValueError('recovery requires same capture/venue and a new process identity')
+        stats=strict_json(manifest)
+        for field in ('records','uncompressed_bytes','archive_bytes'):integer(stats[field],'recovery segment '+field)
+        recoveries=stats['recovery_evidence']
+        if type(recoveries) is not list or len(recoveries)>128:raise ValueError('recovery evidence list bound')
+        evidence=0
+        for item in recoveries:
+            integer(item['tail_bytes'],'recovery evidence bytes')
+            evidence+=65536+item['tail_bytes'] # conservative repeated-tail/marker reservation
+        # Whole-segment verification and exposed rows each read raw once.
+        cost=(3*len(context)+2*len(manifest)+stats['archive_bytes']+2*stats['uncompressed_bytes']+
+              64*stats['records']+evidence)
+        count+=stats['records'];size+=cost
+        if count>max_records or size>max_scan_bytes:raise ValueError('cutoff recovery prefix scan bound')
+        defaults=SegmentLimits()
+        limits=SegmentLimits(max_record_bytes=min(defaults.max_record_bytes,max(1,stats['uncompressed_bytes'])),
+            max_uncompressed_bytes=min(defaults.max_uncompressed_bytes,max(1,stats['uncompressed_bytes'])),
+            max_compressed_bytes=min(defaults.max_compressed_bytes,max(1,stats['archive_bytes'])),
+            max_evidence_bytes=min(defaults.max_evidence_bytes,max(1,evidence)))
+        for record in iter_segment_records(segment.path,limits=limits):
+            yield record
 
 
 def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_id, process_session_id,
@@ -71,39 +118,8 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
         if (identity['capture_id'],identity['process_session_id'])!=(capture_id,process_session_id) or writer.descriptor['provenance']!=asdict(provenance):
             raise ValueError('recovery writer identity/provenance differs')
     def prior():
-        count=size=0
-        for segment in segments:
-            remaining=max_scan_bytes-size
-            if remaining<=0:raise ValueError('cutoff recovery metadata scan bound')
-            context=_read(segment.path/'context.json',min(65536,remaining))
-            remaining-=len(context)
-            if remaining<=0:raise ValueError('cutoff recovery metadata scan bound')
-            manifest=_read(segment.path/'manifest.json',min(SegmentLimits().max_manifest_bytes,remaining))
-            if digest(context)!=segment.context_sha256 or digest(manifest)!=segment.manifest_sha256:
-                raise ValueError('cutoff recovery pinned metadata differs or exceeds bound')
-            value=strict_json(context)
-            if (value['venue'],value['environment'],value['capture_id'])!=(*writer.identity,capture_id) or value['process_session_id']==process_session_id:
-                raise ValueError('recovery requires same capture/venue and a new process identity')
-            stats=strict_json(manifest)
-            for field in ('records','uncompressed_bytes','archive_bytes'):integer(stats[field],'recovery segment '+field)
-            recoveries=stats['recovery_evidence']
-            if type(recoveries) is not list or len(recoveries)>128:raise ValueError('recovery evidence list bound')
-            evidence=0
-            for item in recoveries:
-                integer(item['tail_bytes'],'recovery evidence bytes')
-                evidence+=65536+item['tail_bytes'] # conservative repeated-tail/marker reservation
-            # Whole-segment verification and exposed rows each read raw once.
-            cost=(3*len(context)+2*len(manifest)+stats['archive_bytes']+2*stats['uncompressed_bytes']+
-                  64*stats['records']+evidence)
-            count+=stats['records'];size+=cost
-            if count>max_records or size>max_scan_bytes:raise ValueError('cutoff recovery prefix scan bound')
-            defaults=SegmentLimits()
-            limits=SegmentLimits(max_record_bytes=min(defaults.max_record_bytes,max(1,stats['uncompressed_bytes'])),
-                max_uncompressed_bytes=min(defaults.max_uncompressed_bytes,max(1,stats['uncompressed_bytes'])),
-                max_compressed_bytes=min(defaults.max_compressed_bytes,max(1,stats['archive_bytes'])),
-                max_evidence_bytes=min(defaults.max_evidence_bytes,max(1,evidence)))
-            for record in iter_segment_records(segment.path,limits=limits):
-                yield record
+        return iter_recovery_prefix(segments,venue=writer.identity[0],environment=writer.identity[1],
+            capture_id=capture_id,process_session_id=process_session_id,max_records=max_records,max_scan_bytes=max_scan_bytes)
     # A retry may contain only this recovery's already-fsynced interruption suffix
     # and final marker. It cannot be invoked over a live capture's new allocations.
     target=[];target_bytes=0;marker=None
@@ -188,3 +204,29 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
         for _ in prior():pass
         marker=marker_record(marker_body(coordinator.pin));writer.append(marker)
     return CutoffRecovery(expected_pin,coordinator.pin,next_id,next_utc,failed,closed,marker.record_id,digest(marker.to_bytes()))
+
+
+def verify_recovery_marker(segments,marker,target_records,*,max_records=200000,max_scan_bytes=256*1024*1024):
+    """Replay an existing marker without writing or trusting its declared tip."""
+    from types import SimpleNamespace
+    from .journal import JournalLimits
+    if (not isinstance(marker,RawRecord) or type(target_records) is not tuple or not target_records or
+            target_records[-1]!=marker or len(target_records)>max_records):
+        raise ValueError('bounded recovery prefix ending at marker required')
+    encoded=[];size=0;positions={}
+    for record in target_records:
+        data=record.to_bytes();size+=len(data)+64
+        if size>max_scan_bytes:raise ValueError('recovery verification target byte bound')
+        encoded.append(data);positions[record.receipt.stream_key]=record.receipt.receive_seq
+    class Reader:
+        identity=(marker.venue,marker.environment)
+        limits=JournalLimits()
+        state=SimpleNamespace(records=len(encoded),valid_bytes=size,positions=positions)
+        def _ready(self):pass
+        def encoded_records(self,*,allow_unsealed=False):yield from encoded
+        def append(self,record):raise ValueError('missing complete recovery marker; verification cannot write')
+    value=strict_json(marker.body)
+    return reconcile_cutoffs(Reader(),segments,CutoffPin(**value['source_pin']),capture_scope=value['scope'],
+        capture_id=marker.receipt.capture_id,process_session_id=marker.receipt.process_session_id,provenance=marker.provenance,
+        utc_ns=marker.receipt.receive_utc_ns,monotonic_ns=marker.receipt.monotonic_ns,clock_epoch=marker.receipt.clock_epoch,
+        max_records=max_records,max_scan_bytes=max_scan_bytes)

@@ -11,6 +11,7 @@ from .clocklog import ClockPin, DurableClock, DEFAULT_POLICY, replay_clock
 from .contracts import RawRecord, Receipt, StreamKey, canonical, digest, integer, strict_json
 from .cutoffs import ClockAnchor, CutoffCoordinator, IngressWriter
 from .ledger import DurableLedger
+from .recovery import CutoffRecovery
 
 LINK_SCHEMA = 'dc.clock-cutoff-link/2'
 BINDING_SCHEMA = 'dc.clock-cutoff-binding/2'
@@ -37,11 +38,11 @@ def _link(allocation, clock, coordinator, utc_ns, mono, epoch, sequence):
 class ClockBoundCutoffs:
     """Bind fresh checks to immutable allocations and admission barriers.
 
-    Fresh local allocation scope only. Calls must be serialized with receipt
+    Fresh local scope or verified startup recovery. Calls must be serialized with receipt
     stamping/IngressWriter writes; asynchronous command integration is separate.
     Any failed operation poisons this facade: recover WAL evidence offline.
     """
-    def __init__(self, clock, ingress, coordinator, ledger, *, max_link_bytes=8*1024*1024):
+    def __init__(self, clock, ingress, coordinator, ledger, *, max_link_bytes=8*1024*1024,recovery=None):
         if not isinstance(clock,DurableClock) or not isinstance(ingress,IngressWriter) or not isinstance(coordinator,CutoffCoordinator) or not isinstance(ledger,DurableLedger):
             raise ValueError('typed local clock/ingress/cutoff/ledger owners required')
         integer(max_link_bytes,'clock link projection bound',1)
@@ -51,9 +52,26 @@ class ClockBoundCutoffs:
                 len({clock.capture,ingress.capture_id,coordinator.capture_id,ledger.capture_id}) != 1 or
                 len({clock.session,ingress.session,coordinator.session,ledger.session}) != 1 or
                 coordinator.scope != ledger.scope or clock.provenance != coordinator.provenance or
-                ledger.provenance != coordinator.provenance or coordinator.allocations or
+                ledger.provenance != coordinator.provenance or (coordinator.allocations and recovery is None) or
                 StreamKey(clock.capture,clock.session,'control:clock-cutoffs:'+coordinator.scope) in clock.journal.state.positions):
             raise ValueError('same serialized local owners and fresh cutoff scope required')
+        if recovery is not None:
+            if (not isinstance(recovery,CutoffRecovery) or recovery.recovered_pin!=coordinator.pin or
+                    recovery.next_cutoff_id!=len(coordinator.allocations) or
+                    set(coordinator.allocations)!=set(coordinator.resolutions)):
+                raise ValueError('fully reconciled pinned cutoff history required')
+            found=False;size=0
+            for index,encoded in enumerate(clock.journal.encoded_records(allow_unsealed=True)):
+                size+=len(encoded)
+                if index>=coordinator.max_cutoffs+1 or size>max_link_bytes:raise ValueError('recovery marker scan bound')
+                record=RawRecord.from_bytes(encoded)
+                if record.record_id==recovery.marker_record_id:
+                    if found or digest(encoded)!=recovery.marker_sha256:raise ValueError('recovery marker mismatch')
+                    if (record.receipt.capture_id,record.receipt.process_session_id,record.receipt.connection_id,record.channel)!=(
+                            clock.capture,clock.session,'control:cutoff-recovery:'+coordinator.scope,'cutoff_recovery:'+coordinator.scope):
+                        raise ValueError('foreign recovery marker')
+                    found=True
+            if not found:raise ValueError('durable recovery marker required')
         self.clock,self.ingress,self.coordinator,self.ledger = clock,ingress,coordinator,ledger
         self._links = {}
         self._link_bytes = 0

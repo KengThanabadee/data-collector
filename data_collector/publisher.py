@@ -24,6 +24,7 @@ from .snapshots import PublicationLimits, publish_snapshot, read_snapshot
 from .validity import LedgerEntry, ValidityLedger
 
 from .deliveries import DELIVERY_NS, delivery_base, validate_delivery
+from .recovery import RecoverySegment, verify_recovery_marker
 
 
 class PublisherBusy(ValueError):
@@ -85,7 +86,7 @@ def _records(inputs):
 
 
 def _verify(inputs, plan):
-    total=0;source_hash=None
+    total=0;source_hash=None;old=[];local=False
     for segment in inputs.segments:
         manifest=_read(segment.path/'manifest.json',SegmentLimits().max_manifest_bytes)
         context=_read(segment.path/'context.json',65536)
@@ -94,29 +95,52 @@ def _verify(inputs, plan):
         if digest(manifest)!=segment.manifest_sha256 or digest(context)!=segment.context_sha256:
             raise ValueError('pinned publisher input changed')
         value=strict_json(context);origin=inputs.origin
-        if source_hash is None:source_hash=value['source_sha256']
-        if (value['venue'],value['environment'],value['capture_id'],value['process_session_id'],value['config_sha256'])!=(
-                origin.venue,origin.environment,origin.capture_id,origin.process_session_id,plan.config_sha256):
+        if (value['venue'],value['environment'],value['capture_id'])!=(origin.venue,origin.environment,origin.capture_id):
             raise ValueError('publisher input origin/config differs')
-        if value['source_sha256']!=source_hash:raise ValueError('publisher source bundle changed within process')
-    close=policy=last=ledger=None;ledger_seq=-1
+        if value['process_session_id']!=origin.process_session_id:
+            if local:raise ValueError('historical segments must precede current process')
+            old.append(RecoverySegment(segment.path,segment.context_sha256,segment.manifest_sha256))
+        else:
+            local=True
+            if value['config_sha256']!=plan.config_sha256:raise ValueError('publisher local config differs')
+            if source_hash is None:source_hash=value['source_sha256']
+            if value['source_sha256']!=source_hash:raise ValueError('publisher source bundle changed within process')
+    if not local:raise ValueError('publisher current process segments missing')
+    close=policy=last=ledger=marker=None;ledger_positions={};recovery_records=[]
     for record in _records(inputs):
         if record.record_id==inputs.close_record_id:
             if close is not None or digest(record.to_bytes())!=inputs.close_sha256:
                 raise ValueError('pinned publisher close missing/conflicting')
+            if (record.venue,record.environment,record.receipt.capture_id,record.receipt.process_session_id)!=(
+                    origin.venue,origin.environment,origin.capture_id,origin.process_session_id):
+                raise ValueError('publisher close belongs to another process origin')
             close=record
-        if record.receipt.connection_id==CONTROL:
+        current=(record.receipt.capture_id,record.receipt.process_session_id)==(origin.capture_id,origin.process_session_id)
+        if current and marker is None and old:
+            if (record.kind!='control' or record.channel not in {'cutoffs:'+origin.capture_scope,'cutoff_recovery:'+origin.capture_scope} or
+                    len(recovery_records)>=10001 or len(record.body)>1024*1024):
+                raise ValueError('recovery marker must precede new live/clock work')
+            recovery_records.append(record)
+        if current and record.channel=='cutoff_recovery:'+origin.capture_scope:
+            if marker is not None:raise ValueError('multiple local recovery markers')
+            marker=record
+        if current and record.receipt.connection_id==CONTROL:
             if policy is None:policy=_contract_policy(strict_json(record.body)['policy'])
             if record.record_id==inputs.clock_pin.last_record_id:last=record
         if record.kind=='coverage_event' and record.channel=='validity:'+inputs.origin.capture_scope:
             entry=LedgerEntry.from_bytes(record.body)
             if (record.receipt.connection_id!='control:validity:'+entry.ledger_id or
-                    record.receipt.receive_seq!=ledger_seq+1 or
+                    record.receipt.receive_seq!=ledger_positions.get(record.receipt.stream_key,-1)+1 or
                     getattr(entry.payload,'capture_scope',inputs.origin.capture_scope)!=inputs.origin.capture_scope):
                 raise ValueError('publisher correction ledger namespace/order differs')
             if ledger is None:ledger=ValidityLedger(entry.ledger_id)
-            ledger.add(entry);ledger_seq=record.receipt.receive_seq
+            ledger.add(entry);ledger_positions[record.receipt.stream_key]=record.receipt.receive_seq
     if close is None or policy is None or last is None or ledger is None:raise ValueError('publisher clock/close/ledger evidence missing')
+    if old:
+        if marker is None or marker.provenance!=close.provenance:raise ValueError('historical publisher prefix requires recovery marker')
+        verify_recovery_marker(tuple(old),marker,tuple(recovery_records),max_records=inputs.replay_limits.max_records,
+            max_scan_bytes=inputs.replay_limits.max_scan_bytes)
+    elif marker is not None:raise ValueError('recovery marker source segments missing')
     body=strict_json(close.body)
     if (close.kind!='control' or body.get('schema')!='dc.cutoff-control/2' or body.get('kind')!='closed' or
             body['scope']!=inputs.origin.capture_scope or body['payload']['cutoff_id']!=inputs.cutoff_id or
