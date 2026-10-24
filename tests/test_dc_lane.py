@@ -9,7 +9,9 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from data_collector.contracts import Provenance, RawRecord, Receipt, canonical, digest, strict_json
+from data_collector.contracts import Provenance, RawRecord, Receipt, StreamKey, canonical, digest, strict_json
+from data_collector.clockcutoffs import verify_clock_binding
+from data_collector.cutoffs import MINUTE_NS
 from data_collector.journal import Journal, JournalLimits
 from data_collector.lane import ArchiveLane, DurabilityUnknown, LaneStopped, PENDING_CLOCK_EPOCH
 from data_collector.queues import ByteQueue, QueueCapacity, QueueLimits, VenueQueues
@@ -30,7 +32,7 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
     def observe(self):
         return self.utc+self.mono[0]-1000,self.mono[0],'epoch'
 
-    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None):
+    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None,cutoffs=False):
         self.counter += 1
         root = self.root/str(self.counter)
         provenance = Provenance('a'*64,'b'*64,'c'*64)
@@ -43,7 +45,8 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
                             limits=JournalLimits(max_record_bytes=131072))
         q = queue or ByteQueue(QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768),now_ns=lambda:self.mono[0])
         lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections,
-                           clock_policy=clock_policy)
+                           clock_policy=clock_policy,cutoff_scope='capture' if cutoffs else None,
+                           cutoff_ledger_id='ledger' if cutoffs else None)
         lane.test_task = None
         self.addCleanup(writer.abort); self.addCleanup(emergency.close)
         async def cleanup():
@@ -91,6 +94,227 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
     def received(self,lane,seq=0):
         record=self.record(lane,seq)
         return replace(record,receipt=replace(record.receipt,clock_epoch=PENDING_CLOCK_EPOCH))
+
+    def cutoff_request(self,lane,cutoff=MINUTE_NS):
+        utc,mono,_=self.observe()
+        return lane.submit_cutoff_allocation(cutoff,[StreamKey('capture','process','connection')],
+            dict(config='b'*64,universe='c'*64,metadata='d'*64,required_feeds='e'*64),
+            utc_ns=utc,monotonic_ns=mono,boot_id='boot')
+
+    def cutoff_close(self,lane):
+        utc,mono,_=self.observe()
+        return lane.submit_cutoff_close(0,[StreamKey('capture','process','connection')],
+            utc_ns=utc,monotonic_ns=mono,boot_id='boot')
+
+    async def ready_cutoffs(self):
+        self.utc=MINUTE_NS-100
+        lane,emergency=self.lane(clock_policy=self.clock_policy(),cutoffs=True);self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        self.mono[0]+=60
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        return lane,emergency
+
+    async def test_cutoff_configuration_and_invalid_requests_do_not_consume_queue_state(self):
+        base,emergency_path=self.lane()
+        common=dict(emergency_writer=base.emergency_writer,observe=self.observe,max_connections=4)
+        cases=[dict(cutoff_scope='scope'),dict(cutoff_scope='scope',cutoff_ledger_id='ledger'),
+            dict(cutoff_scope='x'*129,cutoff_ledger_id='ledger',clock_policy=self.clock_policy()),
+            dict(cutoff_scope='clock-assessment',cutoff_ledger_id='ledger',clock_policy=self.clock_policy()),
+            dict(cutoff_scope='runtime:deribit',cutoff_ledger_id='ledger',clock_policy=self.clock_policy()),
+            dict(cutoff_scope='validity:ledger',cutoff_ledger_id='ledger',clock_policy=self.clock_policy()),
+            dict(cutoff_scope='scope',cutoff_ledger_id='ledger',clock_policy=dict(self.clock_policy(),max_offset_ns=100_000_001))]
+        for kwargs in cases:
+            with self.subTest(config=kwargs),self.assertRaises(ValueError):
+                ArchiveLane(base.writer,base.queue,**common,**kwargs)
+        with patch.object(base.writer,'limits',replace(base.writer.limits,max_streams=7)):
+            with self.assertRaises(ValueError):
+                ArchiveLane(base.writer,base.queue,**common,clock_policy=self.clock_policy(),
+                            cutoff_scope='scope',cutoff_ledger_id='ledger')
+        lane,_=await self.ready_cutoffs()
+        stream=StreamKey('capture','process','connection')
+        deps=dict(config='b'*64,universe='c'*64,metadata='d'*64,required_feeds='e'*64)
+        utc,mono,_=self.observe()
+        for cutoff,streams,dependencies,boot in [
+                (MINUTE_NS+1,[stream],deps,'boot'),(MINUTE_NS,[],deps,'boot'),
+                (MINUTE_NS,[stream,stream],deps,'boot'),
+                (MINUTE_NS,[StreamKey('capture','other','connection')],deps,'boot'),
+                (MINUTE_NS,[stream],{},'boot'),(MINUTE_NS,[stream],deps,'x'*129)]:
+            with self.assertRaises(ValueError):
+                lane.submit_cutoff_allocation(cutoff,streams,dependencies,
+                    utc_ns=utc,monotonic_ns=mono,boot_id=boot)
+        self.assertEqual(lane.health()['clock']['cutoff_commands_submitted'],0)
+        self.assertEqual(lane.queue.budget.used,0)
+        self.assertTrue(lane.health()['accepting'])
+
+    async def test_async_cutoffs_share_fifo_with_equal_time_raw_and_verified_clock_links(self):
+        lane,_=await self.ready_cutoffs()
+        allocation=self.cutoff_request(lane)
+        with self.assertRaises(ValueError):self.cutoff_close(lane)
+        self.mono[0]=1099
+        before=lane.submit_received(self.received(lane))
+        allocated=await asyncio.wait_for(allocation,5)
+        self.assertEqual(allocated.event['kind'],'allocated')
+        self.assertTrue(allocated.timing_valid)
+        self.mono[0]=1100
+        equal_before=lane.submit_received(self.received(lane,1))
+        close=self.cutoff_close(lane)
+        with self.assertRaises(ValueError):self.cutoff_close(lane)
+        equal_after=lane.submit_received(self.received(lane,2))
+        self.mono[0]=1101
+        after=lane.submit_received(self.received(lane,3))
+        first,a,closed,b,c=await asyncio.wait_for(asyncio.gather(before,equal_before,close,equal_after,after),5)
+        self.assertEqual([ack.ingress_ordinal for ack in (first,a,b,c)],[0,1,3,4])
+        payload=closed.event['payload']
+        self.assertEqual(closed.event['kind'],'closed')
+        self.assertEqual(payload['validity'],'valid')
+        self.assertEqual(payload['barrier']['ordinal'],2)
+        self.assertEqual(payload['barrier']['deadline_ns'],1100)
+        self.assertEqual(payload['streams'][0]['admitted_seq'],1)
+        self.assertTrue(closed.timing_valid)
+        self.assertEqual(closed.clock_pin.count,4)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        records=self.records(lane)
+        close_record=next(r for r in records if r.record_id==closed.record_id)
+        self.assertEqual(digest(close_record.to_bytes()),closed.raw_sha256)
+        self.assertEqual(strict_json(close_record.body),closed.event)
+        self.assertFalse(any(r.channel=='cutoff_request' for r in records))
+        verify_clock_binding(lambda:iter(records),close_record)
+        self.assertEqual(self.clock_replay(lane).pin,closed.clock_pin)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_async_utc_step_fails_cutoff_but_continues_raw_in_new_epoch(self):
+        lane,_=await self.ready_cutoffs()
+        await asyncio.wait_for(self.cutoff_request(lane),5)
+        before=await asyncio.wait_for(lane.submit_received(self.received(lane)),5)
+        self.mono[0]=1100;self.utc+=500_000_000
+        close=self.cutoff_close(lane)
+        after=lane.submit_received(self.received(lane,1))
+        failed,raw_ack=await asyncio.wait_for(asyncio.gather(close,after),5)
+        self.assertEqual(failed.event['kind'],'failed')
+        self.assertEqual(failed.event['payload']['reason'],'clock_changed_or_stale')
+        self.assertTrue(failed.timing_valid)
+        self.assertTrue(raw_ack.timing_valid)
+        self.assertNotEqual(before.clock_epoch,raw_ack.clock_epoch)
+        self.assertTrue(lane.health()['accepting'])
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        self.assertFalse(any(strict_json(r.body).get('kind')=='closed'
+                             for r in self.records(lane) if r.channel=='cutoffs:capture'))
+
+    async def test_graceful_stop_fails_unresolved_async_allocation(self):
+        lane,_=await self.ready_cutoffs()
+        allocated=await asyncio.wait_for(self.cutoff_request(lane),5)
+        with self.assertRaises(ValueError):self.cutoff_close(lane)
+        with self.assertRaises(ValueError):self.cutoff_request(lane,MINUTE_NS*2)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        cutoff_events=[strict_json(r.body) for r in self.records(lane) if r.channel=='cutoffs:capture']
+        self.assertEqual([event['kind'] for event in cutoff_events],['allocated','failed'])
+        self.assertEqual(cutoff_events[1]['payload']['reason'],'capture_stopped_before_cutoff')
+        self.assertEqual(cutoff_events[1]['payload']['allocation_hash'],allocated.raw_sha256)
+        self.assertIsNone(lane.health()['clock']['active_cutoff'])
+
+    async def test_unaligned_and_missed_allocations_fail_durably_without_reopening_labels(self):
+        self.utc=MINUTE_NS-100
+        lane,_=self.lane(clock_policy=self.clock_policy(),cutoffs=True);self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        failed=await asyncio.wait_for(self.cutoff_request(lane),5)
+        self.assertEqual(failed.event['kind'],'failed')
+        self.assertEqual(failed.event['payload']['reason'],'clock_alignment_unavailable')
+        with self.assertRaises(ValueError):self.cutoff_request(lane)
+        self.mono[0]+=60
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        # A healthy clock cannot manufacture a schedule for a missed UTC label.
+        self.mono[0]+=1
+        self.utc+=MINUTE_NS*2
+        await asyncio.wait_for(self.clock_check(lane),5)
+        self.mono[0]+=1
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,2)),5)
+        self.mono[0]+=60
+        healthy=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,3)),5)
+        self.assertTrue(healthy.assessment.aligned)
+        missed=await asyncio.wait_for(self.cutoff_request(lane,MINUTE_NS*2),5)
+        self.assertEqual(missed.event['kind'],'failed')
+        self.assertEqual(missed.event['payload']['reason'],'cutoff_schedule_unavailable')
+        self.assertTrue(lane.health()['accepting'])
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        allocations=[strict_json(r.body)['payload'] for r in self.records(lane)
+                     if r.channel=='cutoffs:capture' and strict_json(r.body)['kind']=='allocated']
+        self.assertEqual([a['cutoff_id'] for a in allocations],[0,1])
+        self.assertTrue(all(a['clock_anchor'] is None and a['deadline_ns'] is None for a in allocations))
+
+    async def test_cutoff_checks_share_clock_operation_cap_and_stop_resolves_open_allocation(self):
+        lane,_=await self.ready_cutoffs();lane._clock.max_assessments=3
+        allocated=await asyncio.wait_for(self.cutoff_request(lane),5)
+        self.mono[0]=1100
+        with self.assertRaises(QueueCapacity):self.cutoff_close(lane)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'clock_log_bound')
+        self.assertEqual(lane.health()['clock']['pin']['count'],3)
+        self.assertEqual(lane.health()['clock']['cutoff_commands_submitted'],1)
+        self.assertEqual(lane._cutoffs.coordinator.resolutions[0]['payload']['allocation_hash'],allocated.raw_sha256)
+
+    async def test_cancellation_during_cutoff_close_preserves_barrier_and_later_raw(self):
+        lane,_=await self.ready_cutoffs()
+        await asyncio.wait_for(self.cutoff_request(lane),5)
+        await asyncio.wait_for(lane.submit_received(self.received(lane)),5)
+        self.mono[0]=1100
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if record.channel=='cutoffs:capture' and strict_json(record.body)['kind']=='closed':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=self.cutoff_close(lane)
+            later=lane.submit_received(self.received(lane,1))
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            future.cancel();lane.test_task.cancel();await asyncio.sleep(0)
+            self.assertFalse(lane.test_task.done())
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(lane.test_task,5)
+        later_ack=await later
+        self.assertEqual(later_ack.ingress_ordinal,2)
+        records=self.records(lane)
+        closed=next(r for r in records if r.channel=='cutoffs:capture' and strict_json(r.body)['kind']=='closed')
+        self.assertEqual(strict_json(closed.body)['payload']['streams'][0]['admitted_seq'],0)
+        verify_clock_binding(lambda:iter(records),closed)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_failed_async_close_is_unconfirmed_with_pinned_emergency_state(self):
+        lane,emergency=await self.ready_cutoffs()
+        await asyncio.wait_for(self.cutoff_request(lane),5)
+        await asyncio.wait_for(lane.submit_received(self.received(lane)),5)
+        self.mono[0]=1100
+        original=lane.writer.append
+        def fail(record):
+            if record.channel=='cutoffs:capture' and strict_json(record.body)['kind']=='closed':
+                raise OSError('injected close fsync failure')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=fail),redirect_stderr(io.StringIO()):
+            future=self.cutoff_close(lane)
+            later=lane.submit_received(self.received(lane,1))
+            await asyncio.wait_for(lane.test_task,5)
+        for pending in (future,later):
+            with self.assertRaises(DurabilityUnknown):await pending
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertEqual(event['payload']['clock']['pin']['count'],4)
+        self.assertEqual(event['payload']['clock']['active_cutoff'],dict(cutoff_id=0,state='closing'))
+        self.assertEqual(event['payload']['unconfirmed_records'],2)
+        recovered=recover_session(lane.writer.directory,lane.writer.directory.parent.parent/'archive')
+        records=[r for path in recovered for r in iter_segment_records(path)]
+        self.assertFalse(any(strict_json(r.body)['kind']=='closed' for r in records if r.channel=='cutoffs:capture'))
+
+    async def test_cutoff_queue_overflow_stops_ingress_without_accepting_allocation(self):
+        self.utc=MINUTE_NS-100
+        q=ByteQueue(QueueLimits(max_bytes=32768,max_items=1,max_item_bytes=8192),now_ns=lambda:self.mono[0])
+        lane,_=self.lane(queue=q,clock_policy=self.clock_policy(),cutoffs=True)
+        sample=lane.submit_clock(*self.clock_request(lane))
+        with self.assertRaises(QueueCapacity):self.cutoff_request(lane)
+        self.assertEqual(lane.health()['clock']['cutoff_allocations_submitted'],0)
+        self.start(lane);await asyncio.wait_for(sample,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(lane.health()['venue_failure'],'cutoff_queue_admission_failed')
+        self.assertEqual(lane.queue.budget.used,0)
 
     async def test_measured_raw_capture_survives_forward_and_backward_utc_steps(self):
         for step in (-500_000_000,500_000_000):

@@ -69,7 +69,10 @@ class ClockBoundCutoffs:
         try:
             check = self.clock.check(utc_ns=utc_ns,monotonic_ns=monotonic_ns,boot_id=boot_id,ingress_ordinal=self.ingress.ordinal)
             epoch = check.anchor.clock_epoch
-            if check.aligned:
+            scheduled = (check.aligned and utc_ns <= cutoff_utc_ns and
+                monotonic_ns <= check.anchor.deadline(cutoff_utc_ns) and
+                abs((utc_ns-check.anchor.utc_ns)-(monotonic_ns-check.anchor.monotonic_ns)) <= check.anchor.uncertainty_ns)
+            if scheduled:
                 event = self.coordinator.allocate(cutoff_utc_ns,required_streams,dependencies,anchor=check.anchor,
                     observed_utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=epoch)
             else:
@@ -84,8 +87,9 @@ class ClockBoundCutoffs:
             self.coordinator.journal.append(record)
             self._links[identity] = record
             self._link_bytes += size
-            if not check.aligned:
-                return self.coordinator.fail(identity,'clock_alignment_unavailable',utc_ns=utc_ns,
+            if not scheduled:
+                reason = 'clock_alignment_unavailable' if not check.aligned else 'cutoff_schedule_unavailable'
+                return self.coordinator.fail(identity,reason,utc_ns=utc_ns,
                     monotonic_ns=monotonic_ns,clock_epoch=epoch)
             return event
         except BaseException:

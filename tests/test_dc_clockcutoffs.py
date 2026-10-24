@@ -79,6 +79,19 @@ class ClockCutoffTests(unittest.TestCase):
         self.assertEqual(allocated['payload']['clock_anchor']['healthy_samples'],2)
         self.assertEqual(result['ledger_pin'],asdict(self.ledger.pin()))
 
+    def test_missed_or_uncertain_schedule_is_missing_even_with_healthy_clock(self):
+        for utc,mono in [(C+1,1101),(C-99,1000)]:
+            with self.subTest(utc=utc,mono=mono):
+                fixture=ClockCutoffTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+                result=fixture.bound.allocate(C,[fixture.ws],fixture.plan.dependencies,
+                    utc_ns=utc,monotonic_ns=mono,boot_id='boot')
+                self.assertEqual(result['kind'],'failed')
+                self.assertEqual(result['payload']['reason'],'cutoff_schedule_unavailable')
+                self.assertIsNone(fixture.coordinator.allocations[0]['payload']['clock_anchor'])
+                self.assertIsNone(fixture.coordinator.allocations[0]['payload']['deadline_ns'])
+                self.assertFalse(fixture.bound.poisoned)
+                self.assertTrue(fixture.clock.assessment.aligned)
+
     def test_delayed_timer_excludes_post_deadline_raw_and_preserves_quiet_prefix(self):
         self.allocate();first=self.native()
         self.native(1,1101)

@@ -13,12 +13,14 @@ from pathlib import Path
 import time
 import sys
 
-from .contracts import Provenance, RawRecord, Receipt, canonical, digest, integer, strict_json, text
-from .cutoffs import IngressWriter
+from .contracts import Provenance, RawRecord, Receipt, StreamKey, canonical, digest, integer, sha256, strict_json, text
+from .cutoffs import CutoffCoordinator, IngressWriter, MINUTE_NS
+from .clockcutoffs import ClockBoundCutoffs, _contract_policy
+from .ledger import DurableLedger
 from .queues import ByteQueue, QueueBacklog, QueueCapacity
 from .journal import Journal
 from .clock import ClockAssessment, ClockSample
-from .clocklog import ClockPin, DurableClock, validate_clock_source
+from .clocklog import ClockPin, DurableClock, SOURCE, CONTROL, validate_clock_source
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -54,6 +56,16 @@ class DurableClockAck:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DurableCutoffAck:
+    event: dict
+    record_id: str
+    raw_sha256: str
+    clock_pin: ClockPin
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
@@ -63,6 +75,7 @@ class _Pending:
     timing_epoch: str | None = None
     clock_check: bool = False
     stamp_clock: bool = False
+    cutoff_operation: str | None = None
 
 
 class ArchiveLane:
@@ -74,7 +87,8 @@ class ArchiveLane:
     A process supervisor must enforce the hard stop for a permanently hung disk.
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
-                 clock_tolerance_ns=100_000_000, clock_policy=None):
+                 clock_tolerance_ns=100_000_000, clock_policy=None,
+                 cutoff_scope=None, cutoff_ledger_id=None):
         if not isinstance(queue, ByteQueue):
             raise ValueError('typed byte queue required')
         status = queue.health()
@@ -82,8 +96,22 @@ class ArchiveLane:
             raise ValueError('fresh empty byte queue required')
         integer(max_connections, 'connection count bound', 1)
         integer(clock_tolerance_ns, 'wall/monotonic clock tolerance', 1)
+        if (cutoff_scope is None) != (cutoff_ledger_id is None):
+            raise ValueError('explicit cutoff scope and ledger identity required together')
+        if cutoff_scope is not None:
+            for name,value in (('cutoff scope',cutoff_scope),('cutoff ledger',cutoff_ledger_id)):
+                text(value,name)
+                if len(value.encode()) > 128:raise ValueError('cutoff identity byte bound')
+            if clock_policy is None:raise ValueError('cutoffs require measured clock policy')
+            _contract_policy(clock_policy)
+            namespaces=[SOURCE,CONTROL,'control:runtime:'+writer.identity[0],
+                'control:emergency:'+writer.identity[0],'control:clock-check-request','control:cutoff-request',
+                'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
+            if len(set(namespaces))!=len(namespaces):
+                raise ValueError('cutoff and runtime control namespaces must be distinct')
         control_bound = max_connections * 8192 + 65536
-        if max_connections + (3 if clock_policy is not None else 1) > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
+        control_streams = (3 if clock_policy is not None else 1)+(3 if cutoff_scope is not None else 0)
+        if max_connections + control_streams > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
                 emergency_writer.state.records or emergency_writer.limits.max_record_bytes < control_bound):
@@ -108,6 +136,11 @@ class ArchiveLane:
             process_session_id=identity['process_session_id'],provenance=self.provenance,policy=clock_policy)
         self._clock_submitted = 0
         self._clock_checks_submitted = 0
+        self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
+        self._cutoffs = None
+        self._cutoff_commands_submitted = self._cutoff_allocations_submitted = 0
+        self._cutoff_last_utc = self._cutoff_active = None
+        self._cutoff_deadline_ns = None
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='dc-'+identity['venue'])
         self._pending = {}
         self._submitted, self._durable = {}, {}
@@ -233,7 +266,7 @@ class ArchiveLane:
             # Preflight the eventual envelope, not its shorter pending label.
             maximum = replace(maximum, receipt=replace(r,
                 clock_epoch=self.identity['process_session_id']+':clock:1023'))
-        if self._admission_count >= 2**63 or len(maximum.to_bytes()) > self.writer.limits.max_record_bytes:
+        if self._admission_count+self._cutoff_commands_submitted >= 2**63 or len(maximum.to_bytes()) > self.writer.limits.max_record_bytes:
             self._failure('expanded_record_bound', record)
             raise QueueCapacity('expanded ingress record exceeds writer bound')
         future = asyncio.get_running_loop().create_future()
@@ -262,7 +295,7 @@ class ArchiveLane:
             raise LaneStopped('venue archive ingress stopped')
         if self._clock is None:
             raise ValueError('explicit clock policy required to enable measured clock writes')
-        if self._clock_submitted+self._clock_checks_submitted >= self._clock.max_assessments:
+        if self._clock_submitted+self._clock_checks_submitted+self._cutoff_commands_submitted >= self._clock.max_assessments:
             self._failure('clock_log_bound',global_scope=True)
             raise QueueCapacity('clock operation bound; rotate process session')
 
@@ -328,6 +361,109 @@ class ArchiveLane:
         self._wakeup.set()
         return future
 
+    def _cutoff_streams(self, streams):
+        if not isinstance(streams,(tuple,list)) or len(streams)>self.max_connections:
+            raise ValueError('bounded local cutoff stream vector required')
+        if any(not isinstance(s,StreamKey) or (s.capture_id,s.process_session_id)!=(
+                self.identity['capture_id'],self.identity['process_session_id']) or
+                s.connection_id.startswith('control:') or len(canonical(s.connection_id))>130 for s in streams):
+            raise ValueError('local native cutoff streams required')
+        if len(set(streams))!=len(streams):raise ValueError('duplicate cutoff stream')
+        return [asdict(s) for s in streams]
+
+    def _submit_cutoff(self, operation, payload, *, utc_ns, monotonic_ns, boot_id):
+        self._require_clock()
+        if self._cutoff_scope is None or not self._clock_submitted:
+            raise ValueError('configured cutoff owner and admitted measurement required')
+        integer(utc_ns,'cutoff request UTC');integer(monotonic_ns,'cutoff request monotonic')
+        text(boot_id,'cutoff request boot')
+        if max(utc_ns,monotonic_ns)>2**63-1 or len(boot_id.encode())>128:
+            raise ValueError('cutoff request observation bound')
+        if self._admission_count+self._cutoff_commands_submitted>=2**63-1:
+            self._failure('cutoff_ingress_bound',global_scope=True)
+            raise QueueCapacity('cutoff ingress ordinal bound')
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
+            'control:cutoff-request',self._cutoff_commands_submitted,utc_ns,monotonic_ns,self._last_observation[2]),
+            *self.writer.identity,'control','cutoff_request','control',
+            canonical(dict(operation=operation,boot_id=boot_id,payload=payload)),self.provenance)
+        if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:
+            self._failure('receipt_monotonic_regression',request,global_scope=True)
+            raise LaneStopped('cutoff request regressed behind admitted ingress')
+        future=asyncio.get_running_loop().create_future()
+        try:
+            ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('cutoff_queue_admission_failed',request,global_scope=True)
+            raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,
+            timing_epoch=self._last_observation[2],cutoff_operation=operation)
+        self._cutoff_commands_submitted+=1
+        self._last_submitted_mono=monotonic_ns
+        self._wakeup.set()
+        return future
+
+    def submit_cutoff_allocation(self, cutoff_utc_ns, required_streams, dependencies, *, utc_ns, monotonic_ns, boot_id):
+        """Queue one future minute allocation; await its result before closing.
+
+        Only one unresolved allocation is allowed per lane. Failed/missing
+        allocations resolve durably and permit the next consecutive minute.
+        """
+        integer(cutoff_utc_ns,'cutoff UTC label')
+        streams=self._cutoff_streams(required_streams)
+        if not streams or cutoff_utc_ns>2**63-1 or cutoff_utc_ns%MINUTE_NS:
+            raise ValueError('minute cutoff and nonempty required streams required')
+        if (self._cutoff_active is not None or self._cutoff_allocations_submitted>=10000 or
+                (self._cutoff_last_utc is not None and cutoff_utc_ns!=self._cutoff_last_utc+MINUTE_NS)):
+            raise ValueError('one unresolved cutoff, consecutive minute and bounded scope required')
+        if not isinstance(dependencies,dict) or set(dependencies)!={'config','universe','metadata','required_feeds'}:
+            raise ValueError('explicit cutoff dependency versions required')
+        for name,value in dependencies.items():sha256(value,name)
+        payload=dict(cutoff_utc_ns=cutoff_utc_ns,required_streams=streams,dependencies=dependencies)
+        future=self._submit_cutoff('allocate',payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,boot_id=boot_id)
+        self._cutoff_active=dict(cutoff_id=self._cutoff_allocations_submitted,state='allocating')
+        self._cutoff_allocations_submitted+=1
+        self._cutoff_last_utc=cutoff_utc_ns
+        return future
+
+    def submit_cutoff_close(self, cutoff_id, healthy_streams, *, utc_ns, monotonic_ns, boot_id):
+        """Queue a barrier at this exact observation, ordered with raw receipts."""
+        integer(cutoff_id,'cutoff identity')
+        health=self._cutoff_streams(healthy_streams)
+        if self._cutoff_active!={'cutoff_id':cutoff_id,'state':'allocated'}:
+            raise ValueError('await a successful allocation before one close')
+        integer(monotonic_ns,'cutoff close monotonic')
+        if monotonic_ns<self._cutoff_deadline_ns:
+            raise ValueError('cutoff close precedes its saved monotonic deadline')
+        payload=dict(cutoff_id=cutoff_id,healthy_streams=health)
+        future=self._submit_cutoff('close',payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,boot_id=boot_id)
+        self._cutoff_active=dict(cutoff_id=cutoff_id,state='closing')
+        return future
+
+    def _execute_cutoff(self, request):
+        """Disk-owner call only: all bound controls share the raw FIFO owner."""
+        body=strict_json(request.body);r=request.receipt
+        if self._cutoffs is None:
+            coordinator=CutoffCoordinator(self.writer,capture_scope=self._cutoff_scope,
+                capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
+                provenance=self.provenance)
+            ledger=DurableLedger(self.writer,ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
+                capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
+                provenance=self.provenance)
+            ledger.initialize(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,
+                              clock_epoch=self._clock.assessment.anchor.clock_epoch)
+            self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger)
+        args=dict(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,boot_id=body['boot_id'])
+        payload=body['payload']
+        if body['operation']=='allocate':
+            event=self._cutoffs.allocate(payload['cutoff_utc_ns'],
+                [StreamKey(**s) for s in payload['required_streams']],payload['dependencies'],**args)
+        else:
+            event=self._cutoffs.close(payload['cutoff_id'],
+                healthy_streams=[StreamKey(**s) for s in payload['healthy_streams']],**args)
+        records=self._cutoffs.coordinator.allocations if event['kind']=='allocated' else self._cutoffs.coordinator.resolutions
+        reference=records[event['payload']['cutoff_id']]
+        return event,reference['record_id'],reference['hash'],self._clock.pin
+
     def stop(self, reason='operator_stop'):
         if reason not in {'operator_stop','budget_complete','shutdown'}:
             raise ValueError('explicit graceful stop reason required')
@@ -356,7 +492,10 @@ class ArchiveLane:
 
     def _clock_status(self):
         return None if self._clock is None else dict(submitted=self._clock_submitted,
-            checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin))
+            checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin),
+            cutoff_commands_submitted=self._cutoff_commands_submitted,
+            cutoff_scope=self._cutoff_scope,cutoff_allocations_submitted=self._cutoff_allocations_submitted,
+            active_cutoff=None if self._cutoff_active is None else dict(self._cutoff_active))
 
     def _timing(self, lease, receipt, *, epoch=None):
         stamp, valid, _ = self._observation()
@@ -433,6 +572,16 @@ class ArchiveLane:
                     if lease.late or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
+                    if pending.cutoff_operation is not None:
+                        event,record_id,raw_hash,pin=await self._disk(self._execute_cutoff,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        self._cutoff_active=(dict(cutoff_id=event['payload']['cutoff_id'],state='allocated')
+                                             if event['kind']=='allocated' else None)
+                        self._cutoff_deadline_ns=event['payload'].get('deadline_ns') if event['kind']=='allocated' else None
+                        result=DurableCutoffAck(event,record_id,raw_hash,pin,latency,timely)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(result)
+                        continue
                     if pending.clock_sample is not None or pending.clock_check:
                         if pending.clock_check:
                             operation = partial(self._clock.check,utc_ns=record.receipt.receive_utc_ns,
@@ -478,6 +627,13 @@ class ArchiveLane:
                     self._failure('worker_cancelled', global_scope=True)
             if self._pending:
                 raise DurabilityUnknown('pending receipts remain outside the owned queue; cannot finalize capture')
+            if self._cutoff_active is not None:
+                stamp,_,_=self._observation()
+                await self._disk(partial(self._cutoffs.coordinator.fail,self._cutoff_active['cutoff_id'],
+                    'capture_stopped_before_cutoff',utc_ns=stamp[0],monotonic_ns=stamp[1],
+                    clock_epoch=self._clock.assessment.anchor.clock_epoch))
+                self._cutoff_active=None
+                self._cutoff_deadline_ns=None
             await self._control('capture_stopped', dict(reason=self._stop_reason, watermarks=self._watermarks(),
                                                         clock=self._clock_status(), failures=len(self._failed_connections)+int(self._global_failure is not None)))
             # A final control-time observation can itself discover a clock fault.

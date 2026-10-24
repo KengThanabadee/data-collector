@@ -30,6 +30,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5i | Separate raw durability timing from measured UTC alignment epochs | Approved; [evidence](implementation/chunk-05i.json) |
 | 5j | FIFO assignment of received raw alignment labels from committed clock controls | Approved; [evidence](implementation/chunk-05j.json) |
 | 5k | Continue measured-mode raw capture through UTC steps while retaining process timing faults | Approved; [evidence](implementation/chunk-05k.json) |
+| 5l | Clock-bound cutoff allocation/closure commands through the shared raw FIFO | Approved; [evidence](implementation/chunk-05l.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -43,7 +44,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current270 v2 tests pass; existing35 v1 tests were verified earlier as described above.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current280 v2 tests and35 v1 tests pass together (315 total), including the local HTTP fault server; this is local validation, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -81,3 +82,27 @@ Health and newly written runtime controls expose `timing_basis` as
 basis; it does not certify UTC/reference alignment. Snapshot eligibility must
 use the committed clock assessment/check dependencies. Continuous cutoff
 checks and automatic correction mapping remain necessary runtime integration.
+
+Chunk5l adds optional `cutoff_scope`/`cutoff_ledger_id` to `ArchiveLane` and
+`submit_cutoff_allocation`/`submit_cutoff_close`. Exact paired command observations
+are admitted into the same byte queue as raw and measurements; the dedicated
+disk owner writes ledger genesis, checks, allocations/links and closures. One
+unresolved minute is allowed per lane; callers await a successful allocation
+before queuing one barrier at or after its saved deadline. Equal-time raw behind
+the close command is excluded by the barrier ordinal, while a delayed timer
+retains the original deadline. A healthy clock cannot invent a missed or
+uncertain schedule: that allocation resolves durably as failed/missing.
+
+Implicit cutoff checks share the measured clock-operation cap. Queue overflow
+halts ingress with failure evidence; cancellation drains owned writes and raw
+already accepted behind a barrier. Ambiguous failures expose no successful
+closure acknowledgement and retain the clock pin/open-command state in emergency
+evidence. Graceful stop explicitly fails an unresolved allocation. Temporary
+queue request envelopes are not archived as native messages.
+
+This is the serialized command path, not the recurring timer/snapshot publisher.
+Successful durable closure alone does not prove publication by the5s deadline.
+Automatic correction mapping, aggregate venue publication, checkpoint recovery
+and full-universe capacity/intended-host acceptance remain incomplete. Existing
+bounded full-prefix scans must be replaced or checkpointed before they become a
+continuous-runtime resource bottleneck; no capacity claim follows from fixtures.
