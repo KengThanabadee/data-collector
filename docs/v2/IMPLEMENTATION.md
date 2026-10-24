@@ -38,6 +38,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5q | Owned timer/seal/publish/raw-report pipeline with deferred cancellation and durable handoff acknowledgement | Approved; [evidence](implementation/chunk-05q.json) |
 | 5r | Pinned cross-process cutoff reconciliation with durable interruption resolutions and recovery marker | Approved after fixes; [evidence](implementation/chunk-05r.json) |
 | 5s | Explicit pinned startup resume through raw lane, minute timer and historical snapshot publication | Approved after fixes; [evidence](implementation/chunk-05s.json) |
+| 5t | Owned capture inventory and automatic pinned startup selection with opened-WAL evidence | Approved after fixes; [evidence](implementation/chunk-05t.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -331,3 +332,48 @@ Automatic authoritative prefix/root selection, lost publication/report recovery,
 automatic correction mapping, bounded checkpoint capacity, complete feeds and
 transport supervision, independent backup/restore and intended-host24h acceptance
 remain pending. Explicit pinned runtime resume does not establish those gates.
+
+
+Chunk5t adds a local `CaptureStore` with an exclusive root lock and fsynced framed
+registry. Every new session has an ordered reservation followed by an opened
+entry before its writer is returned. Crash-surviving reservations may only become
+abandoned after proving their descriptor/WAL is empty and has no archive data.
+Opened sessions cannot disappear. Root identity, descriptor identities, registry
+hash chain/receipt order and filesystem inventory are checked before selecting
+history; unknown sessions, foreign archive roots, symlinks, damaged registry tails
+and conflicting metadata stop startup instead of guessing the latest timestamp.
+
+For opened sessions, existing WAL recovery preserves corrupt tails, completes
+immutable publication and verifies original committed references. The store derives
+cutoff and validity-ledger tips from the entire ordered registered prefix and
+returns the exact pinned `RecoveryRequest` together with its next fresh writer.
+Clean empty history permits a fresh scope. Nonempty preallocation history and
+empty corrupt-tail uncertainty stop visibly pending explicit gap reconciliation.
+No raw evidence, original close or original publication is rewritten.
+
+Independent review reproduced lost initial and rotated WAL files being treated
+as shorter history. New writers now fsync an immutable per-ordinal opened proof
+before the initial or rotated WAL is exposed to append. Recovery checks those
+proofs and requires all proven WAL dependencies; it also rejects orphan WAL loss/
+seal evidence and unindexed immutable archive objects. An unproved clean empty
+rotated suffix can be recovered after a failed proof publication because it was
+never exposed to append. Registered roots require these proofs; legacy standalone
+writer recovery remains supported without requiring absent historical proofs.
+
+This is bounded serialized startup work; its caller must keep the root owner
+alive while the writer runs, pass the returned request into the reviewed lane
+startup gate, run startup work outside the event loop and stop/drain before close.
+Synthetic integration exercises automatic inventory selection through real lane,
+clock warmup, timer, publisher, raw report and subsequent cross-process selection.
+Fault tests cover registration boundaries, missing WALs, proof failures, raw tail
+preservation, foreign/conflicting dependencies, ownership and resource limits.
+422 combined tests pass (387v2+35v1), including18 startup tests. An independent
+high-reasoning reviewer approved the repaired source/tests and passed65 focused
+tests with ResourceWarning treated as an error. Exact hashes are recorded in the
+chunk evidence.
+
+Automatic adoption of legacy unregistered roots, nonempty preallocation gap
+mapping, lost publication/report reconciliation, automatic corrections,
+checkpoint/index capacity, full feeds/CLI supervision, independent backup/restore
+and intended-host24h acceptance remain pending. This adds no live collection or
+deployment, and the default startup bounds are limits rather than capacity proof.

@@ -1,0 +1,18 @@
+{
+  "chunk": "5t",
+  "status": "approved",
+  "reviewer": "dc_chunk5t_startup_review",
+  "reasoning_effort": "high",
+  "tests": "Root422 combined full-suite tests passed (387v2+35v1), including18 new startup boundary/integration tests and local HTTP fixtures. Root18 startup tests and independent reviewer65 startup/writer/resume/recovery tests passed with ResourceWarning treated as errors. Regressions demonstrate missing initial/rotated/published-unindexed WAL rejection, safe empty reservation/proof failure recovery, unregistered raw refusal and later reset-history rejection.",
+  "sources": {
+    "data_collector/startup.py": "c49718d190f35fda6ce9799f7597645a71cdbff6ce83eb5ad5a9c38cda0de1eb",
+    "data_collector/writer.py": "c2e1c89f01468b42a7ef7437b316fda4ede8c478bfe97e6c28073f0e7e174ce1",
+    "tests/test_dc_startup.py": "63001e7e2e213926aeaa7d880fead81a89ecdaf92a48ad80029880a3df11c257",
+    "docs/v2/IMPLEMENTATION.md": "5f8c51f76cc49fa8c55c5469749e72c4102e98f05a0fd3fbaa3b5b3873e1ffcc"
+  },
+  "findings_closed": [
+    "P1 opened session whose initial or unindexed rotated WAL disappeared could be selected as shorter/empty history. New writers fsync per-ordinal opened proofs before append exposure; strict owned-root recovery requires all proven WALs and rejects orphan seal/recovery/archive evidence. Missing-WAL regressions include an already published but unindexed final segment.",
+    "Initial proof-directory creation failure left an empty opened directory that prevented safe abandonment. Empty unpublished proof directory now allowed only while the reservation remains unexposed and its WAL is proven empty."
+  ],
+  "limits": "Owned local capture roots only; no legacy archive adoption. Root lock must span writer lifetime; caller passes automatically derived RecoveryRequest to existing lane startup gate and runs serialized startup outside event loop. Registry damage and missing dependencies halt without trimming source evidence. Nonempty history before first cutoff and empty corrupt-tail uncertainty stop pending gap mapping. Legacy standalone writer recovery remains compatible without mandatory historical opened proofs. Automatic lost-publication/report recovery, correction mapping, checkpoint capacity, full feeds/supervision/CLI, independent backup and intended-host24h acceptance pending. No live capture or deployment. PLANS implementation prefix approved only; research suffix/README excluded."
+}

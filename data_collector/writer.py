@@ -97,6 +97,16 @@ def _context(descriptor, ordinal):
                           config_sha256=descriptor['provenance']['config_sha256'])
 
 
+def _opened_bytes(descriptor, ordinal):
+    return canonical(dict(schema='dc.writer-opened/2',session_sha256=digest(canonical(descriptor)),
+                          ordinal=ordinal,context_sha256=_context(descriptor,ordinal).context_id))
+
+
+def _publish_opened(directory, descriptor, ordinal):
+    _mkdir(directory/'opened')
+    _publish_bytes(directory/'opened'/f'{ordinal:08d}.json',_opened_bytes(descriptor,ordinal))
+
+
 def _reference(path, ordinal):
     encoded = (path / 'manifest.json').read_bytes()
     return dict(ordinal=ordinal, context_sha256=strict_json(encoded)['context_sha256'], manifest_sha256=digest(encoded))
@@ -134,6 +144,8 @@ class SessionWriter:
             self._last_now = self._now()
             self._opened_ns = self._last_now
             self.active = Journal(self.directory / '00000000.wal', venue=venue, environment=environment, limits=limits, create=True)
+            _publish_opened(self.directory,self.descriptor,0)
+            self.checkpoint('after_wal_open')
         except BaseException:
             self.abort()
             raise
@@ -248,6 +260,8 @@ class SessionWriter:
         if not final:
             self.active = Journal(self.directory / f'{ordinal + 1:08d}.wal', venue=self.identity[0],
                                   environment=self.identity[1], limits=self.limits, create=True)
+            _publish_opened(self.directory,self.descriptor,ordinal+1)
+            self.checkpoint('after_wal_open')
             self._opened_ns = self._now()
             self._segment_streams, self._segment_versions = {}, set()
             self._stream_metadata_bytes = 0
@@ -348,7 +362,7 @@ def _recovery_evidence(directory, descriptor, paths):
     return references, terminals
 
 
-def recover_session(directory, archive_root, *, checkpoint=lambda stage: None):
+def recover_session(directory, archive_root, *, checkpoint=lambda stage: None,require_opened=False):
     """Seal preserved WAL prefixes, never reopen the previous ingress session.
 
     Original corrupt tails and seal/commit retries use the journal/segment evidence
@@ -378,6 +392,31 @@ def recover_session(directory, archive_root, *, checkpoint=lambda stage: None):
         if [p.name for p in paths] != [f'{i:08d}.wal' for i in range(len(paths))]:
             raise ValueError('missing or foreign WAL in session')
         indexed, terminals = _recovery_evidence(directory, descriptor, paths)
+        proofs=[]
+        for path in (directory/'opened').glob('*.json'):
+            if len(proofs)>=descriptor['max_segments']:raise ValueError('opened WAL proof count bound')
+            proofs.append(path)
+        proofs.sort()
+        if [p.name for p in proofs]!=[f'{i:08d}.json' for i in range(len(proofs))]:
+            raise ValueError('opened WAL proof prefix missing')
+        for ordinal,path in enumerate(proofs):
+            if _read_json(path,2048)!=strict_json(_opened_bytes(descriptor,ordinal)):raise ValueError('opened WAL proof differs')
+            if ordinal>=len(paths):raise ValueError('opened WAL dependency missing')
+        if require_opened and not proofs:raise ValueError('opened WAL proof required')
+        # Seals and preserved loss evidence must never silently lose their WAL.
+        for path in directory.iterdir():
+            name=path.name
+            if len(name)>13 and name[:8].isdigit() and name[8:13]=='.wal.' and not (directory/name[:12]).exists():
+                raise ValueError('orphan WAL seal/recovery evidence')
+        if require_opened and len(proofs)<len(paths):
+            # A creator may crash after the empty WAL fsync but before its proof.
+            # No writer exposed this ordinal, so only a clean empty suffix is safe.
+            if len(paths)!=len(proofs)+1:raise ValueError('unproved WAL suffix')
+            with Journal(paths[-1],venue=identity['venue'],environment=identity['environment'],
+                         limits=JournalLimits(**descriptor['journal_limits'])) as journal:
+                if journal.state.records or journal.state.reason or journal.seal_binding is not None:
+                    raise ValueError('unproved WAL contains data or seal evidence')
+            _publish_opened(directory,descriptor,len(proofs))
         complete = next((v for v in terminals if v['schema'] == 'dc.writer-complete/2'), None)
         references, destinations, total, positions = [], [], 0, {}
         for ordinal, path in enumerate(paths):
@@ -410,6 +449,11 @@ def recover_session(directory, archive_root, *, checkpoint=lambda stage: None):
         for terminal in terminals:
             if terminal['segments'] != references or terminal['records'] != total:
                 raise ValueError('recovered prefix differs from durable terminal evidence')
+        if require_opened:
+            expected={path.name for path in destinations}
+            archive_segments=_archive_root(archive_root,descriptor)/'segments'
+            for path in archive_segments.iterdir() if archive_segments.exists() else ():
+                if path.name not in expected:raise ValueError('unindexed immutable archive evidence')
         result = dict(schema='dc.writer-recovered/2', session_sha256=digest(encoded), segments=references,
                       records=total, continuity='requires_new_session_and_interruption_controls')
         _publish_bytes(directory / 'recovered.json', _terminal_bytes(result))
