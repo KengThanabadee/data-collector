@@ -83,6 +83,136 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         return replay_clock(self.records(lane),venue=lane.identity['venue'],environment='production',capture_id='capture',
             process_session_id='process',provenance=lane.provenance,policy=self.clock_policy(),expected_pin=lane._clock.pin)
 
+    def clock_check(self,lane,**kwargs):
+        utc,mono,_=self.observe()
+        return lane.submit_clock_check(utc_ns=kwargs.get('utc_ns',utc),monotonic_ns=kwargs.get('monotonic_ns',mono),
+                                       boot_id=kwargs.get('boot_id','boot'))
+
+    async def test_clock_checks_share_fifo_and_preserve_independent_source_sequence(self):
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        first=lane.submit(self.record(lane))
+        sample=lane.submit_clock(*self.clock_request(lane))
+        second=lane.submit(self.record(lane,1))
+        check=self.clock_check(lane)
+        third=lane.submit(self.record(lane,2))
+        self.start(lane)
+        results=await asyncio.wait_for(asyncio.gather(first,sample,second,check,third),5)
+        self.assertEqual([results[i].ingress_ordinal for i in (0,2,4)],[0,1,2])
+        self.assertTrue(results[3].timing_valid)
+        self.assertFalse(results[3].assessment.aligned)
+        self.mono[0]+=60
+        later=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        self.assertTrue(later.assessment.aligned)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        records=self.records(lane)
+        controls=[r for r in records if r.channel=='clock_assessments']
+        self.assertEqual([r.receipt.receive_seq for r in controls],[0,1,2])
+        query=next(r for r in controls if strict_json(r.body)['schema']=='dc.clock-check/2')
+        self.assertEqual(strict_json(query.body)['observation']['ingress_ordinal'],2)
+        self.assertEqual([r.receipt.receive_seq for r in records if r.channel=='clock_measurement'],[0,1])
+        self.assertFalse(any(r.channel=='clock_check_request' for r in records))
+        self.assertEqual(self.clock_replay(lane).assessment,later.assessment)
+        self.assertEqual(lane.health()['clock']['checks_submitted'],1)
+
+    async def test_stale_reference_check_remains_durable_while_raw_capture_continues(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        self.mono[0]+=60
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        self.mono[0]+=61
+        check=await asyncio.wait_for(self.clock_check(lane),5)
+        self.assertTrue(check.timing_valid)
+        self.assertFalse(check.assessment.aligned)
+        self.assertEqual(check.assessment.reason,'sample_stale')
+        self.assertTrue(lane.health()['accepting'])
+        await asyncio.wait_for(lane.submit(self.record(lane)),5)
+        lane.stop();await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(self.clock_replay(lane).assessment,check.assessment)
+        self.assertEqual(lane.health()['durable_records'],1)
+
+    async def test_async_clock_check_write_failure_preserves_prior_pin_in_emergency(self):
+        lane,emergency=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        prior=await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        original=lane.writer.append
+        def fail(record):
+            if strict_json(record.body).get('schema')=='dc.clock-check/2':raise OSError('check fsync failure')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=fail),redirect_stderr(io.StringIO()):
+            future=self.clock_check(lane)
+            await asyncio.wait_for(lane.test_task,5)
+        with self.assertRaises(DurabilityUnknown):await future
+        self.assertEqual(lane.health()['clock']['pin']['count'],prior.pin.count)
+        self.assertEqual(lane.health()['clock']['checks_submitted'],1)
+        self.assertEqual(lane.health()['unconfirmed_records'],1)
+        self.assertGreater(lane.queue.budget.used,0)
+        with Journal(emergency,venue='deribit',environment='production') as journal:
+            event=strict_json(RawRecord.from_bytes(next(journal.encoded_records(allow_unsealed=True))).body)
+        self.assertEqual(event['payload']['clock']['pin']['count'],1)
+        self.assertEqual(event['payload']['clock']['checks_submitted'],1)
+
+    async def test_cancelled_clock_check_waits_for_owned_write_and_replays(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if strict_json(record.body).get('schema')=='dc.clock-check/2':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=self.clock_check(lane)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            future.cancel();lane.test_task.cancel();await asyncio.sleep(0)
+            self.assertFalse(lane.test_task.done())
+            self.assertGreater(lane.queue.budget.used,0)
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(self.clock_replay(lane).pin.count,2)
+        self.assertEqual(lane.queue.budget.used,0)
+
+    async def test_queue_fault_during_check_retains_historical_alignment_with_invalid_completion(self):
+        lane,_=self.lane(clock_policy=self.clock_policy());self.start(lane)
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane)),5)
+        self.mono[0]+=60
+        await asyncio.wait_for(lane.submit_clock(*self.clock_request(lane,1)),5)
+        entered,release=threading.Event(),threading.Event();self.addCleanup(release.set)
+        original=lane.writer.append
+        def gated(record):
+            if strict_json(record.body).get('schema')=='dc.clock-check/2':
+                entered.set()
+                if not release.wait(3):raise OSError('test gate timeout')
+            return original(record)
+        with patch.object(lane.writer,'append',side_effect=gated):
+            future=self.clock_check(lane)
+            self.assertTrue(await asyncio.to_thread(entered.wait,2))
+            with patch.object(lane.queue,'now_ns',side_effect=ValueError('queue clock error')):
+                with self.assertRaises(ValueError):lane.submit(self.record(lane))
+            release.set()
+            ack=await asyncio.wait_for(future,5);await asyncio.wait_for(lane.test_task,5)
+        self.assertTrue(ack.assessment.aligned)
+        self.assertFalse(ack.timing_valid)
+        self.assertIsNone(ack.receive_to_durable_ns)
+        self.assertFalse(lane.health()['accepting'])
+        self.assertEqual(self.clock_replay(lane).pin.count,3)
+
+    async def test_samples_and_checks_share_one_admission_cap_and_reject_invalid_requests(self):
+        disabled,_=self.lane()
+        with self.assertRaises(ValueError):self.clock_check(disabled)
+        lane,_=self.lane(clock_policy=self.clock_policy())
+        with self.assertRaises(ValueError):self.clock_check(lane)
+        lane._clock.max_assessments=2
+        sample=lane.submit_clock(*self.clock_request(lane))
+        with self.assertRaises(ValueError):self.clock_check(lane,boot_id='b'*129)
+        self.assertEqual(lane.health()['clock']['checks_submitted'],0)
+        check=self.clock_check(lane)
+        with self.assertRaises(QueueCapacity):lane.submit_clock(*self.clock_request(lane,1))
+        self.start(lane)
+        await asyncio.wait_for(asyncio.gather(sample,check),5)
+        await asyncio.wait_for(lane.test_task,5)
+        self.assertEqual(self.clock_replay(lane).pin.count,2)
+        self.assertEqual(lane.health()['venue_failure'],'clock_log_bound')
+
     async def test_clock_writes_share_fifo_with_raw_and_replay_after_finalization(self):
         lane,_=self.lane(clock_policy=self.clock_policy())
         first=lane.submit(self.record(lane))

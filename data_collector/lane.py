@@ -53,6 +53,7 @@ class _Pending:
     future: asyncio.Future
     clock_sample: ClockSample | None = None
     timing_epoch: str | None = None
+    clock_check: bool = False
 
 
 class ArchiveLane:
@@ -97,6 +98,7 @@ class ArchiveLane:
         self._clock = None if clock_policy is None else DurableClock(writer,capture_id=identity['capture_id'],
             process_session_id=identity['process_session_id'],provenance=self.provenance,policy=clock_policy)
         self._clock_submitted = 0
+        self._clock_checks_submitted = 0
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='dc-'+identity['venue'])
         self._pending = {}
         self._submitted, self._durable = {}, {}
@@ -212,6 +214,15 @@ class ArchiveLane:
         self._wakeup.set()
         return future
 
+    def _require_clock(self):
+        if self._stopping or self._terminal:
+            raise LaneStopped('venue archive ingress stopped')
+        if self._clock is None:
+            raise ValueError('explicit clock policy required to enable measured clock writes')
+        if self._clock_submitted+self._clock_checks_submitted >= self._clock.max_assessments:
+            self._failure('clock_log_bound',global_scope=True)
+            raise QueueCapacity('clock operation bound; rotate process session')
+
     def submit_clock(self, sample, source):
         """Queue one measured clock pair in FIFO order with ordinary raw writes.
 
@@ -219,13 +230,7 @@ class ArchiveLane:
         also check timing_valid and current freshness before using its anchor.
         Source acquisition/parser trust and snapshot integration remain separate.
         """
-        if self._stopping or self._terminal:
-            raise LaneStopped('venue archive ingress stopped')
-        if self._clock is None:
-            raise ValueError('explicit clock policy required to enable measured clock writes')
-        if self._clock_submitted >= self._clock.max_assessments:
-            self._failure('clock_log_bound',global_scope=True)
-            raise QueueCapacity('clock assessment bound; rotate process session')
+        self._require_clock()
         validate_clock_source(source,sample,self.writer.identity,self.identity['capture_id'],
                               self.identity['process_session_id'],self.provenance,self._clock_submitted)
         if self._last_submitted_mono is not None and sample.monotonic_ns < self._last_submitted_mono:
@@ -241,6 +246,42 @@ class ArchiveLane:
         self._pending[ticket] = _Pending(source.record_id,source.receipt,future,sample,self._last_observation[2])
         self._clock_submitted += 1
         self._last_submitted_mono = sample.monotonic_ns
+        self._wakeup.set()
+        return future
+
+    def submit_clock_check(self, *, utc_ns, monotonic_ns, boot_id):
+        """Queue a paired observation; it never refreshes reference evidence.
+
+        Stamps are captured by the producer before admission, not when the disk
+        worker eventually processes this request. The request envelope is only
+        queue storage; DurableClock commits its exact observations in the check
+        control. An unaligned check can complete durably while raw capture drains
+        or continues; alignment is separate from durable completion timing.
+        """
+        self._require_clock()
+        if not self._clock_submitted:
+            raise ValueError('admit a measured clock sample before checking alignment')
+        integer(utc_ns,'checked UTC');integer(monotonic_ns,'checked monotonic')
+        text(boot_id,'checked boot')
+        if max(utc_ns,monotonic_ns) > 2**63-1 or len(boot_id.encode()) > 128:
+            raise ValueError('clock request integer/identity bound')
+        epoch = self._last_observation[2]
+        request = RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],
+            'control:clock-check-request',self._clock_checks_submitted,utc_ns,monotonic_ns,epoch),
+            *self.writer.identity,'control','clock_check_request','control',canonical(dict(boot_id=boot_id)),self.provenance)
+        if self._last_submitted_mono is not None and monotonic_ns < self._last_submitted_mono:
+            self._failure('receipt_monotonic_regression',request,global_scope=True)
+            raise LaneStopped('clock check regressed behind admitted ingress')
+        future = asyncio.get_running_loop().create_future()
+        try:
+            ticket = self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel()
+            self._failure('clock_queue_admission_failed',request,global_scope=True)
+            raise
+        self._pending[ticket] = _Pending(request.record_id,request.receipt,future,timing_epoch=epoch,clock_check=True)
+        self._clock_checks_submitted += 1
+        self._last_submitted_mono = monotonic_ns
         self._wakeup.set()
         return future
 
@@ -271,7 +312,8 @@ class ArchiveLane:
                      last_durable=self._durable.get(stream)) for stream, seq in sorted(self._submitted.items(), key=lambda value:str(value[0]))]
 
     def _clock_status(self):
-        return None if self._clock is None else dict(submitted=self._clock_submitted,pin=asdict(self._clock.pin))
+        return None if self._clock is None else dict(submitted=self._clock_submitted,
+            checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin))
 
     def _timing(self, lease, receipt, *, epoch=None):
         stamp, valid, _ = self._observation()
@@ -345,9 +387,14 @@ class ArchiveLane:
                     if lease.late or not lease.clock_valid:
                         self._failure('persist_backlog_or_clock_invalid', global_scope=True)
                     record = RawRecord.from_bytes(lease.payload)
-                    if pending.clock_sample is not None:
-                        assessment = await self._disk(partial(self._clock.sample,pending.clock_sample,record,
-                                                              ingress_ordinal=self.ingress.ordinal))
+                    if pending.clock_sample is not None or pending.clock_check:
+                        if pending.clock_check:
+                            operation = partial(self._clock.check,utc_ns=record.receipt.receive_utc_ns,
+                                monotonic_ns=record.receipt.monotonic_ns,boot_id=strict_json(record.body)['boot_id'],
+                                ingress_ordinal=self.ingress.ordinal)
+                        else:
+                            operation = partial(self._clock.sample,pending.clock_sample,record,ingress_ordinal=self.ingress.ordinal)
+                        assessment = await self._disk(operation)
                         latency,timely = self._timing(lease,record.receipt,epoch=pending.timing_epoch)
                         result = DurableClockAck(assessment,self._clock.pin,latency,timely)
                         self.queue.ack(lease)
