@@ -11,7 +11,7 @@ import time
 
 from .contracts import integer, text
 from .cutoffs import MINUTE_NS
-from .lane import ArchiveLane
+from .lane import ArchiveLane,DurableOwnerPlanAck
 from .publisher import _charge
 from .replay import SnapshotPlan
 
@@ -32,7 +32,8 @@ class ScheduledCutoff:
 class MinuteCutoffs:
     """One producer run, one outstanding consumer lease; no hidden replay queue."""
     def __init__(self, lane, *, first_cutoff_utc_ns, plan, healthy_streams, boot_id,
-                 max_cutoffs=10000, max_plan_bytes=8*1024*1024, wait_until=None):
+                 max_cutoffs=10000, max_plan_bytes=8*1024*1024, wait_until=None,
+                 healthy_streams_for_plan=None):
         if not isinstance(lane,ArchiveLane) or not callable(plan) or not callable(healthy_streams):
             raise ValueError('local lane and synchronous plan/health providers required')
         integer(first_cutoff_utc_ns,'first cutoff UTC')
@@ -46,7 +47,10 @@ class MinuteCutoffs:
                 not lane.health()['accepting']):
             raise ValueError('fresh or recovered configured local minute scope required')
         if wait_until is not None and not callable(wait_until):raise ValueError('cooperative async timer required')
+        if healthy_streams_for_plan is not None and not callable(healthy_streams_for_plan):raise ValueError('callable allocated-plan health required')
         self.lane,self.plan,self.healthy_streams,self.boot_id=lane,plan,healthy_streams,boot_id
+        self.healthy_streams_for_plan=healthy_streams_for_plan
+        self._allocation_lock=asyncio.Lock()
         self.first_cutoff,self.max_cutoffs,self.max_plan_bytes=first_cutoff_utc_ns,max_cutoffs,max_plan_bytes
         self.wait_until=wait_until or self._sleep_until
         self._stop=asyncio.Event();self._available=asyncio.Event()
@@ -66,8 +70,8 @@ class MinuteCutoffs:
         self._observation=stamp
         return stamp
 
-    def _cycle_plan(self):
-        plan=self.plan()
+    def _cycle_plan(self,plan=None):
+        if plan is None:plan=self.plan()
         if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>self.lane.snapshot_limits.max_books:
             raise ValueError('bounded immutable snapshot plan required')
         _charge(plan,self.max_plan_bytes)
@@ -77,6 +81,29 @@ class MinuteCutoffs:
         self.lane._cutoff_streams(streams)
         if plan.config_sha256!=self.lane.provenance.config_sha256:raise ValueError('schedule config differs from capture')
         return plan,streams
+
+    async def replace_plan(self,plan):
+        """Declare and select a managed plan atomically with the next allocation.
+
+        A cutoff already allocated keeps its frozen plan. Native sources for the
+        replacement must start at the exact next durable receipt. Use fresh
+        connections when the old cutoff has not closed.
+        """
+        if not isinstance(plan,SnapshotPlan):raise ValueError('typed replacement owner plan required')
+        async with self._allocation_lock:
+            if self._stop.is_set() or self._terminal:raise ScheduleStopped('schedule stopped before owner cutover')
+            self._cycle_plan(plan)
+            utc,mono,_=self._stamp()
+            try:ack=await self._owned(self.lane.submit_owner_plan(plan,utc_ns=utc,monotonic_ns=mono))
+            except BaseException:
+                self.stop();self.lane.halt_snapshot_schedule('snapshot_schedule_failure')
+                raise
+            if not isinstance(ack,DurableOwnerPlanAck) or not ack.timing_valid or ack.declaration.plan!=plan:
+                self.stop();self.lane.halt_snapshot_schedule('snapshot_schedule_failure')
+                raise ScheduleStopped('timely exact durable owner plan required')
+            self.plan=lambda:plan
+            if self._cancelled:raise asyncio.CancelledError
+            return ack
 
     async def _owned(self, future):
         while True:
@@ -138,13 +165,14 @@ class MinuteCutoffs:
                 if self._stop.is_set():break
                 label=self.first_cutoff+index*MINUTE_NS
                 if label>2**63-1:raise ValueError('schedule UTC range exhausted')
-                plan,streams=self._cycle_plan()
-                utc,mono,_=self._stamp()
-                # Pacing only when alignment cannot allocate a real deadline.
-                # This fallback is never used as a barrier or validity proof.
-                pacing=mono+min(MINUTE_NS,max(0,label-utc))
-                allocation=await self._owned(self.lane.submit_cutoff_allocation(label,streams,plan.dependencies,
-                    utc_ns=utc,monotonic_ns=mono,boot_id=self.boot_id))
+                async with self._allocation_lock:
+                    if self._stop.is_set():break
+                    plan,streams=self._cycle_plan()
+                    utc,mono,_=self._stamp()
+                    # Pacing only; never used as a barrier or validity proof.
+                    pacing=mono+min(MINUTE_NS,max(0,label-utc))
+                    allocation=await self._owned(self.lane.submit_cutoff_allocation(label,streams,plan.dependencies,
+                        utc_ns=utc,monotonic_ns=mono,boot_id=self.boot_id))
                 self._allocated+=1
                 if not allocation.timing_valid:raise ScheduleStopped('allocation durability timing failed')
                 if allocation.event['kind']!='allocated':
@@ -154,7 +182,8 @@ class MinuteCutoffs:
                 active=allocation.event['payload']['cutoff_id']
                 deadline=allocation.event['payload']['deadline_ns']
                 if not await self._wait_deadline(deadline):break
-                health=self.healthy_streams()
+                health=(self.healthy_streams() if self.healthy_streams_for_plan is None else
+                    self.healthy_streams_for_plan(plan))
                 self.lane._cutoff_streams(health)
                 health=tuple(health)
                 if not set(health)<=set(streams):raise ValueError('health includes streams outside this cycle')

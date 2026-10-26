@@ -45,6 +45,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5x | Separate close knowledge from first-publication validity; byte-compatible legacy policy replay | Approved; [evidence](implementation/chunk-05x.json) |
 | 5y | Native recovery closure selection, portable positive proof and FIFO resolution | Approved after fixes; [evidence](implementation/chunk-05y.json) |
 | 5z | Durable managed owner plans, source cutover fences and allocation-pinned replay | Approved after fixes; [evidence](implementation/chunk-05z.json) |
+| 5aa | Atomic managed scheduler cutovers and allocated-plan health | Approved after fixes; [evidence](implementation/chunk-05aa.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -58,7 +59,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current477 combined tests pass:442 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current484 combined tests pass:449 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -614,3 +615,30 @@ re-review approved after40 focused/supporting tests. Automatic lifecycle/resets,
 production capture/CLI, broader feed qualification, remaining fault mappings,
 checkpoints, independent backup/restore and intended-host acceptance remain
 unfinished; this is the explicit cutover mechanism, not a continuous supervisor.
+
+
+## Chunk5aa — scheduled managed cutovers
+
+`MinuteCutoffs.replace_plan` shares a local allocation lock with the existing
+minute allocator. It waits for the exact durable managed declaration before
+switching the plan provider. Already allocated cutoffs retain their original
+frozen plan; later allocations select the replacement. This closes the race
+where an old plan could be queued behind a newly durable owner declaration.
+An optional `healthy_streams_for_plan(plan)` callback evaluates closure health
+against that allocated plan; existing fixed-plan health callbacks keep working.
+
+Seven async tests exercise a blocked disk declaration racing allocation,
+old/new source overlap across two published/replayed cutoffs, deferred cutover
+cancellation, uncertain disk acknowledgement, pre-admission failure, untimely
+acknowledgement and invalid/stopped requests. The review found an unsupported
+halt-reason label that masked errors and skipped lane shutdown; using the existing
+schedule-failure reason and precise failure assertions repaired it. Fresh
+high-reasoning re-review approved after41 focused/supporting tests. Full-suite
+results are recorded in the chunk evidence. This connects existing owner and
+scheduler mechanisms; it adds no socket framework. Automatic feed supervision,
+transport/clock fault mapping, proof checkpoints, continuous runtime/CLI,
+independent backup/restore and intended-host acceptance remain unfinished.
+
+The next concrete integration is the Deribit session driver using these cutovers.
+Its native proof history is currently bounded to256 dependencies/64KiB per gap
+audit; checkpoint/proof-prefix integration remains necessary for sustained capture.

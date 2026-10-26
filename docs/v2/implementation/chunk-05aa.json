@@ -1,0 +1,16 @@
+{
+  "chunk": "5aa",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/schedule.py": "4e8383283834c6cb2bf22e40dbac9b8f4157e703b972938e81630c720f336353",
+    "tests/test_dc_schedule_cutovers.py": "343f77df621cf5500639805d28dfdfe05bfa6853677ccafae80d430a23adab2a",
+    "docs/v2/IMPLEMENTATION.md": "f410a16628b52f5686e7ad5d5805269698245dc4ecfc86423921fc38824b7d20"
+  },
+  "reviewer": "dc_chunk5aa_schedule_review",
+  "tests": "Root484 full-suite tests passed (449v2+35v1) with ResourceWarning treated as errors and loopback HTTP fixtures. Seven new async scheduler-cutover tests pass. Reviewer41 focused/supporting tests across cutovers/schedule/pipeline/owners pass. git diff --check passes.",
+  "findings_closed": [
+    "P2: unsupported halt reason masked original cutover failures and skipped lane halt; use existing snapshot_schedule_failure reason. Tighten disk failure assertion to DurabilityUnknown and exercise healthy-lane pre-admission failure plus untimely durable ack."
+  ],
+  "limits": "Local atomic scheduler/managed-owner integration only. Existing current cutoff retains frozen plan and per-plan health; replacement plan selection follows exact timely durable declaration. Cancellation drains admitted declaration then stops. No automatic transport/lifecycle driver, cross-owner recovery, proof checkpoint integration, broader feeds/runtime/CLI, independent backup/restore or intended-host acceptance. Native audit256 dependency/64KiB limits remain relevant for sustained capture. No live capture/deployment. Commit excludes unrelated README/research and PLANS research suffix."
+}
