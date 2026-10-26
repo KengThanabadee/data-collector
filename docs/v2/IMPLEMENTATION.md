@@ -44,6 +44,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5w | Automatic exact native-audit correction before startup recovery marker/live gate | Approved; [evidence](implementation/chunk-05w.json) |
 | 5x | Separate close knowledge from first-publication validity; byte-compatible legacy policy replay | Approved; [evidence](implementation/chunk-05x.json) |
 | 5y | Native recovery closure selection, portable positive proof and FIFO resolution | Approved after fixes; [evidence](implementation/chunk-05y.json) |
+| 5z | Durable managed owner plans, source cutover fences and allocation-pinned replay | Approved after fixes; [evidence](implementation/chunk-05z.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -57,7 +58,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current465 combined tests pass:430 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current477 combined tests pass:442 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -569,3 +570,47 @@ including loopback HTTP fixtures). Fresh high-reasoning re-review approved after
 owner/plan transitions, remaining fault mapping, checkpoints, remaining feeds,
 CLI/supervision, independent backup/restore and intended-host acceptance remain
 unfinished. No live exchange capture or deployment was performed.
+
+
+## Chunk5z — durable managed owner-plan cutovers
+
+`OwnerPlans` stores versioned full frozen SnapshotPlans on the existing raw
+journal, hash-links declarations across sessions, and binds the active declaration
+to each allocation. `ArchiveLane.submit_owner_plan` uses the existing disk FIFO;
+cutover starts are checked after earlier queued raw writes. Replacement paths
+need fresh managed epochs from `new_owner_epoch()` and exact next WS/seed receipt
+positions. Raw overlap stays archived while snapshot replay applies one selected
+source. A new path never inherits an old book anchor.
+
+Same-source resets wait for all open cutoffs using that source to resolve;
+different connections can overlap before the previous cutoff closes. Metadata
+observations may retain a native owner only when attribute bytes are identical.
+Changed metadata attributes/native fields/config require a fresh owner/bootstrap;
+source prefixes containing another config require fresh source identities.
+Allocations match the exact selected source set and plan dependencies. A later
+declaration affects the next allocation, never an already allocated cutoff.
+
+Managed snapshot descriptors pin the declaration chain selected at allocation.
+Legacy allocations preceding the first declaration retain exact legacy bytes.
+Epoch reuse is rejected over known declaration/correction history; first adoption
+uses the fresh managed UUID namespace rather than claiming discovery of every
+free-form epoch ever used by legacy snapshots. Unused durable declarations burn
+epochs; multiple declarations before one allocation keep the last durable plan,
+and restart requires current-process sources and freshly acquired metadata.
+
+Twelve tests cover overlap/no double application, exact legacy readback, declaration
+between allocation and close, same-socket closure fences/fresh anchors, unused
+owner retirement/idempotent retries, metadata/native reset rules, exact source
+sets, bounded writes, lost acknowledgement, restart guards, and a cancelled
+client/pending-raw FIFO path through fresh snapshot publication. Two managed
+buffered regressions cover foreign-symbol WS bootstrap timing and unrelated REST
+seeds. The P2 review finding was fixed by routing before native book creation or
+mutation, gated on managed declarations to preserve legacy snapshot bytes.
+Owner control admission uses independent bounded scan defaults; snapshot scan
+limits still govern publication. This also preserves legacy cutoff allocation
+when deliberately tiny snapshot limits reject later publication. All477 tests
+pass with ResourceWarning treated as errors (442 v2 plus35 v1). Fresh high-reasoning
+re-review approved after40 focused/supporting tests. Automatic lifecycle/resets,
+production capture/CLI, broader feed qualification, remaining fault mappings,
+checkpoints, independent backup/restore and intended-host acceptance remain
+unfinished; this is the explicit cutover mechanism, not a continuous supervisor.

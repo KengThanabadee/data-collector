@@ -185,6 +185,17 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             coordinator=CutoffCoordinator(empty,capture_scope=scope,capture_id=close.receipt.capture_id,
                 process_session_id='replay-reader',provenance=close.provenance,prior_records=prefix)
             allocated=coordinator.allocations[cutoff_id]['payload']
+            owner_dependencies=()
+            for record in prefix():
+                if record.channel=='owner_plans:'+scope or record.receipt.connection_id=='control:owners:'+scope:
+                    from .owners import OwnerPlans
+                    owners=OwnerPlans(empty,capture_scope=scope,capture_id=close.receipt.capture_id,
+                        process_session_id=close.receipt.process_session_id,provenance=close.provenance,prior_records=prefix,
+                        max_records=limits.max_records,max_scan_bytes=limits.max_scan_bytes,
+                        max_plan_bytes=limits.max_payload_bytes,max_metadata_bytes=limits.max_metadata_bytes)
+                    owner_dependencies=owners.proof_for(cutoff_id,plan)
+                    break
+                if record.record_id==coordinator.allocations[cutoff_id]['record_id']:break
             closed=coordinator.resolutions[cutoff_id]
             if closed['record_id']!=close_record_id or closed['hash']!=digest(close.to_bytes()):raise ValueError('cutoff closure dependency mismatch')
             if 'clock_binding' in closed['payload']['barrier']:
@@ -241,17 +252,29 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             if stream not in {binding.ws_source,binding.seed_source}:continue
             if stream==binding.ws_source and receipt.receive_seq<binding.ws_start_seq:continue
             if stream==binding.seed_source and receipt.receive_seq<binding.seed_start_seq:continue
+            routed_event=None;routing_error=None
+            if owner_dependencies:
+                # Managed streams may multiplex symbols; unrelated input cannot
+                # start the bootstrap clock or invalidate this selected owner.
+                if stream==binding.ws_source and record.kind=='ws_message':
+                    try:routed_event=_book_message(record,binding)
+                    except ValueError as exc:routing_error=exc
+                    if routed_event is None and routing_error is None:continue
+                elif stream==binding.seed_source and record.kind=='rest_response':
+                    if record.instrument is not None and record.instrument!=binding.target.instrument:continue
+                else:continue
             if model is None:
                 model=BufferedBook(binding.target.instrument,binding.target.profile,now_ns=receipt.monotonic_ns)
                 models[i]=model
             try:
+                if routing_error is not None:raise routing_error
                 if stream==binding.seed_source and record.kind=='rest_response':
                     outcome=model.supply_seed(decode_seed(record,binding.target.profile),now_ns=receipt.monotonic_ns)
                     if outcome=='invalid':
                         note(i,model.reason,record.record_id)
                         model.reset(now_ns=receipt.monotonic_ns,reason='native_reseed_required')
                 elif stream==binding.ws_source and record.kind=='ws_message':
-                    event=_book_message(record,binding)
+                    event=routed_event if owner_dependencies else _book_message(record,binding)
                     if event is not None:
                         if isinstance(model,BufferedBook) and model.state=='no_book':model.reset(now_ns=receipt.monotonic_ns,reason='native_availability_recheck')
                         outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=receipt.monotonic_ns)
@@ -302,5 +325,6 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
         raw_segments=[dict(context_sha256=strict_json((p/'manifest.json').read_bytes())['context_sha256'],
                            manifest_sha256=digest((p/'manifest.json').read_bytes())) for p in used],
         payload_sha256=digest(payload))
+    if owner_dependencies:descriptor['owner_plan_dependencies']=list(owner_dependencies)
     identity=digest(canonical(descriptor))
     return dict(snapshot_id=identity,descriptor=descriptor,payload=payload),tuple(base_validities)

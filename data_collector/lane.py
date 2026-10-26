@@ -28,6 +28,7 @@ from .cutoffs import CutoffPin
 from .validity import LedgerPin
 from .gapmap import GapMapping, map_native_gap
 from .gaprecovery import NativeRecovery, map_native_recovery
+from .owners import OwnerPlan,OwnerPlans
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -131,6 +132,13 @@ class DurableRecoveryAck:
 
 
 @dataclass(frozen=True, slots=True)
+class DurableOwnerPlanAck:
+    declaration: OwnerPlan
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
+@dataclass(frozen=True, slots=True)
 class DurableGapAck:
     mapping: GapMapping | NativeRecovery | None
     receive_to_durable_ns: int | None
@@ -150,6 +158,7 @@ class _Pending:
     snapshot_inputs: bool = False
     snapshot_delivery: bool = False
     recovery: bool = False
+    owner_plan: bool = False
     gap_mapping: bool = False
 
 
@@ -199,11 +208,12 @@ class ArchiveLane:
                 'control:snapshot-delivery-request','control:snapshot-deliveries:'+cutoff_scope,
                 'control:cutoff-recovery-request','control:cutoff-recovery:'+cutoff_scope,
                 'control:gap-mapping-request','control:gap-mapping:'+cutoff_scope,
+                'control:owner-plan-request','control:owners:'+cutoff_scope,
                 'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
             if len(set(namespaces))!=len(namespaces):
                 raise ValueError('cutoff and runtime control namespaces must be distinct')
         control_bound = max_connections * 8192 + 65536
-        control_streams = (3 if clock_policy is not None else 1)+(5 if cutoff_scope is not None else 0)+int(recovery is not None)
+        control_streams = (3 if clock_policy is not None else 1)+(6 if cutoff_scope is not None else 0)+int(recovery is not None)
         if max_connections + control_streams > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
@@ -231,6 +241,7 @@ class ArchiveLane:
         self._clock_checks_submitted = 0
         self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
         self._cutoffs = None
+        self._owner_plan_requests=0
         self._gap_requests_submitted=0
         self._recovery_request=recovery;self._recovery_result=None
         self._recovery_submitted=False;self._recovery_ready=recovery is None
@@ -623,6 +634,45 @@ class ArchiveLane:
             self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger)
         return self._cutoffs
 
+    def _owner_plans(self):
+        owners=self._cutoff_owners()
+        return OwnerPlans(self.writer,capture_scope=self._cutoff_scope,capture_id=self.identity['capture_id'],
+            process_session_id=self.identity['process_session_id'],provenance=self.provenance,
+            # Owner control admission has its own bounded scan budget. Snapshot input
+            # limits govern publication, not whether legacy raw cutoffs can allocate.
+            prior_records=owners.ledger.prior_records,max_plan_bytes=self.snapshot_limits.max_payload_bytes,
+            max_metadata_bytes=self.snapshot_limits.max_metadata_bytes)
+
+    def submit_owner_plan(self,plan,*,utc_ns,monotonic_ns):
+        """Freeze a managed owner plan on the disk FIFO before allocating its cutoff."""
+        from .replay import SnapshotPlan
+        from .publisher import _charge
+        self._require_clock()
+        if self._cutoff_scope is None or not self._clock_submitted:raise ValueError('configured measured cutoff scope required')
+        if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>self.snapshot_limits.max_books:raise ValueError('bounded owner plan required')
+        _charge(plan,1024*1024)
+        integer(utc_ns,'owner UTC');integer(monotonic_ns,'owner monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('owner observation bound')
+        if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:raise ValueError('owner observation regressed')
+        if self._owner_plan_requests>=10000:
+            self._failure('owner_plan_request_bound',global_scope=True);raise QueueCapacity('owner plan request bound')
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],'control:owner-plan-request',
+            self._owner_plan_requests,utc_ns,monotonic_ns,self._last_observation[2]),*self.writer.identity,
+            'control','owner_plan_request','control',canonical(asdict(plan)),self.provenance)
+        future=asyncio.get_running_loop().create_future()
+        try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('owner_plan_queue_admission_failed',global_scope=True);raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,timing_epoch=self._last_observation[2],owner_plan=True)
+        self._owner_plan_requests+=1;self._last_submitted_mono=monotonic_ns;self._wakeup.set()
+        return future
+
+    def _execute_owner_plan(self,request):
+        from .snapshots import plan_from_descriptor
+        r=request.receipt
+        return self._owner_plans().declare(plan_from_descriptor(strict_json(request.body)),utc_ns=r.receive_utc_ns,
+            monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch)
+
     def submit_native_gap(self, plan, binding_index, discovery_record_id, *, utc_ns,monotonic_ns):
         """Queue a durable native discovery for independently derived open correction."""
         return self._submit_native_mapping(plan,binding_index,discovery_record_id,'gap',utc_ns,monotonic_ns)
@@ -683,6 +733,7 @@ class ArchiveLane:
         args=dict(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,boot_id=body['boot_id'])
         payload=body['payload']
         if body['operation']=='allocate':
+            self._owner_plans().check_next_allocation(payload['dependencies'],[StreamKey(**s) for s in payload['required_streams']])
             self._cutoffs.ledger.initialize(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,
                 clock_epoch=self._clock.assessment.anchor.clock_epoch)
             event=self._cutoffs.allocate(payload['cutoff_utc_ns'],
@@ -984,6 +1035,12 @@ class ArchiveLane:
                         self._snapshot_inputs_pending=False
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
+                        continue
+                    if pending.owner_plan:
+                        declaration=await self._disk(self._execute_owner_plan,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(DurableOwnerPlanAck(declaration,latency,timely))
                         continue
                     if pending.gap_mapping:
                         mapping=await self._disk(self._execute_gap_mapping,record)

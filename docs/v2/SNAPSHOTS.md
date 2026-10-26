@@ -8,6 +8,17 @@ A raw record ID is `(capture_id, process_session_id, connection_id, receive_seq)
 
 Each instrument/feed epoch has one owning connection. During rotation or redundancy, raw includes all deliveries; a versioned owner-transition control record chooses the state-building path and cutover positions. Apply native order within that path. Do not apply the same book delta twice through cross-connection merging. Shared trade dedup follows native identity; identical prices/times alone are not an ID. Metadata/reference state uses its declared owner/version and source raw positions as well.
 
+Managed local mode records `dc.owner-plan/2` declarations in the raw journal
+before allocation. Each allocation freezes its exact plan and source set; later
+declarations apply to the next cutoff. New native paths use fresh managed owner
+UUIDs and the next durable WS/seed receipts, then require a fresh native anchor.
+A same-source reset waits for its open cutoffs to resolve; a different connection
+may overlap without merging deliveries. Same-attribute metadata observations may
+keep ownership; changed attributes/native interpretation require a new owner.
+Descriptors pin the selected declaration chain. Earlier legacy allocations keep
+their original untracked replay semantics. Explicit declarations do not by
+themselves implement automatic native reset or lifecycle management.
+
 ## 2. Closing a UTC cutoff
 
 A coordinator allocates each UTC minute cutoff once per capture scope with a strictly increasing `cutoff_id`, its UTC label and expected universe/required-feed versions. A restart resumes this durable allocation ledger. Closed labels are never issued a second time; unobserved minutes become explicit missing cutoffs. Across multiple venues, each capture process supplies a separate local closure; the aggregate descriptor pins all required local closures or marks that venue missing.
