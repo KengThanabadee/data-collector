@@ -1,0 +1,17 @@
+{
+  "chunk": "5ab",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/deribit.py": "8e2880192cfd4a3a8e407c4877575d772c89a5a89b4f9f6b4bf3d0067b1d819b",
+    "tests/test_dc_deribit.py": "07754bea5e4f9b50354b365a6e1b23110204379e9407b8949e1a2d6dd3e6ff19",
+    "docs/v2/IMPLEMENTATION.md": "bc9995cdd00c648fa9b0261be069c6ceb56bebca6353679a6d6308ba15a154bb"
+  },
+  "reviewer": "dc_chunk5ab_deribit_review",
+  "tests": "Root503 full-suite tests passed in45.504s (468v2+35v1) with ResourceWarning treated as errors, including loopback HTTP fixtures. Nineteen new receiver tests pass; reviewer independently ran all19 after fixes. Exact pipeline snapshot/replay and portable assessed export verified with synthetic transports. git diff --check passes.",
+  "findings_closed": [
+    "P2: one subscription request could include64channels despite frozen50-channel batch cap. Limit this bounded receiver group to50 explicit channels; catalogue/queue caps reject before capture.",
+    "P1: scan headroom omitted the final full transport frame when cumulative byte budget is crossed. Reserve max_bytes+max_message_bytes before envelope/control allowance. Reviewer reproduced missing negative audit on capable real writer/queue with1.5MiB scan cap and2MiB malformed final frame; new preflight regression rejects that configuration before owner admission."
+  ],
+  "limits": "Bounded Deribit shared-socket ingress over existing FIFO/scheduler/quota; no new generic transport framework. Fresh managed owners, exact raw acknowledgements before native apply, per-binding corrections and immutable publication/export. Conservative256-dependency/64KiB proof and scan headroom required. Late/uncertain durability stops before apply; unresolved raw discoveries after writer/clock/admission failure still require pending fault/reconciliation integration and this receiver alone does not certify historical coverage then. Automatic reconnect/lifecycle, transport/clock/process fault corrections, checkpoints, remaining feeds/runtime/CLI, independent backup/restore and intended-host acceptance remain pending. No network capture/deployment. PLANS implementation prefix only; unrelated README/research excluded."
+}

@@ -46,6 +46,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5y | Native recovery closure selection, portable positive proof and FIFO resolution | Approved after fixes; [evidence](implementation/chunk-05y.json) |
 | 5z | Durable managed owner plans, source cutover fences and allocation-pinned replay | Approved after fixes; [evidence](implementation/chunk-05z.json) |
 | 5aa | Atomic managed scheduler cutovers and allocated-plan health | Approved after fixes; [evidence](implementation/chunk-05aa.json) |
+| 5ab | Bounded durable Deribit shared-socket receiver and automatic native gap mapping | Approved after fixes; [evidence](implementation/chunk-05ab.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -59,7 +60,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current484 combined tests pass:449 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current503 combined tests pass:468 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -642,3 +643,46 @@ independent backup/restore and intended-host acceptance remain unfinished.
 The next concrete integration is the Deribit session driver using these cutovers.
 Its native proof history is currently bounded to256 dependencies/64KiB per gap
 audit; checkpoint/proof-prefix integration remains necessary for sustained capture.
+
+
+## Chunk5ab — bounded Deribit socket ingress
+
+`DeribitBookSession` installs fresh managed owners through the existing minute
+scheduler, opens one size-bounded public socket and subscribes to at most50
+explicit channels of one native product. Exact inbound bytes (including ACKs,
+foreign symbols and malformed messages) and outbound requests share the existing
+raw FIFO. Receipt stamping/admission precede task-cleanup awaits; book decoding
+and application follow a timely, hash-checked durable acknowledgement. Subscription
+ACK and native snapshot health remain distinct. Shared quota grants precede
+subscription, heartbeat setup and public test responses.
+
+The first native failure freezes the plan/discovery, marks the source unhealthy,
+stops scheduling and durably maps only affected bindings. Original snapshot bytes
+remain immutable; verified exports overlay the correction. Transport faults stop
+visibly without inventing a native sequence proof. Cancellation drains admitted
+writes/mappings and closes the socket. Idle/bootstrap/ACK/session/receive-apply,
+message/byte/frame, aggregate-book and outbound/close waits have explicit bounds.
+
+Before capture, the receiver checks conservative source-receipt/cutoff dependency
+headroom against the existing256-entry/64KiB native proof cap, scan headroom and
+expanded-message writer/queue capacity. This is a bounded integration path,
+not continuous qualification. Nineteen synthetic async tests cover exact pipeline
+publication/replay, automatic quiet-cutoff correction, multi-symbol isolation,
+raw-before-apply cancellation, ACK/heartbeat, malformed/foreign input, resource
+preflight, byte-crossing gaps, frame exhaustion, idle/slow processing and socket
+failures. The review found an initial64-channel request exceeding the frozen
+50-channel batch cap and scan headroom missing one full byte-crossing message.
+The receiver now caps its group at50 and reserves the final maximum frame;
+a capable-writer regression rejects insufficient scan headroom before capture.
+Fresh high-reasoning re-review approved all19 receiver tests. Full-suite results
+are recorded in the chunk evidence.
+
+Late/uncertain raw durability acknowledgement stops before native apply. A writer
+clock/deadline failure can halt admission before a negative mapping is queued;
+those unresolved raw discoveries require the pending fault/reconciliation work.
+This receiver alone does not certify historical coverage after such failures.
+
+Automatic reconnect/lifecycle discovery, transport/clock/process correction
+mapping, durable proof checkpoints, broader feeds, continuous runtime/CLI,
+independent backup/restore and intended-host acceptance remain unfinished.
+No network capture or deployment was performed for this chunk.

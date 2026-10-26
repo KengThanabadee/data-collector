@@ -43,12 +43,13 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5y: replay-select first accepted native recovery closure, retain native and complete cutoff-selection proof dependencies, and resolve through existing FIFO; review boundary/dependency findings repaired and high-reasoning re-review approved.
 - [x] Chunk5z: durable managed owner-plan declarations, FIFO cutover fences, allocation-pinned replay and legacy compatibility; managed buffered routing review finding repaired and high-reasoning re-review approved.
 - [x] Chunk5aa: serialize managed owner declaration/provider switch with minute allocation, retaining allocated-plan health; failure-path review finding repaired and high-reasoning re-review approved.
+- [x] Chunk5ab: bounded durable Deribit shared-socket receiver, quota controls, native book apply and automatic affected-binding gap mapping; channel/proof-headroom review findings repaired and high-reasoning re-review approved.
 - [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
 - User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current484 combined tests pass:449 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current503 combined tests pass:468 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 
