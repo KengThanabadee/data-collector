@@ -185,7 +185,7 @@ class DurableLedger:
             self.poisoned=True
             raise
 
-    def _append(self,payload,*,utc_ns,monotonic_ns,clock_epoch):
+    def _append(self,payload,*,utc_ns,monotonic_ns,clock_epoch,_completing_mappings=False):
         self.refresh(allow_pending_mappings=isinstance(payload,GapCorrection))
         if self._pending_mappings and (not isinstance(payload,GapCorrection) or payload.proof_record_id not in self._pending_mappings):
             raise ValueError('pending native mapping requires its exact correction')
@@ -211,7 +211,9 @@ class DurableLedger:
         self._scan_records+=1;self._scan_bytes+=len(record.to_bytes())
         self._known_pin=self._projection.pin()
         self.poisoned=False
-        if self._pending_mappings:raise ValueError('other native mapping audits remain unresolved')
+        if self._pending_mappings:
+            if _completing_mappings:return None
+            raise ValueError('other native mapping audits remain unresolved')
         return self._projection.pin()
 
     def initialize(self,*,utc_ns,monotonic_ns,clock_epoch):
@@ -223,6 +225,32 @@ class DurableLedger:
         if not isinstance(payload,(GapCorrection,CloseGap)):
             raise ValueError('explicit gap/recovery payload required')
         return self._append(payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+
+    def recovery_state(self):
+        """Source chain tip and exact pending negatives; not a validity certificate.
+
+        Startup may carry this tip solely to assert complete ledger continuity.
+        Public pin/assessment APIs still refuse until every audit is corrected.
+        """
+        from .gapmap import mapping_payload
+        self.refresh(allow_pending_mappings=True)
+        pending=tuple(mapping_payload(value,identity) for identity,value in self._mappings.items()
+                      if identity in self._pending_mappings)
+        pin=self._projection.pin() if self._projection.entry_count else None
+        if pending and pin is None:raise ValueError('native mapping audit lacks ledger genesis')
+        return pin,pending
+
+    def complete_native_mappings(self,*,utc_ns,monotonic_ns,clock_epoch):
+        """Finish only already-durable negative audits, in original record order.
+
+        No market replay/positive recovery is inferred. A lost append ack requires
+        reopening; restoration removes completed audits before the next attempt.
+        """
+        _,pending=self.recovery_state()
+        for payload in pending:
+            self._append(payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,
+                         clock_epoch=clock_epoch,_completing_mappings=True)
+        return self.pin(allow_empty=True)
 
     def pin(self, *, allow_empty=False):
         self.refresh()

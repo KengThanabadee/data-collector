@@ -2,7 +2,7 @@
 
 V1 implementation follows the preserved [SPEC v1](docs/SPEC_V1.md). V2 design follows [SPEC.md](SPEC.md). Source repository: [KengThanabadee/option-collector](https://github.com/KengThanabadee/option-collector) (private). Deployment and recurring collection have not been performed.
 
-## V2 runtime implementation — pause requested after chunk5v
+## V2 runtime implementation — resumed
 
 The user authorized chunked implementation with a fresh **high-reasoning** agent review after each chunk. Follow [chunk progress and exact review evidence](docs/v2/IMPLEMENTATION.md).
 
@@ -38,12 +38,13 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5t: owned capture inventory and automatic pinned startup selection, including opened-WAL dependency proofs; missing-WAL repair independently approved,422 combined tests pass.
 - [x] Chunk5u: retain and resume preallocation raw/corrupt-tail history with explicit uncertainty, exact nullable-ledger verification and fresh first-cutoff publication; independent high-reasoning review approved.
 - [x] Chunk5v: adapter-invoked native gap replay and quiet-cutoff range mapping through the raw FIFO, with durable portable audit/correction; multiplexed routing and pending-audit crash findings repaired and independently approved.
+- [x] Chunk5w: automatically finish exact durable native-gap negatives before startup marker/live gate; fresh high-reasoning review approved, crash/marker replay and fresh publication verified.
 - [ ] Recovery-closure selection, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
-- User requested a pause after chunk5v is reviewed, committed and pushed; do not start the next chunk until resumed.
+- User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current442 combined tests pass:407 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current448 combined tests pass:413 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

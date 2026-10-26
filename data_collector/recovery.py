@@ -36,7 +36,10 @@ class CutoffRecovery:
 
 @dataclass(frozen=True, slots=True)
 class RecoveryRequest:
-    """Caller-selected immutable history and authoritative cutoff/ledger tips."""
+    """Pinned history and source chain tips for startup reconciliation.
+
+    The ledger tip proves continuity only; pending negative audits must be
+    completed before the lane exposes certified validity or accepts live work."""
     segments: tuple[RecoverySegment,...]
     cutoff_pin: CutoffPin
     ledger_pin: LedgerPin | None
@@ -86,6 +89,38 @@ def iter_recovery_prefix(segments, *, venue, environment, capture_id, process_se
             yield record
 
 
+def _validate_mapping_repairs(writer,prior,repairs,*,capture_scope,capture_id,process_session_id,
+                              provenance,max_records,max_scan_bytes):
+    """Independently check the startup-only correction prefix, including replay.
+
+    Only exact negatives from unresolved source audits may precede interruption
+    controls. This also runs when verifying an immutable recovery marker.
+    """
+    from types import SimpleNamespace
+    from .ledger import DurableLedger
+    from .validity import LedgerEntry
+    ledger_id=None;has_mapping=False
+    for record in prior():
+        if record.channel=='gap_mapping:'+capture_scope:has_mapping=True
+        if record.channel=='validity:'+capture_scope and record.kind=='coverage_event':
+            identity=LedgerEntry.from_bytes(record.body).ledger_id
+            if ledger_id is not None and ledger_id!=identity:raise ValueError('startup source ledger identity differs')
+            ledger_id=identity
+    if ledger_id is None:
+        if repairs or has_mapping:raise ValueError('startup mapping repair lacks source ledger')
+        return
+    empty=SimpleNamespace(identity=writer.identity,encoded_records=lambda **kwargs:iter(()))
+    args=dict(ledger_id=ledger_id,capture_scope=capture_scope,capture_id=capture_id,
+        process_session_id=process_session_id,provenance=provenance,prior_records=prior,
+        max_scan_records=max_records,max_scan_bytes=max_scan_bytes)
+    source=DurableLedger(empty,**args)
+    pin,pending=source.recovery_state()
+    if tuple(LedgerEntry.from_bytes(r.body).payload for r in repairs)!=pending:
+        raise ValueError('startup requires exactly the pending native mapping corrections')
+    restored=DurableLedger(writer,expected_pin=pin,**args)
+    restored.pin(allow_empty=True) # full chain/evidence replay must leave no orphan audit
+
+
 def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_id, process_session_id,
                       provenance, utc_ns, monotonic_ns, clock_epoch, max_segments=1024,
                       max_records=200000,max_scan_bytes=256*1024*1024,max_cutoffs=10000,
@@ -120,9 +155,9 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
     def prior():
         return iter_recovery_prefix(segments,venue=writer.identity[0],environment=writer.identity[1],
             capture_id=capture_id,process_session_id=process_session_id,max_records=max_records,max_scan_bytes=max_scan_bytes)
-    # A retry may contain only this recovery's already-fsynced interruption suffix
-    # and final marker. It cannot be invoked over a live capture's new allocations.
-    target=[];target_bytes=0;marker=None
+    # A retry may contain only exact pending-negative repairs, the interruption
+    # suffix and final marker; never a live capture's new allocations.
+    target=[];repairs=[];interruptions=[];target_bytes=0;marker=None
     if writer.state.records>max_records or writer.state.valid_bytes>max_scan_bytes:
         raise ValueError('recovery target WAL scan bound')
     for encoded in writer.encoded_records(allow_unsealed=True):
@@ -131,27 +166,34 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
         record=RawRecord.from_bytes(encoded);r=record.receipt
         if ((r.capture_id,r.process_session_id)!=(capture_id,process_session_id) or
                 (record.venue,record.environment)!=writer.identity or record.provenance!=provenance or
-                record.kind!='control' or record.native_product!='control' or record.instrument is not None or record.native_fields_json!=b'{}' or
+                record.kind not in {'control','coverage_event'} or record.native_product!='control' or record.instrument is not None or record.native_fields_json!=b'{}' or
                 len(record.body)>max_control_bytes or r.clock_epoch!=clock_epoch or
                 max(r.receive_seq,r.receive_utc_ns,r.monotonic_ns)>2**63-1 or r.monotonic_ns>monotonic_ns):
             raise ValueError('recovery target must contain only its own controls')
         if record.channel=='cutoff_recovery:'+capture_scope:
-            if marker is not None or r.connection_id!='control:cutoff-recovery:'+capture_scope or r.receive_seq!=0:
+            if marker is not None or record.kind!='control' or r.connection_id!='control:cutoff-recovery:'+capture_scope or r.receive_seq!=0:
                 raise ValueError('conflicting recovery marker')
             marker=record
+        elif record.channel=='validity:'+capture_scope:
+            if marker is not None or interruptions or record.kind!='coverage_event':
+                raise ValueError('mapping repairs must precede cutoff recovery controls')
+            repairs.append(record)
         else:
             value=strict_json(record.body)
-            if (marker is not None or record.channel!='cutoffs:'+capture_scope or r.connection_id!='control:'+capture_scope or
+            if (marker is not None or record.kind!='control' or record.channel!='cutoffs:'+capture_scope or r.connection_id!='control:'+capture_scope or
                     not isinstance(value,dict) or value.get('kind')!='failed' or not isinstance(value.get('payload'),dict) or
                     value['payload'].get('reason')!='interrupted_before_close'):
                 raise ValueError('target contains non-recovery work')
+            interruptions.append(record)
         target.append(record)
+    _validate_mapping_repairs(writer,prior,repairs,capture_scope=capture_scope,capture_id=capture_id,
+        process_session_id=process_session_id,provenance=provenance,max_records=max_records,max_scan_bytes=max_scan_bytes)
     coordinator=CutoffCoordinator(writer,capture_scope=capture_scope,capture_id=capture_id,
         process_session_id=process_session_id,provenance=provenance,prior_records=prior,
         max_cutoffs=max_cutoffs,max_control_bytes=max_control_bytes,max_projection_bytes=max_projection_bytes,
         expected_prior_pin=expected_pin)
     unresolved=tuple(i for i in coordinator.allocations if i not in coordinator.resolutions)
-    completed=tuple(strict_json(r.body)['payload']['cutoff_id'] for r in target if r is not marker)
+    completed=tuple(strict_json(r.body)['payload']['cutoff_id'] for r in interruptions)
     failed=tuple(sorted(completed+unresolved))
     if len(set(failed))!=len(failed) or completed!=tuple(sorted(completed)) or (completed and unresolved and completed[-1]>=unresolved[0]):
         raise ValueError('noncanonical recovery resolution order')

@@ -224,7 +224,8 @@ class CaptureStore:
         ledger=DurableLedger(empty,ledger_id=self.ledger_id,capture_scope=self.scope,capture_id=self.capture_id,
             process_session_id=next_process_session_id,provenance=provenance,prior_records=prior,
             max_scan_records=self.limits.max_records,max_scan_bytes=self.limits.max_scan_bytes)
-        ledger_pin=ledger.pin(allow_empty=not coordinator.pin.count)
+        ledger_pin,_=ledger.recovery_state()
+        if coordinator.pin.count and ledger_pin is None:raise ValueError('cutoff history lacks ledger genesis')
         return RecoveryRequest(references,coordinator.pin,ledger_pin)
 
     def _append(self,phase,desc,utc_ns,monotonic_ns,clock_epoch):

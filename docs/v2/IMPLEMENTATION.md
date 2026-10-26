@@ -41,6 +41,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5t | Owned capture inventory and automatic pinned startup selection with opened-WAL evidence | Approved after fixes; [evidence](implementation/chunk-05t.json) |
 | 5u | Pinned preallocation restart with explicit uncertainty, absent-ledger verification and fresh first-cutoff publication | Approved; [evidence](implementation/chunk-05u.json) |
 | 5v | Native gap replay, quiet-cutoff range mapping, durable audit and FIFO correction hook | Approved after fixes; [evidence](implementation/chunk-05v.json) |
+| 5w | Automatic exact native-audit correction before startup recovery marker/live gate | Approved; [evidence](implementation/chunk-05w.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -54,7 +55,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current442 combined tests pass:407 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current448 combined tests pass:413 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -472,3 +473,31 @@ pending-job/publication/report recovery, checkpoint capacity, complete feed/CLI
 supervision, independent backup/restore and intended-host24h acceptance remain
 pending. No live capture or deployment was started. The user requested a pause
 after this reviewed chunk; no subsequent chunk is started.
+
+
+## Chunk5w — complete durable native audits at startup
+
+Startup now carries the source ledger chain tip as a continuity assertion even
+when a native-gap audit lacks its correction. This is not a validity certificate:
+ordinary ledger pins/assessments still reject pending audits. The serialized
+startup command completes only exact audit-derived negative corrections, then
+writes the existing cutoff recovery marker before allowing fresh live work.
+No new repair session, storage format, worker, or positive continuity claim is
+introduced. An interrupted/lost-ack repair is replayed from durable bytes on the
+next process and completed entries are not duplicated.
+
+Recovery-marker verification independently reconstructs the source ledger and
+requires the exact ordered pending-correction prefix. The snapshot publisher
+accepts that verified prefix before the marker. Missing/mismatched dependencies,
+missing corrections, unrelated ledger controls, and altered correction ranges
+cannot pass the marker gate. Original raw records/publications stay immutable.
+
+Six new integration tests cover repair-to-fresh-publication, multiple audits,
+lost correction acknowledgement with another audit pending, crash between repair
+and marker, missing dependency before session registration, and marker bypass/
+range-tampering rejection. All448 repository tests pass with ResourceWarning
+treated as errors, including35 v1 tests and the local HTTP fixtures. Fresh
+high-reasoning reviewer approved the chunk after94 focused test executions
+(overlapping suites) and three additional independent adversarial probes. Automatic
+job/publication/report reconciliation, recovery closure, feed/process/clock
+fault mapping and intended-host production acceptance remain unfinished.

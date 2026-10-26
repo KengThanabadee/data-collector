@@ -440,7 +440,9 @@ class ArchiveLane:
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
             prior_records=prior,expected_pin=expected_ledger,max_scan_records=self.snapshot_limits.max_records,
             max_scan_bytes=self.snapshot_limits.max_scan_bytes)
-        if ledger.pin(allow_empty=True)!=expected_ledger:raise ValueError('startup ledger knowledge differs from expected pin')
+        if ledger.recovery_state()[0]!=expected_ledger:raise ValueError('startup ledger knowledge differs from expected pin')
+        ledger.complete_native_mappings(utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,
+            clock_epoch=request.receipt.clock_epoch)
         result=reconcile_cutoffs(self.writer,segments,CutoffPin(**value['cutoff_pin']),capture_scope=self._cutoff_scope,
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
             utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,clock_epoch=request.receipt.clock_epoch,

@@ -1,0 +1,18 @@
+{
+  "chunk": "5w",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/ledger.py": "e399d4c39f4ee1807f135e8e4b79f30d6d361a1d2024f122991051e28edd73b0",
+    "data_collector/startup.py": "774574ad38ad533dfd13a2cad29b52de891bb102c444b8b470a9fd57fe78bb9b",
+    "data_collector/lane.py": "569d419ca90ea9d44581e3bd9d6293cdab4253661603c9ed39f4397c5d1f285b",
+    "data_collector/recovery.py": "fd051c7782a21be833316086bc997dddf06fac3b3618d03e94369638ed9c7f8e",
+    "data_collector/publisher.py": "430fa0aecf3ae65ae93ed1bee9c1b4515296124c7b86221806bc2c390624ba46",
+    "tests/test_dc_mapping_recovery.py": "59a00e9731c78c2b5085fd728bbe0971556b2de81c1141592489afe41df47572",
+    "docs/v2/IMPLEMENTATION.md": "cf371d72077122e4ffffbb9a714857fc23e160478f77f7c2b4a685a9c0b74bb6"
+  },
+  "reviewer": "dc_chunk5w_mapping_startup_review",
+  "tests": "Root448 full-suite tests passed (413v2+35v1) with ResourceWarning treated as errors, including6 new mapping-startup tests and loopback HTTP fixtures. Reviewer51 focused tests plus43 focused tests (overlapping suites) passed. Three independent adversarial probes passed: mismatched source ledger tip, reordered/missing/duplicate/wrong-envelope/broken-chain repair prefixes, failure before first repair append. git diff --check passed.",
+  "findings_closed": [],
+  "limits": "Bounded local startup completion of exact existing negative native audits only; no new positive/native continuity proof or historical repair. Source ledger pin in RecoveryRequest is a chain-continuity assertion, never a validity certificate; ordinary pin/assessment still fail on pending audits. No new repair session, worker or archive format. Recovery closure, automatic pending job/publication/report reconciliation, feed/process/clock fault range mapping, remaining feeds/CLI/supervision, backup/restore and intended-host24h acceptance remain pending. No live capture/deployment. PLANS implementation prefix only; unrelated research and README excluded."
+}
