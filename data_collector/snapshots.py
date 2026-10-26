@@ -11,7 +11,7 @@ import tempfile
 from .contracts import InstrumentKey, StreamKey, canonical, digest, integer, sha256, strict_json
 from .journal import Journal, _publish_bytes
 from .ledger import DurableLedger
-from .replay import BookBinding, ReplayLimits, SnapshotPlan, materialize_snapshot
+from .replay import BookBinding, ReplayLimits, SnapshotPlan, _materialize_snapshot
 from .segments import _mkdir, iter_segment_records
 from .validity import FeedTarget, LedgerEntry, LedgerPin, ValidityLedger
 
@@ -108,20 +108,25 @@ def _ledger_view(paths,base,*,pin=None,limits):
     return projection,selected,dependencies,[references[key] for key in sorted(references)]
 
 
-def _publication(base,paths,*,pin=None,limits):
+def _publication(base,paths,*,pin=None,limits,policy='ledger-at-start/1',base_validities=None):
+    if policy not in {'ledger-at-start/1','ledger-at-start/2'}:raise ValueError('unknown snapshot publication policy')
     ledger,pin,dependencies,segments=_ledger_view(paths,base,pin=pin,limits=limits)
     descriptor=dict(base['descriptor']);payload=strict_json(base['payload'])
     plan=plan_from_descriptor(descriptor['plan'])
     if len(payload['books'])!=len(plan.bindings):raise ValueError('snapshot book population mismatch')
-    for book,binding in zip(payload['books'],plan.bindings):
+    if policy=='ledger-at-start/2' and (type(base_validities) is not tuple or len(base_validities)!=len(plan.bindings) or
+            any(v not in {'valid','invalid','unknown','missing'} for v in base_validities)):
+        raise ValueError('independent replay validity required for publication')
+    for i,(book,binding) in enumerate(zip(payload['books'],plan.bindings)):
         original=book['validity_as_published']
-        assessment=ledger.assess(descriptor['capture_scope'],binding.target,descriptor['cutoff_id'],original,pin)
+        baseline=base_validities[i] if policy=='ledger-at-start/2' else original
+        assessment=ledger.assess(descriptor['capture_scope'],binding.target,descriptor['cutoff_id'],baseline,pin)
         book['validity_at_close']=original
         book['validity_as_published']=assessment['assessed_validity']
         book['publication_corrections']=assessment['corrections']
     body=canonical(payload)
     if len(body)>limits.max_payload_bytes:raise ValueError('publication payload byte bound')
-    descriptor.update(materialization_id=base['snapshot_id'],publication_policy='ledger-at-start/1',
+    descriptor.update(materialization_id=base['snapshot_id'],publication_policy=policy,
         publication_ledger_pin=asdict(pin),publication_ledger_dependencies=dependencies,
         publication_ledger_segments=segments,payload_sha256=digest(body))
     encoded=canonical(descriptor)
@@ -152,7 +157,7 @@ def _load(root,snapshot_id,limits):
     if canonical(descriptor)!=descriptor_bytes or digest(descriptor_bytes)!=snapshot_id:
         raise ValueError('snapshot descriptor identity mismatch')
     payload=_bounded_bytes(directory/'payload.json',limits.replay.max_payload_bytes)
-    if descriptor.get('schema')!='dc.snapshot/2' or descriptor.get('publication_policy')!='ledger-at-start/1':
+    if descriptor.get('schema')!='dc.snapshot/2' or descriptor.get('publication_policy') not in {'ledger-at-start/1','ledger-at-start/2'}:
         raise ValueError('unknown snapshot publication schema')
     result=dict(snapshot_id=snapshot_id,descriptor=descriptor,payload=payload)
     marker=strict_json(_bounded_bytes(directory/'manifest.json',limits.max_manifest_bytes))
@@ -200,8 +205,9 @@ def read_snapshot(root,snapshot_id,segments,*,limits=PublicationLimits()):
     """Return immutable original publication bytes after full raw dependency replay."""
     result=_load(root,snapshot_id,limits);descriptor=result['descriptor']
     paths=_pinned_paths(_paths(segments,limits.replay),descriptor)
-    base=materialize_snapshot(paths,descriptor['close_record_id'],plan_from_descriptor(descriptor['plan']),limits=limits.replay)
-    replayed=_publication(base,paths,pin=LedgerPin(**descriptor['publication_ledger_pin']),limits=limits.replay)
+    base,validities=_materialize_snapshot(paths,descriptor['close_record_id'],plan_from_descriptor(descriptor['plan']),limits=limits.replay)
+    replayed=_publication(base,paths,pin=LedgerPin(**descriptor['publication_ledger_pin']),limits=limits.replay,
+        policy=descriptor['publication_policy'],base_validities=validities)
     if replayed!=result:raise ValueError('published snapshot differs from verified raw replay')
     return result
 
@@ -226,9 +232,9 @@ def publish_snapshot(root,segments,close_record_id,plan,*,limits=PublicationLimi
         # directory fsync. Repeat durable publication even when all names exist.
         _commit(root,existing,limits)
         return existing
-    base=materialize_snapshot(paths,close_record_id,plan,limits=limits.replay)
+    base,validities=_materialize_snapshot(paths,close_record_id,plan,limits=limits.replay)
     if expected_close_sha256 is not None and base['descriptor']['close_sha256']!=expected_close_sha256:
         raise ValueError('snapshot close differs from pinned acquisition hash')
-    result=_publication(base,paths,limits=limits.replay)
+    result=_publication(base,paths,limits=limits.replay,policy='ledger-at-start/2',base_validities=validities)
     _commit(root,result,limits)
     return read_snapshot(root,result['snapshot_id'],paths,limits=limits)

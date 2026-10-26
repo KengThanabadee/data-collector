@@ -39,6 +39,18 @@ For example, close12:00 at position100. A later position101 gets UTC11:59:59 aft
 
 A snapshot's `validity_as_published` describes information known at publication. It is immutable alongside its original values. Later evidence may prove that an earlier interval was unreliable; append a `validity_correction` to a scope-wide ordered, durable ledger. Each record requires a monotonic `ledger_seq`, previous-record hash, source raw/control IDs, discovery/acquisition timestamp and receive positions, affected instrument/feed/owner epoch, reason/evidence, bounds and new assessed status. Replica copies keep the same ledger identity, not new independent sequences.
 
+New local publications use `ledger-at-start/2`. Replay independently computes
+native/metadata/closure validity, assesses it at the close ledger pin for
+`validity_at_close`, and at the first publication pin for
+`validity_as_published`. A gap resolution learned between close and first
+publication can make the recovered cutoff eligible only if intrinsic replay
+is healthy and the cutoff is outside the resolved gap. Earlier affected cutoffs
+remain downgraded. This does not upgrade an already-published invalid row;
+assessed exports still start from its immutable published validity. Existing
+`ledger-at-start/1` publications retain their exact historical replay semantics.
+Intrinsic replay validity is transient and does not change standalone
+materialization bytes.
+
 For a sequence hole discovered at positionP after last provably continuous messageL, save L's ingress proof boundary (process/clock epoch, monotonic time and ingress ordinal), and define the affected interval in **closure/barrier order**, not solely by admitted message position. Every relevant cutoff whose saved barrier is strictly after that proof boundary and before the first closure that incorporates an accepted recovery anchorR is downgraded, including cutoffs whose admitted prefix is **still exactly L** because the feed was quiet. The latter equality must never exempt a later cutoff. An exact closure at L's proof boundary may retain that exactly-proven state; later barrier health alone does not extend L's proof across a subsequently discovered sequence hole. The first qualifying recovery closure and later ones can be eligible only after all required recovered messages are applied. Recovery never restores earlier missing history.
 
 The correction stores an explicit inclusive `first_affected_cutoff_id` and exclusive `recovery_cutoff_id` (null/open until recovery) for each affected capture scope, plus native L/P/R positions and conservative UTC bounds. Resolve first_affected_cutoff_id from durable allocation/closure barriers, including quiet cutoffs; reference the proof raw ID and saved barrier evidence. New cutoff IDs monotonically allocated while the interval is open inherit its invalid status even across process restart; do not compare monotonic clocks from different epochs. Close it only with a durable resolution identifying the first recovery closure. If an epoch/proof boundary cannot be mapped, conservatively expand to all cutoffs after the last supported anchor and record uncertainty. Missing IDs or missing barrier evidence cannot produce a valid assessed row. Previously published and not-yet-published descriptors use the same cutoff-range rule. These cutoff bounds, rather than an admission>L predicate or ambiguous wall-clock time, are normative.

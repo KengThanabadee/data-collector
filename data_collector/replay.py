@@ -144,6 +144,11 @@ def _book_message(record,binding):
 
 
 def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits()):
+    return _materialize_snapshot(segments,close_record_id,plan,limits=limits)[0]
+
+
+def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits()):
+    """Artifact plus transient pre-correction validity; legacy artifact bytes stay fixed."""
     sha256(close_record_id,'close_record_id')
     if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>limits.max_books:raise ValueError('bounded typed snapshot plan required')
     paths=[]
@@ -267,7 +272,7 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
         if row['admitted_seq'] is not None and (positions.get(stream)!=row['admitted_seq'] or last_hashes.get(stream)!=row['record_hash']):
             raise ValueError('applied position/hash does not equal durable admission')
         applied.append(dict(stream=asdict(stream),receive_seq=positions.get(stream)))
-    books=[]
+    books=[];base_validities=[]
     for binding,model,diagnostic in zip(plan.bindings,models,diagnostics):
         metadata=history.at_version(binding.metadata_version_id,positions)
         if metadata.instrument!=binding.target.instrument or metadata.receipt.stream_key!=binding.metadata_source:raise ValueError('metadata target/source mismatch')
@@ -283,6 +288,7 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
             except ValueError:latest=None
             if latest is None or latest.version_id!=metadata.version_id:
                 status='invalid' if status!='missing' else 'missing';reasons.append('metadata_changed_since_plan')
+        base_validities.append(status)
         status=known_ledger.assess(scope,binding.target,cutoff_id,status,pin)['assessed_validity']
         books.append(dict(target=asdict(binding.target),metadata_version=metadata.version_id,metadata=metadata.attributes,
                           metadata_effective_at_ns=metadata.effective_at_ns,
@@ -297,4 +303,4 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
                            manifest_sha256=digest((p/'manifest.json').read_bytes())) for p in used],
         payload_sha256=digest(payload))
     identity=digest(canonical(descriptor))
-    return dict(snapshot_id=identity,descriptor=descriptor,payload=payload)
+    return dict(snapshot_id=identity,descriptor=descriptor,payload=payload),tuple(base_validities)

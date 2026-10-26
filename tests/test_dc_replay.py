@@ -24,7 +24,7 @@ class ReplayTests(unittest.TestCase):
 
     def fixture(self,profile='deribit_full',*,native_gap=False,known_gap=False,effective=None,
                 malformed_count=0,extra_topic=False,recover=False,stale_pin=False,new_metadata=False,
-                missing_header=False,unknown_revision=False,stale_recovery=False,observed_ahead=False,second_cutoff=False):
+                missing_header=False,unknown_revision=False,stale_recovery=False,observed_ahead=False,second_cutoff=False,healthy=True):
         self.counter+=1;root=self.root/str(self.counter);root.mkdir()
         venue='deribit' if profile=='deribit_full' else 'bybit' if profile.startswith('bybit') else 'binance'
         product='option' if profile in {'deribit_full','bybit_standard'} else 'spot' if profile=='binance_spot' else 'linear'
@@ -113,13 +113,13 @@ class ReplayTests(unittest.TestCase):
             if known_gap or stale_pin:
                 ledger.append(GapCorrection('capture',target,0,None,latest.record_id,original.record_id,'late_gap'),
                               utc_ns=C-1,monotonic_ns=1099,clock_epoch='epoch')
-            barrier=ingress.barrier(anchor,C,now_monotonic_ns=1100,healthy_streams=streams)
+            barrier=ingress.barrier(anchor,C,now_monotonic_ns=1100,healthy_streams=streams if healthy else [])
             coordinator.close(0,barrier,ledger_pin=initial_pin if stale_pin else ledger.pin(),utc_ns=C,monotonic_ns=1100,clock_epoch='epoch')
             close_id=coordinator.resolutions[0]['record_id']
             if second_cutoff:
                 coordinator.allocate(2*C,streams,plan.dependencies,anchor=anchor,observed_utc_ns=C,
                     monotonic_ns=1100,clock_epoch='epoch')
-                quiet=ingress.barrier(anchor,2*C,now_monotonic_ns=C+1100,healthy_streams=streams)
+                quiet=ingress.barrier(anchor,2*C,now_monotonic_ns=C+1100,healthy_streams=streams if healthy else [])
                 coordinator.close(1,quiet,ledger_pin=ledger.pin(),utc_ns=2*C,monotonic_ns=C+1100,clock_epoch='epoch')
                 close_id=[close_id,coordinator.resolutions[1]['record_id']]
             context=SegmentContext(venue,'production','capture','process','segment','a'*64,'b'*64)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .contracts import canonical,digest,integer,sha256,strict_json
 from .journal import _publish_bytes
-from .replay import materialize_snapshot
+from .replay import _materialize_snapshot
 from .segments import _mkdir
 from .snapshots import (PublicationLimits,_bounded_bytes,_ledger_view,_paths,_pinned_paths,
                         _publication,plan_from_descriptor,read_snapshot)
@@ -141,8 +141,9 @@ def read_export(export_root,export_id,segments,*,limits=ExportLimits()):
         snapshot_descriptor=original['descriptor']
         if digest(canonical(snapshot_descriptor))!=original['snapshot_id']:raise ValueError('embedded snapshot identity mismatch')
         selected=_pinned_paths(paths,snapshot_descriptor)
-        base=materialize_snapshot(selected,snapshot_descriptor['close_record_id'],plan_from_descriptor(snapshot_descriptor['plan']),limits=limits.publication.replay)
-        replayed=_publication(base,selected,pin=LedgerPin(**snapshot_descriptor['publication_ledger_pin']),limits=limits.publication.replay)
+        base,validities=_materialize_snapshot(selected,snapshot_descriptor['close_record_id'],plan_from_descriptor(snapshot_descriptor['plan']),limits=limits.publication.replay)
+        replayed=_publication(base,selected,pin=LedgerPin(**snapshot_descriptor['publication_ledger_pin']),limits=limits.publication.replay,
+            policy=snapshot_descriptor['publication_policy'],base_validities=validities)
         if replayed!=original:raise ValueError('embedded original differs from raw publication replay')
         originals.append(original)
     pin=LedgerPin(**descriptor['ledger_pin']) if descriptor['ledger_pin'] is not None else None

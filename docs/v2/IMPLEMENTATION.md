@@ -42,6 +42,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5u | Pinned preallocation restart with explicit uncertainty, absent-ledger verification and fresh first-cutoff publication | Approved; [evidence](implementation/chunk-05u.json) |
 | 5v | Native gap replay, quiet-cutoff range mapping, durable audit and FIFO correction hook | Approved after fixes; [evidence](implementation/chunk-05v.json) |
 | 5w | Automatic exact native-audit correction before startup recovery marker/live gate | Approved; [evidence](implementation/chunk-05w.json) |
+| 5x | Separate close knowledge from first-publication validity; byte-compatible legacy policy replay | Approved; [evidence](implementation/chunk-05x.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -55,7 +56,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current448 combined tests pass:413 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current452 combined tests pass:417 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -501,3 +502,33 @@ high-reasoning reviewer approved the chunk after94 focused test executions
 (overlapping suites) and three additional independent adversarial probes. Automatic
 job/publication/report reconciliation, recovery closure, feed/process/clock
 fault mapping and intended-host production acceptance remain unfinished.
+
+
+## Chunk5x — publication validity after recovery knowledge
+
+A confirmed prerequisite for native recovery closure: an open correction known
+at cutoff was previously folded into the starting validity used for first
+publication. Even if a resolution arrived before publication, that invalid
+starting value could never recover. Replay now retains its intrinsic native,
+metadata and closure status as transient side data. Standalone materialization
+bytes/identities remain unchanged.
+
+New immutable publications use `ledger-at-start/2`: `validity_at_close` still
+reports the close-pinned assessment; `validity_as_published` assesses the
+intrinsic replay status with the first publication ledger pin. Native/metadata/
+barrier failures cannot be upgraded by a resolution. `/1` publications retain
+exact legacy replay. Snapshot and portable-export readers dispatch the saved
+policy; later exports still start from immutable published validity and cannot
+upgrade an already-published invalid row.
+
+Four regression tests cover pre-publication resolution and historical ranges,
+unchanged published-invalid bytes/assessments, native/metadata/missing-barrier
+failure protection, and mixed-policy portable exports with pinned legacy
+materialization/publication/payload hashes captured before this change. Synthetic
+CloseGap controls test publication semantics only; accepted-native-anchor
+selection and positive-proof certification remain pending. All452 repository
+tests pass with ResourceWarning treated as errors (417 v2 plus35 v1, including
+local HTTP fixtures). Fresh high-reasoning reviewer approved after41 focused
+tests, a HEAD-vs-current comparison across15fixture variants (17materializations
+and17legacy publications byte-identical), and adversarial same-segment
+resolution, pinned later-gap, portable export and invalid-policy/pin probes.

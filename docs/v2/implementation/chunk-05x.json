@@ -1,0 +1,20 @@
+{
+  "chunk": "5x",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/replay.py": "fb46aed126938cd38276f5636da0bc77e6b130d89a609c208914938661d15515",
+    "data_collector/snapshots.py": "457d0fac9e4d7415ac5a176966e71bf18336e134fcc8ab275c677511d439447f",
+    "data_collector/exports.py": "be5f5037cf2b416527e2bb42ddcce413e90a648d574d10109bd1dcd1dde3ab75",
+    "tests/test_dc_replay.py": "ee4e643b899e3959f769db194f7cdef48bb11faaca960aad220b58dea0f02daf",
+    "tests/test_dc_publication_validity.py": "e4d23bbecf352be8f49a9648309989be8a71b48eaa7f6ecfebaa651a090e8519",
+    "docs/v2/SNAPSHOTS.md": "e541b3a4460b2db06c36202f091c8127accd2ed406ae1f02e048498daf6b574f",
+    "docs/v2/IMPLEMENTATION.md": "f0e3f31f19beccff8a45147fc826d6778ff0c3f4ce043442aceb2f1227dbe3c9"
+  },
+  "reviewer": "dc_chunk5x_publication_review",
+  "tests": "Root452 full-suite tests passed (417v2+35v1) with ResourceWarning treated as errors, including4 new publication-validity tests and loopback HTTP fixtures. Reviewer41 focused tests passed. HEAD-vs-current comparison:15fixture variants,17 materializations and17 legacy /1 publications byte/descriptor/identity equal. Adversarial probes passed: post-close resolution in same sealed segment, pinned replay with later independent gap, fresh publication/export downgrade under later gap, unknown policy/missing baseline/forged pin rejected. git diff --check passed.",
+  "findings_closed": [
+    "Confirmed prerequisite bug: correction-assessed invalid status at cutoff was reused as the intrinsic publication baseline, permanently invalidating recovered cutoffs even when CloseGap was known before first publication. Preserve transient intrinsic native/metadata/closure validity and assess it under first-publication pin; immutable validity_at_close still reflects close knowledge. Version publication policy and dispatch /1 for exact old replay."
+  ],
+  "limits": "Publication semantics prerequisite only. Synthetic CloseGap fixtures do not certify native anchor selection or positive recovery proof. No new positive proof mapper, owner transition, transport or lifecycle framework. Existing standalone materialization and legacy /1 artifact bytes remain exact; invalid/missing native, metadata or closure health cannot be upgraded, and already published-invalid rows remain immutable in assessed exports. Recovery closure, fault mapping, pending-job reconciliation, remaining feeds/runtime/CLI, backup/restore and intended-host24h acceptance remain pending. No live capture/deployment. PLANS implementation prefix only; unrelated research and README excluded."
+}
