@@ -27,6 +27,7 @@ from .recovery import CutoffRecovery, RecoveryRequest, RecoverySegment, iter_rec
 from .cutoffs import CutoffPin
 from .validity import LedgerPin
 from .gapmap import GapMapping, map_native_gap
+from .gaprecovery import NativeRecovery, map_native_recovery
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -131,7 +132,7 @@ class DurableRecoveryAck:
 
 @dataclass(frozen=True, slots=True)
 class DurableGapAck:
-    mapping: GapMapping
+    mapping: GapMapping | NativeRecovery | None
     receive_to_durable_ns: int | None
     timing_valid: bool
 
@@ -624,13 +625,20 @@ class ArchiveLane:
 
     def submit_native_gap(self, plan, binding_index, discovery_record_id, *, utc_ns,monotonic_ns):
         """Queue a durable native discovery for independently derived open correction."""
+        return self._submit_native_mapping(plan,binding_index,discovery_record_id,'gap',utc_ns,monotonic_ns)
+
+    def submit_native_recovery(self,plan,binding_index,correction_id,*,utc_ns,monotonic_ns):
+        """Queue recovery selection; a None mapping leaves the existing gap open."""
+        return self._submit_native_mapping(plan,binding_index,correction_id,'recovery',utc_ns,monotonic_ns)
+
+    def _submit_native_mapping(self,plan,binding_index,identity,operation,utc_ns,monotonic_ns):
         from .replay import SnapshotPlan
         from .publisher import _charge
         self._require_clock()
         if self._cutoff_scope is None or not self._clock_submitted:raise ValueError('configured cutoff scope and measurement required')
         if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>self.snapshot_limits.max_books:
             raise ValueError('bounded native gap snapshot plan required')
-        integer(binding_index,'native gap binding');sha256(discovery_record_id,'native discovery raw identity')
+        integer(binding_index,'native gap binding');sha256(identity,'native mapping identity')
         if binding_index>=len(plan.bindings):raise ValueError('native gap binding differs from plan')
         binding=plan.bindings[binding_index]
         if binding.ws_source.process_session_id==self.identity['process_session_id'] and plan.config_sha256!=self.provenance.config_sha256:
@@ -644,7 +652,7 @@ class ArchiveLane:
         request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],'control:gap-mapping-request',
             self._gap_requests_submitted,utc_ns,monotonic_ns,self._last_observation[2]),*self.writer.identity,'control',
             'gap_mapping_request','control',canonical(dict(plan=asdict(plan),binding_index=binding_index,
-            discovery_record_id=discovery_record_id)),self.provenance)
+            operation=operation,**({'discovery_record_id':identity} if operation=='gap' else {'correction_id':identity}))),self.provenance)
         future=asyncio.get_running_loop().create_future()
         try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
         except Exception:
@@ -656,6 +664,14 @@ class ArchiveLane:
     def _execute_gap_mapping(self,request):
         from .snapshots import plan_from_descriptor
         value=strict_json(request.body);owners=self._cutoff_owners();r=request.receipt
+        if value.get('operation')=='recovery':
+            old=() if self._recovery_request is None else self._recovery_request.segments
+            if len(old)+len(self.writer.committed)+int(bool(self.writer.active.state.records))>self.snapshot_limits.max_segments:
+                raise ValueError('native recovery segment bound')
+            if self.writer.active.state.records:self.writer.rotate()
+            return map_native_recovery(owners.ledger,owners.coordinator,[s.path for s in old]+list(self.writer.committed),
+                plan_from_descriptor(value['plan']),value['binding_index'],value['correction_id'],
+                utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,limits=self.snapshot_limits)
         return map_native_gap(owners.ledger,owners.coordinator,plan_from_descriptor(value['plan']),value['binding_index'],
             value['discovery_record_id'],utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,
             max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)

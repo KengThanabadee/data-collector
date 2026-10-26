@@ -68,7 +68,8 @@ class ReplayTests(unittest.TestCase):
                 channel=inst.native_symbol.lower()+'@depth'
                 first=dict(e='depthUpdate',E=1,s=inst.native_symbol,U=10,u=11 if profile=='binance_spot' else 10,b=[['100','2']],a=[['101','3']])
                 second=dict(e='depthUpdate',E=2,s=inst.native_symbol,U=12 if profile=='binance_spot' else 11,u=12 if profile=='binance_spot' else 20,b=[['100','4']],a=[])
-                if profile=='binance_um':first['pu']=9;second['pu']=10
+                if native_gap:second.update(U=99,u=100)
+                if profile=='binance_um':first['pu']=9;second['pu']=999 if native_gap else 10
             original=ingress.append(raw('ws',0,C-10,1090,channel,'ws_message',first))
             if seed:
                 if profile=='bybit_full':
@@ -106,6 +107,12 @@ class ReplayTests(unittest.TestCase):
                 elif profile=='bybit_full':
                     recovery=json.loads(canonical(body));recovery['result'].update(u=12,seq=200,b=[['100','9']])
                     ingress.append(raw('seed',1,C-1,1099,route,'rest_response',recovery,fields))
+                elif profile.startswith('binance'):
+                    recovery=dict(lastUpdateId=100,bids=[['100','9']],asks=[['101','3']])
+                    ingress.append(raw('seed',1,C-1,1099,route,'rest_response',recovery,fields))
+                    bridged=dict(second,U=100,u=101,b=[['100','9']])
+                    if profile=='binance_um':bridged['pu']=100
+                    ingress.append(raw('ws',next_seq,C-1,1099,channel,'ws_message',bridged))
             if new_metadata or unknown_revision:
                 ingress.append(raw('meta',1,C-1,1099,'metadata','metadata_version',dict(schema='dc.metadata/2',
                     effective_at_ns=None if unknown_revision else C-50,attributes=dict(base_currency='BTC',amount_unit='changed'),

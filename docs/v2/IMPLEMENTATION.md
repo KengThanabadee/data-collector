@@ -43,6 +43,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5v | Native gap replay, quiet-cutoff range mapping, durable audit and FIFO correction hook | Approved after fixes; [evidence](implementation/chunk-05v.json) |
 | 5w | Automatic exact native-audit correction before startup recovery marker/live gate | Approved; [evidence](implementation/chunk-05w.json) |
 | 5x | Separate close knowledge from first-publication validity; byte-compatible legacy policy replay | Approved; [evidence](implementation/chunk-05x.json) |
+| 5y | Native recovery closure selection, portable positive proof and FIFO resolution | Approved after fixes; [evidence](implementation/chunk-05y.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -56,7 +57,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current452 combined tests pass:417 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current465 combined tests pass:430 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -532,3 +533,39 @@ local HTTP fixtures). Fresh high-reasoning reviewer approved after41 focused
 tests, a HEAD-vs-current comparison across15fixture variants (17materializations
 and17legacy publications byte-identical), and adversarial same-segment
 resolution, pinned later-gap, portable export and invalid-policy/pin probes.
+
+
+## Chunk5y — native recovery closure proof
+
+The adapter-invoked `submit_native_recovery` shares the existing bounded mapping
+FIFO and disk owner. It seals inputs, replays the frozen native plan, and selects
+the first healthy closed cutoff incorporating an accepted snapshot/REST seed
+acquired after native gap discovery. It does not infer recovery from quiet health,
+stale retransmissions, a post-barrier anchor, incomplete bridge, missing metadata
+or an unhealthy closure. Unresolved earlier cutoffs or intervening plan changes
+stop selection until separately resolved; owner/plan transitions remain pending.
+
+A versioned positive audit records the chosen closure/anchor, exact materialized
+snapshot descriptor, source cutoff pin, full bounded replay-prefix raw hashes,
+and all cutoff controls needed for selection, including delayed earlier outcomes.
+Supplied sealed replay bytes must equal the owned durable prefix. The audit and
+CloseGap resolution share the existing mapping control namespace; transitive
+ledger dependencies carry the full proof into portable exports. An orphan
+positive audit leaves the negative gap open and can be retried exactly, including
+after restart. Positive audit completion does not reuse negative-audit startup
+repair. Original historical missing intervals/publications remain unchanged.
+
+Thirteen tests cover native and buffered recovery (Deribit, Bybit full, Binance spot
+and UM), a complete async capture/gap/recovery/publication/report path, stale and
+post-barrier anchors, unhealthy/unresolved/out-of-order closures, alternate
+hash-valid replay inputs, bounded proof admission, ambiguous audit/resolution
+acknowledgements, portable export dependencies and cross-process exact retries.
+Two P2 review findings were repaired: failed/first-affected changed-plan or
+unresolved boundaries cannot be skipped; selection cutoff controls appended
+after the chosen close are retained in portable proof dependencies. All465
+repository tests pass with ResourceWarning treated as errors (430 v2 plus35 v1,
+including loopback HTTP fixtures). Fresh high-reasoning re-review approved after
+13 focused native-recovery tests and90 supporting tests. Automatic adapter scheduling,
+owner/plan transitions, remaining fault mapping, checkpoints, remaining feeds,
+CLI/supervision, independent backup/restore and intended-host acceptance remain
+unfinished. No live exchange capture or deployment was performed.

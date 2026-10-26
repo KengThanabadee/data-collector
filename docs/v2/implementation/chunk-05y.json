@@ -1,0 +1,20 @@
+{
+  "chunk": "5y",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/gaprecovery.py": "ab6f0197738d0dffb0d3b9961738daafa32de9ff2b3f07aec280407424638eb6",
+    "data_collector/ledger.py": "1f0058b051794057734442eb6af9b314728f99b0bc19f0db2a5fc388dc3a730d",
+    "data_collector/lane.py": "fbd2d84a8a6e4b62e901d599bdfd1e90327ae48412f41919232f2ea8e24b06df",
+    "tests/test_dc_native_recovery.py": "2b96f916f1317e305116b8cc4273956791869d1b69c8b0256785c2f084cad4f7",
+    "tests/test_dc_replay.py": "636f2cb3fc4ab6845b22e0383761c7b27f48649865e0d2b03c77c25ff12478d8",
+    "docs/v2/IMPLEMENTATION.md": "96ba5d3189b63721ca9aec4fb4c72b30aa1221513d99f229785df6978da007ac"
+  },
+  "reviewer": "dc_chunk5y_native_recovery_review",
+  "tests": "Root465 full-suite tests passed (430v2+35v1) with ResourceWarning treated as errors, including13 new native-recovery tests and loopback HTTP fixtures. Reviewer13 final focused tests and90 supporting journal/writer/ledger/gap/replay/snapshot/export tests passed. Additional adversarial reproducers confirmed both repaired boundary/dependency findings. git diff --check passed.",
+  "findings_closed": [
+    "P2: failed-cutoff skip bypassed frozen-plan guard, including at first affected cutoff equality; check all affected allocations/resolutions before considering positive candidates. Added failed changed-plan, changed first affected and unresolved first affected regressions.",
+    "P2: delayed earlier cutoff outcome after selected close was omitted from portable positive-proof dependencies. Include all cutoff controls needed to reconstruct saved selection pin, while keeping native sealed replay comparison through selected close. Added export omission regression with delayed earlier-failure-only segment."
+  ],
+  "limits": "Adapter-invoked bounded same-frozen-plan/owner native recovery hook, not automatic feed supervision or owner transition handling. Complete native admitted-prefix replay, intrinsic metadata/clock/barrier health, accepted post-discovery anchor and first eligible resolved closure required. Full native prefix plus selection cutoff controls retained as portable evidence. Orphan positive audit leaves original negative open until exact retry; negative-audit startup repair unchanged. Raw/published historical bytes remain immutable. Automatic adapter scheduling, owner/plan transitions, remaining fault mapping/checkpoints, remaining feeds/runtime/CLI, backup/restore and intended-host24h acceptance remain pending. No live capture/deployment. PLANS implementation prefix only; unrelated research/README excluded."
+}

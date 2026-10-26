@@ -4,7 +4,7 @@ Serialized owner API. A pin is exposed only after fsync and projection update.
 Prior records must come from verified immutable segments, in original order.
 Bounded full scans are intentionally explicit until checkpoint/index integration.
 """
-from dataclasses import dataclass
+from dataclasses import asdict,dataclass
 
 from .contracts import InstrumentKey, Provenance, RawRecord, Receipt, StreamKey, digest, integer, sha256, strict_json, text
 from .validity import CloseGap, GapCorrection, LedgerEntry, LedgerPin, LedgerStart, ValidityLedger
@@ -87,6 +87,10 @@ class DurableLedger:
             from .gapmap import mapping_payload
             if payload!=mapping_payload(self._mappings[payload.proof_record_id],payload.proof_record_id):
                 raise ValueError('correction differs from native mapping audit')
+        if isinstance(payload,CloseGap) and payload.evidence_record_id in self._mappings:
+            from .gaprecovery import recovery_payload
+            if payload!=recovery_payload(self._mappings[payload.evidence_record_id],payload.evidence_record_id):
+                raise ValueError('resolution differs from native recovery audit')
         for identity in references:
             evidence=self._evidence.get(identity)
             if evidence is None or evidence.capture_id != self.capture_id:
@@ -104,6 +108,7 @@ class DurableLedger:
         channel='gap_mapping:'+self.scope;connection='control:gap-mapping:'+self.scope
         if record.channel!=channel and record.receipt.connection_id!=connection:return
         from .gapmap import SCHEMA,RULE,mapping_payload
+        from .gaprecovery import SCHEMA as RECOVERY_SCHEMA,RULE as RECOVERY_RULE,recovery_payload
         r=record.receipt
         if ((r.capture_id,r.connection_id,record.channel,record.kind,record.native_product,record.instrument,record.native_fields_json)!=
                 (self.capture_id,connection,channel,'coverage_event','control',None,b'{}') or
@@ -111,11 +116,22 @@ class DurableLedger:
                 r.receive_seq!=self._mapping_positions.get(r.stream_key,-1)+1 or len(record.body)>65536):
             raise ValueError('native mapping envelope/order differs')
         value=strict_json(record.body)
-        if (not isinstance(value,dict) or value.get('schema')!=SCHEMA or value.get('rule')!=RULE or
-                value.get('scope')!=self.scope or value.get('recovery_cutoff_id') is not None):
+        if (not isinstance(value,dict) or (value.get('schema'),value.get('rule')) not in {(SCHEMA,RULE),(RECOVERY_SCHEMA,RECOVERY_RULE)} or
+                value.get('scope')!=self.scope):
             raise ValueError('native mapping schema/scope differs')
-        sha256(value['request_id'],'native mapping request');sha256(value['plan_sha256'],'native mapping plan')
-        expected=mapping_payload(value,record.record_id)
+        sha256(value['request_id'],'native mapping request')
+        negative=value['schema']==SCHEMA
+        if negative:
+            sha256(value['plan_sha256'],'native mapping plan')
+            if value.get('recovery_cutoff_id') is not None:raise ValueError('native negative must remain open')
+            expected=mapping_payload(value,record.record_id)
+            required={expected.evidence_record_id}|({value['native_proof_record_id']} if value['native_proof_record_id'] is not None else set())
+        else:
+            expected=recovery_payload(value,record.record_id)
+            gap=self._projection.correction(expected.correction_id)
+            if value['target']!=asdict(gap.target) or expected.recovery_cutoff_id<=gap.first_cutoff_id:
+                raise ValueError('native recovery target/range differs from gap')
+            required={expected.recovery_anchor_record_id,value['close_record_id']}
         rows=value['raw_dependencies'];refs=[]
         if type(rows) is not list or not rows:raise ValueError('native mapping dependency list required')
         for row in rows:
@@ -125,12 +141,11 @@ class DurableLedger:
             if prior is None or prior.capture_id!=self.capture_id or prior.raw_sha256!=row['raw_sha256']:
                 raise ValueError('native mapping raw dependency missing/conflicting')
             refs.append(row['record_id'])
-        proof=value['native_proof_record_id']
-        if len(set(refs))!=len(refs) or expected.evidence_record_id not in refs or (proof is not None and proof not in refs):
+        if len(set(refs))!=len(refs) or not required<=set(refs):
             raise ValueError('native mapping proof/discovery dependency missing')
         self._mapping_bytes+=len(record.body)
         if self._mapping_bytes>self._max_mapping_bytes:raise ValueError('native mapping projection byte bound')
-        self._pending_mappings.add(record.record_id)
+        if negative:self._pending_mappings.add(record.record_id)
         self._mappings[record.record_id]=value;self._mapping_refs[record.record_id]=tuple(refs)
         self._mapping_positions[r.stream_key]=r.receive_seq
 
