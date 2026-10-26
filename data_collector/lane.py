@@ -26,6 +26,7 @@ from .deliveries import delivery_base, validate_delivery
 from .recovery import CutoffRecovery, RecoveryRequest, RecoverySegment, iter_recovery_prefix, reconcile_cutoffs
 from .cutoffs import CutoffPin
 from .validity import LedgerPin
+from .gapmap import GapMapping, map_native_gap
 
 PENDING_CLOCK_EPOCH = 'pending:alignment'
 
@@ -128,6 +129,13 @@ class DurableRecoveryAck:
     timing_valid: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DurableGapAck:
+    mapping: GapMapping
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
 @dataclass(slots=True)
 class _Pending:
     record_id: str
@@ -141,6 +149,7 @@ class _Pending:
     snapshot_inputs: bool = False
     snapshot_delivery: bool = False
     recovery: bool = False
+    gap_mapping: bool = False
 
 
 class ArchiveLane:
@@ -188,11 +197,12 @@ class ArchiveLane:
                 'control:snapshot-input-request',
                 'control:snapshot-delivery-request','control:snapshot-deliveries:'+cutoff_scope,
                 'control:cutoff-recovery-request','control:cutoff-recovery:'+cutoff_scope,
+                'control:gap-mapping-request','control:gap-mapping:'+cutoff_scope,
                 'control:'+cutoff_scope,'control:validity:'+cutoff_ledger_id,'control:clock-cutoffs:'+cutoff_scope]
             if len(set(namespaces))!=len(namespaces):
                 raise ValueError('cutoff and runtime control namespaces must be distinct')
         control_bound = max_connections * 8192 + 65536
-        control_streams = (3 if clock_policy is not None else 1)+(4 if cutoff_scope is not None else 0)+int(recovery is not None)
+        control_streams = (3 if clock_policy is not None else 1)+(5 if cutoff_scope is not None else 0)+int(recovery is not None)
         if max_connections + control_streams > writer.limits.max_streams or control_bound > writer.limits.max_record_bytes:
             raise ValueError('writer limits lack bounded runtime-control headroom')
         if (not isinstance(emergency_writer, Journal) or emergency_writer.identity != writer.identity or
@@ -220,6 +230,7 @@ class ArchiveLane:
         self._clock_checks_submitted = 0
         self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
         self._cutoffs = None
+        self._gap_requests_submitted=0
         self._recovery_request=recovery;self._recovery_result=None
         self._recovery_submitted=False;self._recovery_ready=recovery is None
         self.max_recovery_ns=max_recovery_ns
@@ -598,9 +609,7 @@ class ArchiveLane:
             raise ValueError('explicit snapshot schedule failure required')
         self._failure(reason,global_scope=True)
 
-    def _execute_cutoff(self, request):
-        """Disk-owner call only: all bound controls share the raw FIFO owner."""
-        body=strict_json(request.body);r=request.receipt
+    def _cutoff_owners(self):
         if self._cutoffs is None:
             coordinator=CutoffCoordinator(self.writer,capture_scope=self._cutoff_scope,
                 capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
@@ -609,6 +618,50 @@ class ArchiveLane:
                 capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
                 provenance=self.provenance)
             self._cutoffs=ClockBoundCutoffs(self._clock,self.ingress,coordinator,ledger)
+        return self._cutoffs
+
+    def submit_native_gap(self, plan, binding_index, discovery_record_id, *, utc_ns,monotonic_ns):
+        """Queue a durable native discovery for independently derived open correction."""
+        from .replay import SnapshotPlan
+        from .publisher import _charge
+        self._require_clock()
+        if self._cutoff_scope is None or not self._clock_submitted:raise ValueError('configured cutoff scope and measurement required')
+        if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>self.snapshot_limits.max_books:
+            raise ValueError('bounded native gap snapshot plan required')
+        integer(binding_index,'native gap binding');sha256(discovery_record_id,'native discovery raw identity')
+        if binding_index>=len(plan.bindings):raise ValueError('native gap binding differs from plan')
+        binding=plan.bindings[binding_index]
+        if binding.ws_source.process_session_id==self.identity['process_session_id'] and plan.config_sha256!=self.provenance.config_sha256:
+            raise ValueError('native gap plan differs from current capture config')
+        _charge(plan,1024*1024)
+        integer(utc_ns,'gap UTC');integer(monotonic_ns,'gap monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1:raise ValueError('gap observation bound')
+        if self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono:raise ValueError('gap observation regressed')
+        if self._gap_requests_submitted>=10000:
+            self._failure('native_gap_request_bound',global_scope=True);raise QueueCapacity('native gap request bound')
+        request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],'control:gap-mapping-request',
+            self._gap_requests_submitted,utc_ns,monotonic_ns,self._last_observation[2]),*self.writer.identity,'control',
+            'gap_mapping_request','control',canonical(dict(plan=asdict(plan),binding_index=binding_index,
+            discovery_record_id=discovery_record_id)),self.provenance)
+        future=asyncio.get_running_loop().create_future()
+        try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('native_gap_queue_admission_failed',global_scope=True);raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,timing_epoch=self._last_observation[2],gap_mapping=True)
+        self._gap_requests_submitted+=1;self._last_submitted_mono=monotonic_ns;self._wakeup.set()
+        return future
+
+    def _execute_gap_mapping(self,request):
+        from .snapshots import plan_from_descriptor
+        value=strict_json(request.body);owners=self._cutoff_owners();r=request.receipt
+        return map_native_gap(owners.ledger,owners.coordinator,plan_from_descriptor(value['plan']),value['binding_index'],
+            value['discovery_record_id'],utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,
+            max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+
+    def _execute_cutoff(self, request):
+        """Disk-owner call only: all bound controls share the raw FIFO owner."""
+        body=strict_json(request.body);r=request.receipt
+        self._cutoff_owners()
         args=dict(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,boot_id=body['boot_id'])
         payload=body['payload']
         if body['operation']=='allocate':
@@ -798,6 +851,7 @@ class ArchiveLane:
             checks_submitted=self._clock_checks_submitted,pin=asdict(self._clock.pin),
             cutoff_commands_submitted=self._cutoff_commands_submitted,
             cutoff_scope=self._cutoff_scope,cutoff_allocations_submitted=self._cutoff_allocations_submitted,
+            gap_requests_submitted=self._gap_requests_submitted,
             cutoff_history_count=self._history_count,recovery_ready=self._recovery_ready,
             recovery_submitted=self._recovery_submitted,recovery_marker_id=None if self._recovery_result is None else self._recovery_result.marker_record_id,
             recovery_next_utc_ns=None if self._recovery_result is None else self._recovery_result.next_cutoff_utc_ns,
@@ -912,6 +966,12 @@ class ArchiveLane:
                         self._snapshot_inputs_pending=False
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
+                        continue
+                    if pending.gap_mapping:
+                        mapping=await self._disk(self._execute_gap_mapping,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(DurableGapAck(mapping,latency,timely))
                         continue
                     if pending.cutoff_operation is not None:
                         event,record_id,raw_hash,pin=await self._disk(self._execute_cutoff,record)

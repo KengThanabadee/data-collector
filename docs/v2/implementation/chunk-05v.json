@@ -1,0 +1,19 @@
+{
+  "chunk": "5v",
+  "status": "approved",
+  "reviewer": "dc_chunk5v_gap_mapping_review",
+  "reasoning_effort": "high",
+  "tests": "Root442 full-suite tests passed (407v2+35v1), including12 new native-gap mapping/integration tests and local HTTP fixtures. Independent reviewer23 gapmap/ledger tests passed with ResourceWarning treated as errors. Tests include exact proof and later quiet barriers, unchanged originals/portable assessed exports, transitive missing dependencies, bounds, control/duplicate refusal, multiplexed snapshot and buffered streams, cancelled-client FIFO ownership, lost audit/correction acknowledgements and exact repair across process restart.",
+  "sources": {
+    "data_collector/gapmap.py": "e5ce801c02e8e32aa86e2b68f37ad5b1057d5957594d3582b77ad926f23f6ca9",
+    "data_collector/ledger.py": "5028178032d852dd160cc68f09704c7bc7fe75dd739b15420a58d4aa161ea1af",
+    "data_collector/lane.py": "7d055b8aad132f101cc0556b116dd9a1dcbda188b131c3a509ec0365d2c86efc",
+    "tests/test_dc_gapmap.py": "5c93173d2573bafdba2913bbbd9413173851ca8c6f3f26db54f28731bd0c9fff",
+    "docs/v2/IMPLEMENTATION.md": "cc984a5d132fdb25f8fc35da4fe8d36e9286e35b87b03c7f120b88dfa28c7e73"
+  },
+  "findings_closed": [
+    "P1 audit fsynced before correction could survive crash while old ledger pin still certified affected quiet rows valid. Pending audits now block public certification/startup; only exact audit-derived correction completes them. Genesis precedes audit and mapper supports exact new-process repair with first audit identity/time retained.",
+    "P2 legitimate other-instrument messages on multiplexed sockets were rejected before routing. Routing now precedes target validation and model/bootstrap initialization; whole-stream receipts/dependencies retained. Snapshot and buffered-owner regressions cover it."
+  ],
+  "limits": "Adapter-invoked bounded negative native mapping hook only; no automatic watch of all raw messages and no recovery/positive reinstatement. Missing proof/epoch knowledge widens conservatively; health-only Bybit standard not sequence proof. Open scope-target-owner cutoff range retained through ledger. Audit holds bounded transitive raw proof/cutoff dependencies; unresolved audits stop certification until exact repair. Automatic pending-job selection/repair, recovery closure, clock/feed/process-fault range mapping, owner transitions, checkpoint capacity, all feeds/CLI/supervision, backup/restore and intended-host24h acceptance remain pending. No live capture/deployment. User requested pause after this chunk is committed/pushed. PLANS implementation prefix only; unrelated research/README excluded."
+}

@@ -6,7 +6,7 @@ Bounded full scans are intentionally explicit until checkpoint/index integration
 """
 from dataclasses import dataclass
 
-from .contracts import InstrumentKey, Provenance, RawRecord, Receipt, StreamKey, digest, integer, text
+from .contracts import InstrumentKey, Provenance, RawRecord, Receipt, StreamKey, digest, integer, sha256, strict_json, text
 from .validity import CloseGap, GapCorrection, LedgerEntry, LedgerPin, LedgerStart, ValidityLedger
 
 
@@ -43,8 +43,9 @@ class DurableLedger:
             raise ValueError('typed expected restore pin required')
         self._known_pin=expected_pin
         self._scan_records=self._scan_bytes=0
+        self._max_mapping_bytes=max_ledger_bytes
         self.poisoned=False
-        self.refresh()
+        self.refresh(allow_pending_mappings=True)
 
     @property
     def channel(self):return 'validity:'+self.scope
@@ -82,6 +83,10 @@ class DurableLedger:
         target=payload.target if isinstance(payload,GapCorrection) else (
             self._projection.correction(payload.correction_id).target if isinstance(payload,CloseGap) else None)
         references=self._references(payload)
+        if isinstance(payload,GapCorrection) and payload.proof_record_id in self._mappings:
+            from .gapmap import mapping_payload
+            if payload!=mapping_payload(self._mappings[payload.proof_record_id],payload.proof_record_id):
+                raise ValueError('correction differs from native mapping audit')
         for identity in references:
             evidence=self._evidence.get(identity)
             if evidence is None or evidence.capture_id != self.capture_id:
@@ -94,6 +99,40 @@ class DurableLedger:
                 raise ValueError('proof/recovery anchor instrument differs from target')
             if anchor.native_product not in {target.instrument.native_product,'control'}:
                 raise ValueError('proof/recovery anchor product differs from target')
+
+    def _restore_mapping(self,record):
+        channel='gap_mapping:'+self.scope;connection='control:gap-mapping:'+self.scope
+        if record.channel!=channel and record.receipt.connection_id!=connection:return
+        from .gapmap import SCHEMA,RULE,mapping_payload
+        r=record.receipt
+        if ((r.capture_id,r.connection_id,record.channel,record.kind,record.native_product,record.instrument,record.native_fields_json)!=
+                (self.capture_id,connection,channel,'coverage_event','control',None,b'{}') or
+                (record.venue,record.environment)!=self.journal.identity or
+                r.receive_seq!=self._mapping_positions.get(r.stream_key,-1)+1 or len(record.body)>65536):
+            raise ValueError('native mapping envelope/order differs')
+        value=strict_json(record.body)
+        if (not isinstance(value,dict) or value.get('schema')!=SCHEMA or value.get('rule')!=RULE or
+                value.get('scope')!=self.scope or value.get('recovery_cutoff_id') is not None):
+            raise ValueError('native mapping schema/scope differs')
+        sha256(value['request_id'],'native mapping request');sha256(value['plan_sha256'],'native mapping plan')
+        expected=mapping_payload(value,record.record_id)
+        rows=value['raw_dependencies'];refs=[]
+        if type(rows) is not list or not rows:raise ValueError('native mapping dependency list required')
+        for row in rows:
+            if type(row) is not dict or set(row)!={'record_id','raw_sha256'}:raise ValueError('native mapping dependency shape')
+            sha256(row['record_id'],'mapped raw identity');sha256(row['raw_sha256'],'mapped raw hash')
+            prior=self._evidence.get(row['record_id'])
+            if prior is None or prior.capture_id!=self.capture_id or prior.raw_sha256!=row['raw_sha256']:
+                raise ValueError('native mapping raw dependency missing/conflicting')
+            refs.append(row['record_id'])
+        proof=value['native_proof_record_id']
+        if len(set(refs))!=len(refs) or expected.evidence_record_id not in refs or (proof is not None and proof not in refs):
+            raise ValueError('native mapping proof/discovery dependency missing')
+        self._mapping_bytes+=len(record.body)
+        if self._mapping_bytes>self._max_mapping_bytes:raise ValueError('native mapping projection byte bound')
+        self._pending_mappings.add(record.record_id)
+        self._mappings[record.record_id]=value;self._mapping_refs[record.record_id]=tuple(refs)
+        self._mapping_positions[r.stream_key]=r.receive_seq
 
     def _restore_control(self,record):
         if record.channel != self.channel or record.kind != 'coverage_event':return
@@ -109,15 +148,18 @@ class DurableLedger:
         self._projection.check(entry)
         self._check_payload(entry.payload)
         self._projection.add(entry)
+        if isinstance(entry.payload,GapCorrection):self._pending_mappings.discard(entry.payload.proof_record_id)
         self._positions[r.stream_key]=r.receive_seq
         self._control_ids[entry.sequence]=record.record_id
 
-    def refresh(self):
+    def refresh(self, *, allow_pending_mappings=False):
         if self.poisoned:raise ValueError('ledger must be reopened after failure')
         # Revalidate the entire supplied prefix, including its order and evidence
         # availability. Never certify a cached pin after a dependency disappears.
         self._projection=ValidityLedger(self.ledger_id,**self._projection_limits)
         self._evidence,self._positions,self._control_ids={},{},{}
+        self._mappings,self._mapping_refs,self._mapping_positions={},{},{}
+        self._mapping_bytes=0;self._pending_mappings=set()
         count=size=0
         try:
             for record in self._all_records():
@@ -129,8 +171,11 @@ class DurableLedger:
                 if not self._check_evidence_capacity(evidence):continue
                 # A correction may only reference evidence already observed in
                 # the durable prefix, not its own control or a later record.
+                self._restore_mapping(record)
                 self._restore_control(record)
                 self._evidence[evidence.record_id]=evidence
+            if self._pending_mappings and not allow_pending_mappings:
+                raise ValueError('unresolved native mapping audit; complete exact correction before certification')
             if self._known_pin is not None:
                 self._projection.verify_pin(self._known_pin)
             if self._projection.entry_count:
@@ -141,7 +186,9 @@ class DurableLedger:
             raise
 
     def _append(self,payload,*,utc_ns,monotonic_ns,clock_epoch):
-        self.refresh()
+        self.refresh(allow_pending_mappings=isinstance(payload,GapCorrection))
+        if self._pending_mappings and (not isinstance(payload,GapCorrection) or payload.proof_record_id not in self._pending_mappings):
+            raise ValueError('pending native mapping requires its exact correction')
         count=self._projection.entry_count
         entry=LedgerEntry(self.ledger_id,count,self._projection.pin().head_hash if count else None,payload)
         self._projection.check(entry)
@@ -157,12 +204,14 @@ class DurableLedger:
         self.poisoned=True
         self.journal.append(record)
         self._projection.add(entry)
+        if isinstance(payload,GapCorrection):self._pending_mappings.discard(payload.proof_record_id)
         self._evidence[evidence.record_id]=evidence
         self._positions[stream]=receipt.receive_seq
         self._control_ids[entry.sequence]=record.record_id
         self._scan_records+=1;self._scan_bytes+=len(record.to_bytes())
         self._known_pin=self._projection.pin()
         self.poisoned=False
+        if self._pending_mappings:raise ValueError('other native mapping audits remain unresolved')
         return self._projection.pin()
 
     def initialize(self,*,utc_ns,monotonic_ns,clock_epoch):
@@ -196,4 +245,8 @@ class DurableLedger:
         for entry in self._projection.entries(pin):
             identities.add(self._control_ids[entry.sequence])
             identities.update(self._references(entry.payload))
+        pending=list(identities)
+        while pending:
+            for dependency in self._mapping_refs.get(pending.pop(),()):
+                if dependency not in identities:identities.add(dependency);pending.append(dependency)
         return tuple(self._evidence[identity] for identity in sorted(identities))

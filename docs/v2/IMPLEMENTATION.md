@@ -40,6 +40,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5s | Explicit pinned startup resume through raw lane, minute timer and historical snapshot publication | Approved after fixes; [evidence](implementation/chunk-05s.json) |
 | 5t | Owned capture inventory and automatic pinned startup selection with opened-WAL evidence | Approved after fixes; [evidence](implementation/chunk-05t.json) |
 | 5u | Pinned preallocation restart with explicit uncertainty, absent-ledger verification and fresh first-cutoff publication | Approved; [evidence](implementation/chunk-05u.json) |
+| 5v | Native gap replay, quiet-cutoff range mapping, durable audit and FIFO correction hook | Approved after fixes; [evidence](implementation/chunk-05v.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -53,7 +54,7 @@ Chunk1 initial tests:7 new tests pass. Existing35 tests:29 passed in sandbox;6 l
 
 Current v2 verification includes native decoding, archive verification, durable correction-ledger restore, local book materialization fixtures, fake-exchange capture/replay and one bounded live Deribit snapshot capture with equal raw-replayed book state. The first quiet-contract experiment did not meet the two-advancing-delta gate. The continuous multi-venue runtime, shared-time snapshot publication, exports/checkpoints, operations/backup integration and live acceptance are not yet complete.
 
-Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current430 combined tests pass:395 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
+Latest bounded live sample: Deribit90s,42 application messages including ACK, BTC12 and ETH27 advancing native deltas, no sequence invalidation in that sample, verified raw segment and equal full book replay. Root independently reconstructed Decimal levels/native predecessor chains from raw without the capture reducer; [checks](implementation/probe-independent-checks.json). This establishes only the sampled native book path. Current442 combined tests pass:407 v2 plus35 v1 including the local HTTP fault server. These are local results, not intended-host acceptance.
 
 The90s sample evidence was independently audited by `dc_chunk7c_duration_review`:50raw records,42WSframes,41native book messages, exact predecessor chains and independently reconstructed Decimal books match. The report hash is pinned in [chunk7c review evidence](implementation/chunk-07c.json).
 
@@ -417,3 +418,57 @@ Mapping interruption/clock/feed gaps onto existing cutoff ranges, lost snapshot/
 report reconciliation, checkpoint capacity, all-feed transport/CLI supervision,
 legacy root adoption, independent backup/restore and intended-host24h acceptance
 remain pending. No live capture or deployment is started by these tests.
+
+
+Chunk5v adds the adapter-invoked `submit_native_gap(plan, binding_index,
+discovery_record_id)` command through the existing raw FIFO/disk owner. The
+mapper independently replays the selected native owner with reviewed snapshot/
+buffered book reducers, derives its last applied continuous proof and requires the
+reported raw delivery to establish a native invalidation. Duplicate/stale/control
+messages do not extend that proof or become a fabricated hole. Messages for
+another instrument on a multiplexed stream retain receipt/dependency accounting
+but are routed before target validation or bootstrap-clock initialization.
+
+The first affected cutoff follows saved barrier order, including quiet closures
+whose admitted prefix still equals the proof. The exact post-message proof
+boundary `(monotonic_ns, collector_ingress_ordinal +1)` can retain its state;
+strictly later barriers are affected. Missing or incompatible proof/epoch/barrier
+knowledge widens conservatively and records unknown status. Cross-process clocks
+are never compared. Bybit standard health-only semantics do not become a native
+sequence proof. New/future cutoff IDs inherit the resulting open correction for
+the matching scope, instrument/profile and owner epoch.
+
+A fsynced audit pins the plan, native discovery/proof, cutoff knowledge, receipt
+observations and required raw hashes before its exact negative ledger correction.
+UTC interval bounds are explicitly not inferred. Ledger restore validates audit
+namespace/order and dependencies, requires the correction to match the audit and
+expands raw dependencies transitively for portable snapshot/export verification.
+Retries retain the first audit identity/timestamps and its original cutoff prefix,
+including exact completion in a later process with a lower monotonic origin.
+
+Independent review repaired two findings: legitimate multiplexed instruments were
+rejected before routing, and a durable audit without its correction could allow an
+old valid assessment after crash. Pending audits now block public ledger pins,
+assessments and startup certification. A ledger owner may restore their bytes for
+repair; only the exact audit-derived correction completes pending knowledge. The
+explicit mapper retry can finish across process restart. Automatic supervisor
+selection/repair of pending jobs is still pending, so ordinary startup visibly
+stops on an unresolved audit instead of certifying unaffected history.
+
+The hook has bounded request/plan/raw/dependency/audit projections and normal
+receive-to-durable timing. It remains callable while raw capture is open, preserves
+cancelled-client admitted work and does not modify old raw or published snapshots.
+Twelve new synthetic tests cover exact vs later quiet barriers, real assessed
+exports with immutable originals, transitive dependency loss, malformed/control/
+duplicate discoveries, bounds, FIFO publication integration, cancelled clients,
+multiplexed snapshot/buffered owners, audit/correction ambiguity and new-process
+repair.442 combined tests pass (407v2+35v1); independent high-reasoning re-review
+passed23 gap/ledger tests. Exact bytes and closed findings are recorded separately.
+
+This is the negative native mapping hook, not a live all-feed monitor or positive
+recovery certificate. Adapters/supervision must invoke it; first recovery-closure
+selection, clock/feed/process-fault range mapping, owner transitions, automatic
+pending-job/publication/report recovery, checkpoint capacity, complete feed/CLI
+supervision, independent backup/restore and intended-host24h acceptance remain
+pending. No live capture or deployment was started. The user requested a pause
+after this reviewed chunk; no subsequent chunk is started.
