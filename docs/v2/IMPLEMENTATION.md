@@ -51,6 +51,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5ad | Bounded buffered native discovery, timeout/reavailability repair and frozen artifact compatibility | Approved after fixes; [evidence](implementation/chunk-05ad.json) |
 | 5ae | Managed Deribit connection-end negatives, durable shutdown and non-healing replay | Approved after fixes; [evidence](implementation/chunk-05ae.json) |
 | 5af | Verified snapshot-book continuation state and immutable native checkpoint prerequisite | Approved; [evidence](implementation/chunk-05af.json) |
+| 5ag | Checkpoint-to-cutoff native continuation with exact raw artifact equivalence | Approved; [evidence](implementation/chunk-05ag.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -843,3 +844,38 @@ owner/cutoff/metadata/clock projections remain pending. Existing256-dependency/
 64KiB proof, scan and projection limits remain in force; reading a checkpoint
 still replays full raw. Other feeds/lifecycle/runtime/CLI, independent backup/
 restore and intended-host acceptance remain unfinished. No network/deployment.
+
+
+## Chunk5ag — checkpoint-to-cutoff native replay
+
+`materialize_from_checkpoint` re-verifies encoded checkpoint bytes itself and
+renders a later cutoff for the same exact frozen snapshot-book plan. The target
+prefix must contain the old close/hash in the same capture/scope and extend the
+checkpoint ledger knowledge. Full control/owner/discovery/clock/metadata/receipt
+certification stays on its existing path. Only native binding dispatch resumes
+from admitted per-stream sequences; records newly admitted by a later cutoff
+are included even when they precede the checkpoint close in raw file order.
+
+The existing checkpoint verification replay now returns transient cumulative
+diagnostics and effective policy context. Checkpoint /1 bytes remain unchanged.
+The renderer restores native model state, diagnostics and terminal latches; it
+falls back to raw native replay when audit/owner policy changes or target
+admissions cease to extend the checkpoint (for example after a clock epoch
+change). Descriptor, payload, snapshot ID and ledger pin equal raw-only results.
+Public callers cannot supply a mutable self-labelled verified model to bypass
+checkpoint validation.
+
+Eleven tests cover both profiles, quiet and populated suffixes, repeated calls,
+129-receipt prefix/2-receipt suffix dispatch counts, newly admitted pre-close
+receipts, cumulative diagnostics/recovery, hidden observed watermarks, changed
+plan/future frontier and recomputed-hash tampering, new-policy fallback, clock
+admission fallback, and ended-source/open-negative preservation. Fresh high-
+reasoning re-review approved the clock fallback extension. Full-suite results
+and exact hashes are in the chunk evidence.
+
+The statistics count renderer binding dispatch only: checkpoint verification
+and control/discovery certification still replay full prefixes. This does not
+remove capture proof/scan caps or establish end-to-end acceleration. Incremental
+control projections, compact raw-prefix proofs, runtime checkpoint scheduling,
+buffered state, other feeds/lifecycle/CLI, independent backup/restore and actual
+host acceptance remain pending. No network capture or deployment occurred.

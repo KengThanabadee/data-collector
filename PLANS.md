@@ -48,12 +48,13 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5ad: buffered native raw discovery, bounded retained bootstrap state and policy-bound historical snapshot/export replay; compatibility finding repaired, high-reasoning re-review approved.
 - [x] Chunk5ae: managed Deribit connection-end corrections, shielded shutdown and policy-bound non-healing replay; unmanaged/dependency findings repaired and high-reasoning re-review approved.
 - [x] Chunk5af: verified snapshot-book state and immutable native checkpoint prerequisite; high-reasoning review approved,556 tests pass; capture limits unchanged.
+- [x] Chunk5ag: checkpoint-to-cutoff native continuation with exact raw artifact equivalence and policy/admission fallback; high-reasoning re-review approved,567 combined tests pass.
 - [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
 - User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current556 combined tests pass:521 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current567 combined tests pass:532 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

@@ -1,7 +1,7 @@
 """Verified native continuation state at an immutable cutoff frontier.
 
 First integration supports snapshot-seeded book profiles. Loading replays raw;
-this prerequisite does not yet accelerate capture or restore control projections.
+native suffix rendering does not yet accelerate capture or restore control projections.
 """
 from dataclasses import asdict,dataclass
 from pathlib import Path
@@ -37,9 +37,12 @@ class VerifiedNativeState:
     terminated: tuple[bool,...]
     stream_frontiers: tuple[dict,...]
     last_applied: tuple
+    diagnostics: tuple[dict,...]
+    transport_policies: frozenset
+    buffered_policies: frozenset
 
 
-def _build(paths,close_id,plan,limits):
+def _build(paths,close_id,plan,limits,*,_aux=None):
     if not isinstance(plan,SnapshotPlan):raise ValueError('typed native checkpoint plan required')
     if any(b.target.profile not in {'deribit_full','bybit_standard'} for b in plan.bindings):
         raise ValueError('snapshot-seeded native checkpoint profiles only')
@@ -69,6 +72,7 @@ def _build(paths,close_id,plan,limits):
                     last_applied=proofs.get(model.last_source))
             for model,ended in zip(native['models'],native['terminated'])])
     encoded=canonical(value)
+    if _aux is not None:_aux.update(native)
     if len(encoded)>limits.max_bytes:raise ValueError('native checkpoint byte bound')
     return encoded
 
@@ -76,11 +80,15 @@ def _build(paths,close_id,plan,limits):
 def make_native_checkpoint(segments,close_id,plan,*,limits=NativeCheckpointLimits()):
     """Derive complete native state without dropping ledger or raw dependencies."""
     if not isinstance(limits,NativeCheckpointLimits):raise ValueError('typed native checkpoint limits required')
+    return _build(_checkpoint_paths(segments,limits),close_id,plan,limits)
+
+
+def _checkpoint_paths(segments,limits):
     paths=[]
     for path in segments:
         if len(paths)>=limits.replay.max_segments:raise ValueError('native checkpoint segment bound')
         paths.append(Path(path))
-    return _build(paths,close_id,plan,limits)
+    return paths
 
 
 def verify_native_checkpoint(encoded,checkpoint_id,segments,*,limits=NativeCheckpointLimits()):
@@ -88,7 +96,7 @@ def verify_native_checkpoint(encoded,checkpoint_id,segments,*,limits=NativeCheck
 
     The returned models are continuation state, not current ledger certification.
     Control history, terminal latches and open gaps must not be discarded by a
-    future suffix consumer. That consumer is not installed by this module.
+    live capture consumer. Runtime checkpoint selection is not installed here.
     """
     if not isinstance(limits,NativeCheckpointLimits):raise ValueError('typed native checkpoint limits required')
     sha256(checkpoint_id,'checkpoint_id')
@@ -113,10 +121,12 @@ def verify_native_checkpoint(encoded,checkpoint_id,segments,*,limits=NativeCheck
             total_levels+=len(state['levels'][side])
         if total_levels>limits.replay.max_total_levels:raise ValueError('native checkpoint aggregate level bound')
         models.append(restore_snapshot_state(state,limits=limits.book));ended.append(row['terminated']);last.append(row['last_applied'])
-    expected=make_native_checkpoint(segments,value['frontier'].get('close_record_id'),plan,limits=limits)
+    aux={}
+    expected=_build(_checkpoint_paths(segments,limits),value['frontier'].get('close_record_id'),plan,limits,_aux=aux)
     if encoded!=expected:raise ValueError('native checkpoint differs from complete raw replay')
     return VerifiedNativeState(checkpoint_id,value['frontier'],tuple(models),tuple(ended),
-        tuple(value['stream_frontiers']),tuple(last))
+        tuple(value['stream_frontiers']),tuple(last),tuple(aux['diagnostics']),
+        aux['transport_policies'],aux['buffered_policies'])
 
 
 def _marker(encoded):
@@ -140,3 +150,25 @@ def read_native_checkpoint(root,checkpoint_id,segments,*,limits=NativeCheckpoint
     if marker!=canonical(_marker(encoded)) or digest(encoded)!=checkpoint_id:
         raise ValueError('native checkpoint commit/hash differs')
     return verify_native_checkpoint(encoded,checkpoint_id,segments,limits=limits)
+
+
+def materialize_from_checkpoint(encoded,checkpoint_id,segments,target_close_id,plan,*,limits=NativeCheckpointLimits(),stats=None):
+    """Re-verify native state and continue to a later cutoff of the same plan.
+
+    Control/ledger/metadata certification still validates the full prefix. A new
+    audit policy, owner replay context or nonextending admission falls back to
+    raw native replay.
+    Stats count renderer binding dispatches only, excluding verification scans.
+    """
+    if not isinstance(limits,NativeCheckpointLimits):raise ValueError('typed native checkpoint limits required')
+    if stats is not None and type(stats) is not dict:raise ValueError('mutable checkpoint statistics dict required')
+    paths=_checkpoint_paths(segments,limits)
+    verified=verify_native_checkpoint(encoded,checkpoint_id,paths,limits=limits)
+    observed={}
+    artifact,_=_materialize_snapshot(paths,target_close_id,plan,limits=limits.replay,
+        _native_resume=verified,_native_state=observed)
+    if stats is not None:
+        stats.update(native_mode=observed['native_mode'],renderer_binding_dispatches=observed['binding_dispatches'],
+            renderer_checkpoint_skips=observed['checkpoint_skips'],checkpoint_verification='full_raw_prefix',
+            control_certification='full_raw_prefix')
+    return artifact

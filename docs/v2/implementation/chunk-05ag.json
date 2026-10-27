@@ -1,0 +1,16 @@
+{
+  "chunk": "5ag",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/checkpoints.py": "69d9d314613442e25fb50aa0284f133449bbae19f98b7217c8575289b1bf156f",
+    "data_collector/replay.py": "4075209d21ab2300728cad84ca6c155c23dbbcb14608474dd0509b5719771a24",
+    "tests/test_dc_checkpoint_suffix.py": "beb6ebfb2bac1b27548c28409bfeb7e5490a9514377ab956a0e87b0c37af845d",
+    "docs/v2/NATIVE_CHECKPOINTS.md": "3e7a3f5ad20cac4d8bf4849bcaf6ec43262090c649a409fbc37adc34c6b1f09d",
+    "docs/v2/IMPLEMENTATION.md": "c2973cd6c23f668ff8091cd7066faccf8a836cdb26b7cc2b3095589cecf818f9"
+  },
+  "reviewer": "dc_chunk5ag_suffix_review",
+  "tests": "Root567 full-suite tests passed in53.177s (532v2+35v1), ResourceWarning treated as errors, including loopback HTTP fixtures. Eleven new suffix tests pass; reviewer independently41 checkpoint/replay/suffix focused tests passed after clock-admission fallback. Exact artifact equality and renderer129prefix/2suffix counts verified; all certification scans remain full-prefix. Root compared actual HEAD checkpoint maker with current maker on both supported profiles: checkpoint/1 bytes identical. All5 source hashes and final docs reviewed; git diff --check passes.",
+  "findings_closed": [],
+  "limits": "Native renderer continuation for same exact frozen snapshot-book plan only. Encoded checkpoint always raw-verified; target controls/ledger/discovery/metadata/clock/receipts still full-prefix. Policy/owner-context or admission regression uses raw-native fallback. Checkpoint/1 bytes and raw-only artifact identities preserved. Dispatch statistics exclude checkpoint verification and certification scans; no end-to-end acceleration/runtime/production claim. Existing proof/scan caps unchanged. Incremental projections, compact prefix proofs, runtime scheduling, buffered state, other original feeds/CLI/backup/host acceptance pending. No live capture/deployment. PLANS implementation prefix only; unrelated research excluded."
+}

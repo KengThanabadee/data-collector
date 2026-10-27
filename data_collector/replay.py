@@ -147,16 +147,21 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
     return _materialize_snapshot(segments,close_record_id,plan,limits=limits)[0]
 
 
-def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits(),_historical=False,_native_state=None):
+def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits(),_historical=False,_native_state=None,_native_resume=None):
     """Artifact plus transient pre-correction validity; legacy artifact bytes stay fixed."""
     sha256(close_record_id,'close_record_id')
     if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>limits.max_books:raise ValueError('bounded typed snapshot plan required')
+    if _native_resume is not None:
+        from .checkpoints import VerifiedNativeState
+        if not isinstance(_native_resume,VerifiedNativeState):raise ValueError('verified native continuation required')
+        if canonical(asdict(plan))!=canonical(_native_resume.frontier['plan']):
+            raise ValueError('native checkpoint requires the same frozen plan')
     paths=[]
     for path in segments:
         if len(paths)>=limits.max_segments:raise ValueError('bounded distinct committed segment paths required')
         paths.append(Path(path))
     if not paths or len(set(paths))!=len(paths):raise ValueError('bounded distinct committed segment paths required')
-    used=[];close=None;count=size=0
+    used=[];close=None;count=size=0;checkpoint_seen=False
     # Stop dependencies at the segment containing the durable close. Adding later
     # segments must not alter this snapshot's identity or admission membership.
     for path in paths:
@@ -164,6 +169,10 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
         for record in iter_segment_records(path):
             count+=1;size+=len(record.to_bytes())
             if count>limits.max_records or size>limits.max_scan_bytes:raise ValueError('snapshot prefix scan bound')
+            if _native_resume is not None and record.record_id==_native_resume.frontier['close_record_id']:
+                if digest(record.to_bytes())!=_native_resume.frontier['close_sha256']:
+                    raise ValueError('native checkpoint close raw hash differs')
+                checkpoint_seen=True
             if record.record_id==close_record_id:
                 close=record;break
         if close is not None:break
@@ -171,6 +180,11 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
     control=strict_json(close.body)
     if control.get('schema')!='dc.cutoff-control/2' or control.get('kind')!='closed':raise ValueError('durable closed cutoff required')
     scope=control['scope'];cutoff_id=control['payload']['cutoff_id']
+    if _native_resume is not None:
+        frontier=_native_resume.frontier
+        if (not checkpoint_seen or frontier['capture_scope']!=scope or frontier['cutoff_id']>=cutoff_id or
+                any(b.ws_source.capture_id!=close.receipt.capture_id for b in plan.bindings)):
+            raise ValueError('native checkpoint must precede target in the same capture/scope')
     def prefix():
         n=total=0
         for path in used:
@@ -222,6 +236,21 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
                     if value.get('transport_policy')=='deribit-session-end/1':
                         transport_policies.add(canonical(value['target']))
     admitted={StreamKey(**row['stream']):row for row in closed['payload']['streams']}
+    resume_positions={};use_resume=False;native_mode='raw';binding_dispatches=checkpoint_skips=0
+    if _native_resume is not None:
+        known_ledger.verify_pin(LedgerPin(**_native_resume.frontier['ledger_pin']))
+        admission_extends=True
+        for row in _native_resume.frontier['admitted_positions']:
+            stream=StreamKey(**row['stream']);current=admitted.get(stream);old=row['admitted_seq']
+            if (current is None or (old is not None and (current['admitted_seq'] is None or current['admitted_seq']<old)) or
+                    (old is not None and current['admitted_seq']==old and current['record_hash']!=row['record_hash'])):
+                admission_extends=False
+            resume_positions[stream]=-1 if old is None else old
+        use_resume=(admission_extends and _native_resume.transport_policies==frozenset(transport_policies) and
+            _native_resume.buffered_policies==frozenset(buffered_policies) and
+            list(owner_dependencies)==_native_resume.frontier.get('owner_plan_dependencies',[]))
+        native_mode=('checkpoint_suffix' if use_resume else
+            'raw_policy_fallback' if admission_extends else 'raw_admission_fallback')
     transport_ended=set()
     models=[];diagnostics=[dict(count=0,first_reason=None,first_record_id=None,last_record_id=None) for _ in plan.bindings]
     diagnostic_bytes=0
@@ -245,6 +274,13 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             if binding.seed_source is None or binding.signed_prices:raise ValueError('buffered native book needs an explicit seed source and unsigned prices')
             model=None # first archived receipt supplies the local monotonic origin
         models.append(model)
+    if use_resume:
+        models=list(_native_resume.models)
+        transport_ended={i for i,ended in enumerate(_native_resume.terminated) if ended}
+        diagnostics=[dict(row) for row in _native_resume.diagnostics]
+        diagnostic_bytes=sum(len(row['first_reason'].encode())+128 for row in diagnostics if row['first_reason'] is not None)
+        if diagnostic_bytes>limits.max_diagnostic_bytes:raise ReplayResourceError('replay diagnostic projection bound')
+        if sum(model.book.level_count for model in models)>limits.max_total_levels:raise ValueError('aggregate L2 projection bound')
     history=MetadataHistory();superseded_metadata=set();metadata_bytes=0;positions={};last_hashes={}
     for record in prefix():
         receipt=record.receipt;stream=receipt.stream_key
@@ -264,6 +300,9 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             if stream not in {binding.ws_source,binding.seed_source}:continue
             if stream==binding.ws_source and receipt.receive_seq<binding.ws_start_seq:continue
             if stream==binding.seed_source and receipt.receive_seq<binding.seed_start_seq:continue
+            if use_resume and receipt.receive_seq<=resume_positions[stream]:
+                checkpoint_skips+=1;continue
+            binding_dispatches+=1
             if owner_dependencies and canonical(asdict(binding.target)) in transport_policies:
                 if stream==binding.ws_source:
                     ended=deribit_session_end(record)
@@ -346,5 +385,8 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
     if owner_dependencies:descriptor['owner_plan_dependencies']=list(owner_dependencies)
     identity=digest(canonical(descriptor))
     if _native_state is not None:
-        _native_state.update(models=tuple(models),terminated=tuple(i in transport_ended for i in range(len(models))))
+        _native_state.update(models=tuple(models),terminated=tuple(i in transport_ended for i in range(len(models))),
+            diagnostics=tuple(dict(row) for row in diagnostics),transport_policies=frozenset(transport_policies),
+            buffered_policies=frozenset(buffered_policies),native_mode=native_mode,
+            binding_dispatches=binding_dispatches,checkpoint_skips=checkpoint_skips)
     return dict(snapshot_id=identity,descriptor=descriptor,payload=payload),tuple(base_validities)
