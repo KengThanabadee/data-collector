@@ -11,7 +11,7 @@ from .books import SnapshotBook
 from .bootstrap import BufferedBook
 from .contracts import RawRecord, Receipt, canonical, digest, integer, sha256, strict_json
 from .cutoffs import CutoffCoordinator
-from .decoders import decode_seed
+from .decoders import decode_seed,deribit_session_end
 from .ledger import DurableLedger
 from .replay import SnapshotPlan, _book_message
 from .validity import GapCorrection, LedgerEntry, LedgerPin
@@ -72,7 +72,7 @@ def _first_affected(coordinator,proof):
 
 
 def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,utc_ns,monotonic_ns,clock_epoch,
-                   max_records=200000,max_scan_bytes=256*1024*1024,max_dependencies=256,max_mapping_bytes=65536):
+                   max_records=200000,max_scan_bytes=256*1024*1024,max_dependencies=256,max_mapping_bytes=65536,_transport=False):
     """Serialized disk-owner call; audit fsync then ledger fsync before return.
 
     Retrying an admitted request retains its first audit timestamp and original
@@ -94,8 +94,11 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
     if (any(s.capture_id!=ledger.capture_id or s.process_session_id!=binding.ws_source.process_session_id for s in sources) or
             (target.instrument.venue,target.instrument.environment)!=ledger.journal.identity):
         raise ValueError('same-process native owner sources and venue required')
-    request_id=digest(canonical(dict(scope=ledger.scope,ledger_id=ledger.ledger_id,plan=asdict(plan),
-        binding_index=binding_index,discovery_record_id=discovery_record_id)))
+    if _transport and target.profile!='deribit_full':raise ValueError('Deribit terminal book path required')
+    request=dict(scope=ledger.scope,ledger_id=ledger.ledger_id,plan=asdict(plan),
+        binding_index=binding_index,discovery_record_id=discovery_record_id)
+    if _transport:request['discovery_kind']='deribit_end'
+    request_id=digest(canonical(request))
     def all_records():
         count=size=0
         for record in ledger._all_records():
@@ -129,15 +132,34 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
     # New buffered audits name the corrected timeout/no-book transition policy.
     buffered_policy=(None if target.profile in {'deribit_full','bybit_standard'} else
         ('reset-and-timeout/1' if existing is None else strict_json(existing.body).get('buffered_policy')))
-    dependencies={};model=None;proof=None;discovery=None;reason=None
+    transport_policy=(None if target.profile!='deribit_full' else
+        ('deribit-session-end/1' if existing is None else strict_json(existing.body).get('transport_policy')))
+    managed_ids=set();owner_dependencies=set();managed=False
+    if _transport or transport_policy is not None:
+        from .owners import OwnerPlans
+        owners=OwnerPlans(ledger.journal,capture_scope=ledger.scope,capture_id=ledger.capture_id,
+            process_session_id=ledger.session,provenance=ledger.provenance,prior_records=ledger.prior_records,
+            max_records=max_records,max_scan_bytes=max_scan_bytes)
+        managed_ids={owner.record_id for owner in owners.plans if owner.plan==plan}
+        if not managed_ids:
+            if _transport or existing is not None:
+                raise ValueError('durable managed owner plan required for Deribit transport policy')
+            transport_policy=None # legacy native-only mapping, unchanged semantics
+        else:
+            last=max(i for i,owner in enumerate(owners.plans) if owner.record_id in managed_ids)
+            for owner in owners.plans[:last+1]:
+                owner_dependencies.add(owner.record_id)
+                owner_dependencies.update(owners.metadata[b.metadata_version_id].source_record_id for b in owner.plan.bindings)
+    dependencies={};model=None;proof=None;discovery=None;reason=None;ended=False
     def depend(record):
         if record.record_id not in dependencies:
             if len(dependencies)>=max_dependencies:raise ValueError('gap raw dependency bound; checkpoint required')
             dependencies[record.record_id]=dict(record_id=record.record_id,raw_sha256=digest(record.to_bytes()))
     for record in prefix():
-        if record.channel=='cutoffs:'+ledger.scope:depend(record)
+        if record.channel=='cutoffs:'+ledger.scope or record.record_id in owner_dependencies:depend(record)
     positions={};last_mono=None
     for record in prefix():
+        if record.record_id in managed_ids:managed=True
         r=record.receipt
         if r.stream_key not in sources:continue
         start=binding.ws_start_seq if r.stream_key==binding.ws_source else binding.seed_start_seq
@@ -148,6 +170,23 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         last_mono=r.monotonic_ns
         if record.provenance.config_sha256!=plan.config_sha256:raise ValueError('native gap plan/source config differs')
         depend(record)
+        if transport_policy and r.stream_key==binding.ws_source:
+            if (record.venue,record.environment,record.native_product)!=(target.instrument.venue,
+                    target.instrument.environment,target.instrument.native_product):
+                raise ValueError('Deribit source namespace differs')
+            end_reason=deribit_session_end(record)
+            if end_reason is not None:
+                if not ended:
+                    ended=True
+                    if record.record_id==discovery_record_id and _transport:
+                        if not managed:raise ValueError('managed owner declaration must precede Deribit termination')
+                        discovery=record;reason=end_reason;break
+                    if record.record_id not in known_negatives:
+                        raise ValueError('earlier Deribit session end must be mapped first')
+                if record.record_id==discovery_record_id and _transport:return None
+            if ended:
+                if record.record_id==discovery_record_id:raise ValueError('closed Deribit source cannot prove a native gap')
+                continue
         if not ((r.stream_key==binding.seed_source and record.kind=='rest_response') or
                 (r.stream_key==binding.ws_source and record.kind=='ws_message')):
             if record.record_id==discovery_record_id:raise ValueError('native data discovery required')
@@ -184,6 +223,7 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
             if record.record_id==discovery_record_id:raise ValueError('control delivery cannot prove a native gap')
             continue
         if outcome=='invalid':
+            if record.record_id==discovery_record_id and _transport:raise ValueError('Deribit terminal control required')
             if record.record_id!=discovery_record_id:
                 if record.record_id not in known_negatives:raise ValueError('earlier native gap must be mapped first')
                 if isinstance(model,BufferedBook):
@@ -204,6 +244,8 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         discovery_receive_utc_ns=discovery.receipt.receive_utc_ns,utc_interval='not_inferred',
         raw_dependencies=list(dependencies.values()))
     if buffered_policy is not None:body_value['buffered_policy']=buffered_policy
+    if transport_policy is not None:body_value['transport_policy']=transport_policy
+    if _transport:body_value['discovery_kind']='deribit_end'
     body=canonical(body_value)
     if len(body)>min(max_mapping_bytes,65536):raise ValueError('gap mapping metadata bound; checkpoint required')
     if existing is not None:
@@ -227,3 +269,8 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
     ledger._append(correction,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch,_completing_mappings=True)
     pin=ledger.recovery_state()[0] # continuity tip only; public certification replays all raw discoveries
     return GapMapping(marker.record_id,digest(marker.to_bytes()),correction.correction_id,first,pin)
+
+
+def map_deribit_end(ledger,coordinator,plan,binding_index,discovery_record_id,**kwargs):
+    """Map a saved connection termination; never claim a native sequence hole."""
+    return map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,_transport=True,**kwargs)

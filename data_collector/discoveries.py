@@ -8,7 +8,7 @@ from dataclasses import asdict,dataclass
 from .books import SnapshotBook
 from .bootstrap import BufferedBook
 from .contracts import canonical,integer
-from .decoders import decode_seed
+from .decoders import decode_seed,deribit_session_end
 from .owners import OwnerPlans,_path
 from .replay import SnapshotPlan,_book_message
 
@@ -18,6 +18,7 @@ class NativeDiscovery:
     plan: SnapshotPlan
     binding_index: int
     record_id: str
+    kind: str = 'native'
 
 
 def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000,
@@ -62,6 +63,17 @@ def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000,
             if row['last_mono'] is not None and r.monotonic_ns<row['last_mono']:raise ValueError('managed native clock order invalid')
             row['last_mono']=r.monotonic_ns
             if record.provenance.config_sha256!=row['plan'].config_sha256:raise ValueError('managed native config differs')
+            if binding.target.profile=='deribit_full' and stream==binding.ws_source:
+                if (record.venue,record.environment,record.native_product)!=(binding.target.instrument.venue,
+                        binding.target.instrument.environment,binding.target.instrument.native_product):
+                    raise ValueError('managed Deribit source namespace differs')
+                ended=deribit_session_end(record)
+                if ended is not None and not row.get('ended',False):
+                    row['ended']=True
+                    if (canonical(asdict(binding.target)),record.record_id) not in audited:
+                        if len(pending)>=max_paths:raise ValueError('native discovery count bound; checkpoint required')
+                        pending.append(NativeDiscovery(row['plan'],row['index'],record.record_id,'deribit_end'))
+                if row.get('ended',False):continue
             error=event=None
             if stream==binding.ws_source and record.kind=='ws_message':
                 try:event=_book_message(record,binding)

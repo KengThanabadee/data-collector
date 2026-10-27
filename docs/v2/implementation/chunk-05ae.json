@@ -1,0 +1,25 @@
+{
+  "chunk": "5ae",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/decoders.py": "0c1a66a81c24986045bdc31d981947131ab9a7e7788c3f1c72134a1125153b35",
+    "data_collector/deribit.py": "bd011d7bb9349ba2287185b419900f519a9bb95c4920c7bf045c877122a2c4a9",
+    "data_collector/discoveries.py": "9968773adb162087de5ea7997679d258d4866c242a3830b664db740ef1d615f6",
+    "data_collector/gapmap.py": "67a65fc1743b825751318e3dd4aa491e15234e5bd54a4d59e5f84fc2c6d2b462",
+    "data_collector/lane.py": "1a794549c21720d9f08569f917cdfd8b673674497a52f1e210bb389bae6e9968",
+    "data_collector/ledger.py": "eb3d31a2c111e7d863a92de4fcb87155ea6d4de5375890928a20d6503c913ea1",
+    "data_collector/owners.py": "0c6844585a250a169aedb07340dce5a666c18729ace2fcbd610e93039cbbb775",
+    "data_collector/replay.py": "fd138e0bf4d54d773baabd5918ac0396fb0b18694df897deae43d211cd5a5287",
+    "tests/test_dc_deribit.py": "e1ae0287989a08da50499e2f056d41ff57b4e454efa29aa594c0b451ec5a2b01",
+    "tests/test_dc_deribit_ends.py": "d049301911074392c788ffeb3defc661d7b753cb92e076c4a7e541525e3fa5c4",
+    "docs/v2/IMPLEMENTATION.md": "574153dc5dceba816367ad3746e01cc691314e3624bc72228a9d9f2dc810faf2"
+  },
+  "reviewer": "dc_chunk5ae_transport_review",
+  "tests": "Root542 full-suite tests passed in51.275s (507v2+35v1), ResourceWarning treated as errors, including loopback HTTP fixtures. Root38 focused transport/receiver tests passed in9.500s;19 new cases confirmed by reviewer loader. Reviewer independently reproduced unmanaged recovery and owner-omission failures, then verified fixes and all11 source hashes. Exact new-process startup/marker, immutable snapshot/export and native recovery rejection are exercised synthetically. git diff --check passes.",
+  "findings_closed": [
+    "New terminal mapper accepted unmanaged paths, whose legacy replay could heal an ended source. Require validated exact owner plan declaration before termination; reject before writing.",
+    "Terminal policy depended on owner declaration without retaining its raw hash. Retain complete qualifying declaration chain and metadata source hashes for every new transport-aware audit; owner omission fails ledger restore. Preflight reserves conservative proof headroom."
+  ],
+  "limits": "Saved managed Deribit end controls only; independent negative cause per binding, no native-sequence loss invented. Existing journal/audit schema reused with versioned policy. Old native audits and frozen artifacts retain read semantics. Other transport/runtime/clock/process loss before durable terminal control, reconnect/lifecycle, checkpoints, remaining feeds/runtime/CLI, independent backup/restore and intended-host acceptance pending. No network capture/deployment. PLANS implementation prefix only; unrelated README/research excluded."
+}

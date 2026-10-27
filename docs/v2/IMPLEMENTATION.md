@@ -49,6 +49,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5ab | Bounded durable Deribit shared-socket receiver and automatic native gap mapping | Approved after fixes; [evidence](implementation/chunk-05ab.json) |
 | 5ac | Recover managed snapshot-book native failures directly from raw before certification/startup | Approved after fixes; [evidence](implementation/chunk-05ac.json) |
 | 5ad | Bounded buffered native discovery, timeout/reavailability repair and frozen artifact compatibility | Approved after fixes; [evidence](implementation/chunk-05ad.json) |
+| 5ae | Managed Deribit connection-end negatives, durable shutdown and non-healing replay | Approved after fixes; [evidence](implementation/chunk-05ae.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -758,3 +759,51 @@ Quiet bootstrap expiry without a new receipt still needs transport watchdog
 integration. Transport/clock/process faults, proof checkpoints, automatic feed
 lifecycle, remaining feed models/runtime/CLI, independent backup/restore and
 intended-host acceptance remain pending. No live capture or deployment occurred.
+
+
+## Chunk5ae — Deribit connection termination
+
+Existing receiver socket CLOSE/CLOSING/CLOSED/ERROR controls and its stopped
+control now establish connection termination. Managed raw discovery retains the
+first end per target, including bootstrapping and already native-invalid targets.
+Native sequence gaps and connection loss remain independent causes: a fresh
+snapshot can repair a native reset on an open socket, but cannot resurrect an
+ended source. Shared-socket termination affects every binding while a native gap
+still targets only the instruments whose sequence failed.
+
+The terminal mapper reuses native book replay and the existing last-proof cutoff
+boundary rule. It emits an open negative with discovery_kind deribit_end and
+transport_policy deribit-session-end/1 in the existing audit schema. Controls and
+other instruments never advance the target's proof; no anchor widens to unknown
+from cutoff0. A validated exact managed plan must precede the terminal record.
+Transport-aware audits retain the declaration chain and its metadata hashes.
+This prevents omitted ownership evidence from silently selecting legacy replay.
+Existing native audits without this policy retain their exact retry semantics.
+
+The receiver remembers the earliest durable socket end, archives its stopped
+record and awaits each correction through the existing FIFO before returning or
+raising cancellation. An interrupted acknowledgement remains discoverable from
+raw during startup or before cutoff/seal. Stopped-record correction count remains
+the count at serialization; final health separately reports connection-end
+corrections. Preflight reserves owner/metadata proof headroom conservatively.
+
+Managed replay activates termination handling only from validated exact-target
+policy audits before the selected close. Later frames do not heal that source,
+and native recovery cannot select them. New owner declarations require a fresh
+connection identity after termination; historical declarations/artifacts retain
+their original read semantics. Existing frozen snapshot/export reads remain
+separate from current certification.
+
+Nineteen new tests plus the updated multiplexed receiver test cover quiet-cutoff
+corrections, earliest-end deduplication, no anchor, independent causes, post-end
+snapshot/recovery, source/identity/policy bounds, legacy audit retries, omitted
+owner dependencies, crash/startup/marker repair, disk-owner callback races,
+requested stop and cancellation. Review identified unmanaged terminal API use and
+missing ownership proof dependencies; both were repaired and re-reviewed.
+Full-suite results and exact hashes are recorded in the chunk evidence.
+
+This handles saved managed Deribit termination controls only. Failure before any
+such control can be written still requires runtime/clock/process fault mapping.
+Automatic reconnect/lifecycle, durable proof checkpoints, other feed models,
+continuous runtime/CLI, independent backup/restore and intended-host acceptance
+remain pending. No network capture or deployment was performed.

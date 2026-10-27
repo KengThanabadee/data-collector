@@ -122,6 +122,10 @@ class DurableLedger:
         sha256(value['request_id'],'native mapping request')
         negative=value['schema']==SCHEMA
         if negative:
+            if 'transport_policy' in value and value['transport_policy']!='deribit-session-end/1':
+                raise ValueError('unknown Deribit transport replay policy')
+            if 'discovery_kind' in value and (value['discovery_kind']!='deribit_end' or value.get('transport_policy')!='deribit-session-end/1'):
+                raise ValueError('unknown terminal discovery kind/policy')
             if 'buffered_policy' in value and value['buffered_policy']!='reset-and-timeout/1':
                 raise ValueError('unknown buffered gap replay policy')
             sha256(value['plan_sha256'],'native mapping plan')
@@ -295,11 +299,12 @@ class DurableLedger:
 
     def complete_native_discoveries(self,coordinator,*,utc_ns,monotonic_ns,clock_epoch):
         """Replay managed raw failures and append exact negatives before startup."""
-        from .gapmap import map_native_gap
+        from .gapmap import map_native_gap,map_deribit_end
         self.recovery_state()
         pending=self._pending_native
         for discovery in pending:
-            map_native_gap(self,coordinator,discovery.plan,discovery.binding_index,discovery.record_id,
+            mapper=map_deribit_end if discovery.kind=='deribit_end' else map_native_gap
+            mapper(self,coordinator,discovery.plan,discovery.binding_index,discovery.record_id,
                 utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch,
                 max_records=self.max_scan_records,max_scan_bytes=self.max_scan_bytes)
         return self.pin(allow_empty=True)

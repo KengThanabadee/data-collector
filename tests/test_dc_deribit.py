@@ -200,7 +200,7 @@ class DeribitTests(unittest.IsolatedAsyncioTestCase):
         self.plan=replace(self.plan,bindings=(binding,second))
         return lane
 
-    async def test_multiplexed_gap_corrects_only_affected_binding(self):
+    async def test_multiplexed_native_gap_is_targeted_and_session_end_covers_both(self):
         lane=await self.two_bindings();instrument=self.plan.bindings[1].target.instrument
         receiver,pipeline=self.receiver(lane);task=self.launch(receiver)
         self.socket.put(self.frame(receiver));self.socket.put(self.frame(receiver,symbol=instrument.native_symbol))
@@ -213,8 +213,9 @@ class DeribitTests(unittest.IsolatedAsyncioTestCase):
         await self.finish_raw(lane)
         report=next(strict_json(r.body) for r in self.records(lane) if r.channel=='snapshot_deliveries:capture')
         result=export_snapshots(pipeline.publisher.root/'snapshots',self.root/'exports',[report['snapshot_id']],lane.segments)
-        self.assertEqual(result['descriptor']['population']['invalid'],1)
-        self.assertEqual(result['descriptor']['population']['valid'],1)
+        self.assertEqual(len(receiver.ends),2)
+        self.assertEqual(result['descriptor']['population']['invalid'],2)
+        self.assertEqual(result['descriptor']['population']['valid'],0)
 
     async def test_byte_crossing_gap_is_classified_before_resource_stop(self):
         lane=await self.ready();receiver,pipeline=self.receiver(lane,max_bytes=2500)

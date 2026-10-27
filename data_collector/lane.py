@@ -26,7 +26,7 @@ from .deliveries import delivery_base, validate_delivery
 from .recovery import CutoffRecovery, RecoveryRequest, RecoverySegment, iter_recovery_prefix, reconcile_cutoffs
 from .cutoffs import CutoffPin
 from .validity import LedgerPin
-from .gapmap import GapMapping, map_native_gap
+from .gapmap import GapMapping, map_native_gap, map_deribit_end
 from .gaprecovery import NativeRecovery, map_native_recovery
 from .owners import OwnerPlan,OwnerPlans
 
@@ -685,6 +685,10 @@ class ArchiveLane:
         """Queue a durable native discovery for independently derived open correction."""
         return self._submit_native_mapping(plan,binding_index,discovery_record_id,'gap',utc_ns,monotonic_ns)
 
+    def submit_deribit_end(self,plan,binding_index,discovery_record_id,*,utc_ns,monotonic_ns):
+        """Queue independently replayed Deribit connection-end negative knowledge."""
+        return self._submit_native_mapping(plan,binding_index,discovery_record_id,'deribit_end',utc_ns,monotonic_ns)
+
     def submit_native_recovery(self,plan,binding_index,correction_id,*,utc_ns,monotonic_ns):
         """Queue recovery selection; a None mapping leaves the existing gap open."""
         return self._submit_native_mapping(plan,binding_index,correction_id,'recovery',utc_ns,monotonic_ns)
@@ -710,7 +714,7 @@ class ArchiveLane:
         request=RawRecord(Receipt(self.identity['capture_id'],self.identity['process_session_id'],'control:gap-mapping-request',
             self._gap_requests_submitted,utc_ns,monotonic_ns,self._last_observation[2]),*self.writer.identity,'control',
             'gap_mapping_request','control',canonical(dict(plan=asdict(plan),binding_index=binding_index,
-            operation=operation,**({'discovery_record_id':identity} if operation=='gap' else {'correction_id':identity}))),self.provenance)
+            operation=operation,**({'discovery_record_id':identity} if operation in {'gap','deribit_end'} else {'correction_id':identity}))),self.provenance)
         future=asyncio.get_running_loop().create_future()
         try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
         except Exception:
@@ -730,7 +734,8 @@ class ArchiveLane:
             return map_native_recovery(owners.ledger,owners.coordinator,[s.path for s in old]+list(self.writer.committed),
                 plan_from_descriptor(value['plan']),value['binding_index'],value['correction_id'],
                 utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,limits=self.snapshot_limits)
-        return map_native_gap(owners.ledger,owners.coordinator,plan_from_descriptor(value['plan']),value['binding_index'],
+        mapper=map_deribit_end if value.get('operation')=='deribit_end' else map_native_gap
+        return mapper(owners.ledger,owners.coordinator,plan_from_descriptor(value['plan']),value['binding_index'],
             value['discovery_record_id'],utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,
             max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
 

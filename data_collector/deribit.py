@@ -13,7 +13,7 @@ import aiohttp
 
 from .books import SnapshotBook
 from .contracts import RawRecord,Receipt,StreamKey,canonical,digest,integer
-from .decoders import native_json
+from .decoders import native_json,deribit_session_end
 from .lane import DurableAck,DurableGapAck,PENDING_CLOCK_EPOCH
 from .owners import new_owner_epoch
 from .quota import Priority,PriorityQuota
@@ -78,7 +78,7 @@ class DeribitBookSession:
         self._channels={b.native_channel:i for i,b in enumerate(self.plan.bindings)}
         self._stop=asyncio.Event();self._started=self._terminal=self._cancelled=False
         self._seq=self._frames=self._bytes=self._controls=0
-        self._acked=False;self._failed=False;self.reason=None;self.gaps=[]
+        self._acked=False;self._failed=False;self.reason=None;self.gaps=[];self.ends=[];self._end_record=None
         self._start_ns=self._last_receive_ns=None
         envelope=RawRecord(Receipt(self.source.capture_id,self.source.process_session_id,self.source.connection_id,
             2**63-1,2**63-1,2**63-1,self.source.process_session_id+':clock:1023'),
@@ -94,7 +94,10 @@ class DeribitBookSession:
         # Each frame may require one outbound test response. All cutoff controls
         # are retained by native mapping, including older closed cutoffs.
         clock=self.lane.health()['clock']
-        dependencies=2*self.limits.max_frames+6+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)
+        # Terminal policy also requires the managed declaration chain and its
+        # metadata. Prior raw count conservatively bounds recovered prerequisites.
+        owner_proof=self.lane._source_records+51*self.lane._owner_plan_requests+len(self.plan.bindings)+1
+        dependencies=2*self.limits.max_frames+6+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)+owner_proof
         if dependencies>256 or any(len(canonical(asdict(b.target)))+6000+dependencies*200>65536 for b in self.plan.bindings):
             raise ValueError('native proof headroom requires shorter capture or checkpoints')
         # Leave conservative room for raw envelopes, clock/cutoff/publication
@@ -244,6 +247,7 @@ class DeribitBookSession:
                 message,record,future=delivery
                 record=await self._ack(record,future)
                 if message.type not in {aiohttp.WSMsgType.TEXT,aiohttp.WSMsgType.BINARY}:
+                    if deribit_session_end(record) is not None:self._end_record=record
                     raise DeribitStopped('socket_closed_or_error')
                 body=record.body
                 self._frames+=1;self._bytes+=len(body);last=record.receipt.monotonic_ns
@@ -276,8 +280,18 @@ class DeribitBookSession:
             if failure is not None:self._failed=True
             try:
                 if self.lane.health()['accepting']:
-                    await self._archive(canonical(dict(schema='dc.deribit-session/2',event='stopped',reason=self.reason,
+                    stopped=await self._archive(canonical(dict(schema='dc.deribit-session/2',event='stopped',reason=self.reason,
                         frames=self._frames,bytes=self._bytes,corrections=len(self.gaps))), 'deribit_session','control')
+                    end=self._end_record or stopped
+                    # A native reset can recover on an open socket; a terminated
+                    # connection is an independent cause that cannot be healed.
+                    for index in range(len(self.models)):
+                        utc,mono,_=self.lane._sample()
+                        ack=await self._owned(self.lane.submit_deribit_end(self.plan,index,end.record_id,
+                            utc_ns=utc,monotonic_ns=mono))
+                        if not isinstance(ack,DurableGapAck) or not ack.timing_valid:
+                            raise DeribitStopped('connection end correction unconfirmed')
+                        if ack.mapping is not None:self.ends.append(ack.mapping)
             except Exception as exc:
                 if failure is None:failure=exc
             if failure is not None and self.lane.health()['accepting']:
@@ -296,4 +310,5 @@ class DeribitBookSession:
     def health(self):
         return dict(started=self._started,terminal=self._terminal,reason=self.reason,acked=self._acked,
             frames=self._frames,bytes=self._bytes,controls=self._controls,corrections=len(self.gaps),
+            connection_end_corrections=len(self.ends),
             source=asdict(self.source),books=tuple(m.view() for m in self.models))

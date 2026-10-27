@@ -174,3 +174,22 @@ def decode_seed(record, profile, *, max_bytes=2*1024*1024):
                           _levels(value['bids']),_levels(value['asks']))
     except (KeyError,TypeError,IndexError) as exc:
         raise ValueError('native seed schema mismatch') from exc
+
+
+def deribit_session_end(record):
+    """Recognize only the receiver's saved terminal controls, never native data."""
+    if record.kind!='control' or record.channel!='deribit_session' or record.venue!='deribit':return None
+    value=native_json(record.body,max_bytes=4096)
+    if record.instrument is not None:raise ValueError('Deribit session control cannot select one instrument')
+    if value.get('event')=='socket_event':
+        if set(value)!={'event','type'} or type(value['type']) is not int:
+            raise ValueError('malformed Deribit socket control')
+        # WebSocket CLOSE, aiohttp CLOSING/CLOSED/ERROR; PING/PONG are not loss.
+        return 'deribit_socket_ended' if value['type'] in {8,256,257,258} else None
+    if value.get('schema')=='dc.deribit-session/2' and value.get('event')=='stopped':
+        if (set(value)!={'schema','event','reason','frames','bytes','corrections'} or
+                not isinstance(value['reason'],str) or len(value['reason'])>256):
+            raise ValueError('malformed Deribit session stop')
+        for name in ('frames','bytes','corrections'):integer(value[name],name)
+        return 'deribit_session_stopped'
+    return None

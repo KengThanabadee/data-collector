@@ -184,6 +184,12 @@ class OwnerPlans:
     def declare(self,plan,*,utc_ns,monotonic_ns,clock_epoch):
         self.refresh(for_declaration=True);self._check_plan(plan,self.session,self.provenance.config_sha256)
         if self.plans and self.plans[-1].plan==plan:return self.plans[-1]
+        # A native reset can reuse an open socket; a terminated connection
+        # cannot acquire a fresh owner epoch. Keep historical declarations intact.
+        from .decoders import deribit_session_end
+        sources={b.ws_source for b in plan.bindings if b.target.profile=='deribit_full'}
+        if sources and any(r.receipt.stream_key in sources and deribit_session_end(r) is not None for r in self._scan_records()):
+            raise ValueError('terminated Deribit source requires fresh connection identity')
         self._transition(plan,self.session,self.provenance.config_sha256)
         r=Receipt(self.capture_id,self.session,self.connection,
             self.positions.get(StreamKey(self.capture_id,self.session,self.connection),-1)+1,

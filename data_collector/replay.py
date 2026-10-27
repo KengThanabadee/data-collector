@@ -12,7 +12,7 @@ from .books import SnapshotBook
 from .bootstrap import BufferedBook
 from .contracts import RawRecord,StreamKey,canonical,digest,integer,sha256,strict_json
 from .cutoffs import CutoffCoordinator
-from .decoders import decode_depth,decode_seed,native_json
+from .decoders import decode_depth,decode_seed,native_json,deribit_session_end
 from .journal import Journal
 from .ledger import DurableLedger
 from .metadata import MetadataHistory,MetadataVersion
@@ -214,12 +214,15 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
                 ledger_dependencies=[asdict(d) for d in ledger.dependencies(pin)]
                 known_ledger=ValidityLedger(pin.ledger_id)
                 for entry in ledger.entries(pin):known_ledger.add(entry)
-            buffered_policies=set()
+            buffered_policies=set();transport_policies=set()
             if owner_dependencies:
                 for value in ledger._mappings.values():
                     if value.get('buffered_policy')=='reset-and-timeout/1':
                         buffered_policies.add(canonical(value['target']))
+                    if value.get('transport_policy')=='deribit-session-end/1':
+                        transport_policies.add(canonical(value['target']))
     admitted={StreamKey(**row['stream']):row for row in closed['payload']['streams']}
+    transport_ended=set()
     models=[];diagnostics=[dict(count=0,first_reason=None,first_record_id=None,last_record_id=None) for _ in plan.bindings]
     diagnostic_bytes=0
     def note(i,reason,record_id):
@@ -261,6 +264,12 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             if stream not in {binding.ws_source,binding.seed_source}:continue
             if stream==binding.ws_source and receipt.receive_seq<binding.ws_start_seq:continue
             if stream==binding.seed_source and receipt.receive_seq<binding.seed_start_seq:continue
+            if owner_dependencies and canonical(asdict(binding.target)) in transport_policies:
+                if stream==binding.ws_source:
+                    ended=deribit_session_end(record)
+                    if ended is not None and i not in transport_ended:
+                        transport_ended.add(i);model.invalidate(ended);note(i,ended,record.record_id)
+                    if i in transport_ended:continue
             routed_event=None;routing_error=None
             if owner_dependencies:
                 # Managed streams may multiplex symbols; unrelated input cannot
