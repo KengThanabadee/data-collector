@@ -122,6 +122,8 @@ class DurableLedger:
         sha256(value['request_id'],'native mapping request')
         negative=value['schema']==SCHEMA
         if negative:
+            if 'buffered_policy' in value and value['buffered_policy']!='reset-and-timeout/1':
+                raise ValueError('unknown buffered gap replay policy')
             sha256(value['plan_sha256'],'native mapping plan')
             if value.get('recovery_cutoff_id') is not None:raise ValueError('native negative must remain open')
             expected=mapping_payload(value,record.record_id)
@@ -319,6 +321,9 @@ class DurableLedger:
     def dependencies(self,pin):
         """Exact immutable raw hashes required for this pinned ledger knowledge."""
         self.refresh()
+        return self._dependencies(pin)
+
+    def _dependencies(self,pin):
         identities=set()
         for entry in self._projection.entries(pin):
             identities.add(self._control_ids[entry.sequence])
@@ -328,3 +333,13 @@ class DurableLedger:
             for dependency in self._mapping_refs.get(pending.pop(),()):
                 if dependency not in identities:identities.add(dependency);pending.append(dependency)
         return tuple(self._evidence[identity] for identity in sorted(identities))
+
+    def _frozen_knowledge(self,pin):
+        """Historical artifact reproduction only; never current certification.
+
+        Newly derived raw failures cannot rewrite an older artifact's knowledge.
+        Durable orphan audits, chain/dependency errors and pin mismatch still fail.
+        """
+        self.refresh(allow_native_discoveries=True)
+        if self._projection.pin()!=pin:raise ValueError('historical ledger tip differs from frozen pin')
+        return self._projection,self._dependencies(pin)

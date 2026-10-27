@@ -6,7 +6,9 @@ Legacy paths without an owner declaration retain their original replay contract.
 from dataclasses import asdict,dataclass
 
 from .books import SnapshotBook
-from .contracts import canonical
+from .bootstrap import BufferedBook
+from .contracts import canonical,integer
+from .decoders import decode_seed
 from .owners import OwnerPlans,_path
 from .replay import SnapshotPlan,_book_message
 
@@ -18,7 +20,11 @@ class NativeDiscovery:
     record_id: str
 
 
-def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000):
+def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000,
+                               max_buffer_events=4096,max_buffer_bytes=16*1024*1024):
+    for name,value in (('paths',max_paths),('levels',max_levels),
+                       ('buffer events',max_buffer_events),('buffer bytes',max_buffer_bytes)):
+        integer(value,name,1)
     owners=OwnerPlans(ledger.journal,capture_scope=ledger.scope,capture_id=ledger.capture_id,
         process_session_id=ledger.session,provenance=ledger.provenance,prior_records=ledger.prior_records,
         max_records=ledger.max_scan_records,max_scan_bytes=ledger.max_scan_bytes,max_plans=max_paths)
@@ -31,8 +37,10 @@ def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000):
         if record.record_id in declarations:
             plan=declarations[record.record_id]
             for index,binding in enumerate(plan.bindings):
-                if binding.target.profile not in {'deribit_full','bybit_standard'}:continue
-                if binding.seed_source is not None:raise ValueError('snapshot owner cannot inherit REST seed')
+                snapshot=binding.target.profile in {'deribit_full','bybit_standard'}
+                if snapshot and binding.seed_source is not None:raise ValueError('snapshot owner cannot inherit REST seed')
+                if not snapshot and (binding.seed_source is None or binding.signed_prices):
+                    raise ValueError('buffered native book needs an explicit seed source and unsigned prices')
                 identity=(binding.target,)+_path(binding)
                 # A same-source reset has a durable fence against open cutoffs.
                 # New receipts belong to the new epoch, not the retired model.
@@ -59,19 +67,50 @@ def pending_native_discoveries(ledger,*,max_paths=10000,max_levels=200000):
                 try:event=_book_message(record,binding)
                 except ValueError as exc:error=exc
                 if event is None and error is None:continue
+            elif stream==binding.seed_source and record.kind=='rest_response':
+                if record.instrument is not None and record.instrument!=binding.target.instrument:continue
             else:continue
             model=row['model']
             if model is None:
-                model=SnapshotBook(binding.target.instrument,binding.target.profile,depth=binding.depth,signed_prices=binding.signed_prices)
+                model=(SnapshotBook(binding.target.instrument,binding.target.profile,depth=binding.depth,signed_prices=binding.signed_prices)
+                    if binding.target.profile in {'deribit_full','bybit_standard'} else
+                    BufferedBook(binding.target.instrument,binding.target.profile,now_ns=r.monotonic_ns))
                 row['model']=model
+            failed_exception=False
             try:
                 if error is not None:raise error
-                outcome=model.receive(event)
+                if stream==binding.seed_source:
+                    outcome=model.supply_seed(decode_seed(record,binding.target.profile),now_ns=r.monotonic_ns)
+                else:
+                    if isinstance(model,BufferedBook) and model.state=='no_book':
+                        model.reset(now_ns=r.monotonic_ns,reason='native_availability_recheck')
+                    outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=r.monotonic_ns)
+                if isinstance(model,BufferedBook) and model.state=='invalid':outcome='invalid'
             except ValueError:
+                failed_exception=True
                 outcome=model.invalidate('native_decode_or_apply_failed')
             if outcome=='invalid' and (canonical(asdict(binding.target)),record.record_id) not in audited:
                 if len(pending)>=max_paths:raise ValueError('native discovery count bound; checkpoint required')
                 pending.append(NativeDiscovery(row['plan'],row['index'],record.record_id))
-        if sum(row['model'].book.level_count for row in paths.values() if row['model'] is not None)>max_levels:
-            raise ValueError('native discovery aggregate level bound; checkpoint required')
+            if outcome=='invalid' and isinstance(model,BufferedBook):
+                model.reset(now_ns=r.monotonic_ns,reason='native_reseed_required')
+                if not failed_exception and stream==binding.ws_source:model.receive(event,now_ns=r.monotonic_ns)
+            # Charge after every path transition, including retained bootstrap
+            # seeds and last deltas that are no longer in the event buffer.
+            if isinstance(model,BufferedBook):
+                retained={id(delta) for delta in model.buffer}
+                extra=[]
+                for delta in (model.last,model.buffer_last):
+                    if delta is not None and id(delta) not in retained:
+                        retained.add(id(delta));extra.append(delta)
+                row['aux_bytes']=model.buffer_bytes+sum(len(canonical(asdict(d))) for d in extra)
+                row['seed_levels']=0 if model.seed is None else len(model.seed.bids)+len(model.seed.asks)
+                if model.seed is not None:row['aux_bytes']+=len(canonical(asdict(model.seed)))
+                row['buffer_events']=len(model.buffer)
+            if sum(p['model'].book.level_count+p.get('seed_levels',0) for p in paths.values() if p['model'] is not None)>max_levels:
+                raise ValueError('native discovery aggregate level bound; checkpoint required')
+            if sum(p.get('buffer_events',0) for p in paths.values())>max_buffer_events:
+                raise ValueError('native discovery aggregate buffer event bound; checkpoint required')
+            if sum(p.get('aux_bytes',0) for p in paths.values())>max_buffer_bytes:
+                raise ValueError('native discovery aggregate buffer byte bound; checkpoint required')
     return tuple(pending)

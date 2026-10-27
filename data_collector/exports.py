@@ -38,7 +38,7 @@ def _ids(values,limits):
     return sorted(result)
 
 
-def _render(originals,paths,mode,pin,limits):
+def _render(originals,paths,mode,pin,limits,*,_historical=False):
     if mode not in {'as_published','assessed_at_ledger'}:raise ValueError('explicit export read mode required')
     if mode=='as_published' and pin is not None:raise ValueError('as_published has no assessment pin')
     first=originals[0]['descriptor']
@@ -49,7 +49,7 @@ def _render(originals,paths,mode,pin,limits):
     if len({scope(row) for row in originals})!=1:raise ValueError('aggregate cross-scope export requires separate local exports')
     ledger=None;entries=[];dependencies=[];ledger_segments=[]
     if mode=='assessed_at_ledger':
-        ledger,pin,dependencies,ledger_segments=_ledger_view(paths,originals[0],pin=pin,limits=limits.publication.replay)
+        ledger,pin,dependencies,ledger_segments=_ledger_view(paths,originals[0],pin=pin,limits=limits.publication.replay,_historical=_historical)
         for original in originals:
             published_pin=LedgerPin(**original['descriptor']['publication_ledger_pin'])
             if pin.sequence<published_pin.sequence:raise ValueError('assessment pin precedes original publication knowledge')
@@ -141,11 +141,11 @@ def read_export(export_root,export_id,segments,*,limits=ExportLimits()):
         snapshot_descriptor=original['descriptor']
         if digest(canonical(snapshot_descriptor))!=original['snapshot_id']:raise ValueError('embedded snapshot identity mismatch')
         selected=_pinned_paths(paths,snapshot_descriptor)
-        base,validities=_materialize_snapshot(selected,snapshot_descriptor['close_record_id'],plan_from_descriptor(snapshot_descriptor['plan']),limits=limits.publication.replay)
+        base,validities=_materialize_snapshot(selected,snapshot_descriptor['close_record_id'],plan_from_descriptor(snapshot_descriptor['plan']),limits=limits.publication.replay,_historical=True)
         replayed=_publication(base,selected,pin=LedgerPin(**snapshot_descriptor['publication_ledger_pin']),limits=limits.publication.replay,
-            policy=snapshot_descriptor['publication_policy'],base_validities=validities)
+            policy=snapshot_descriptor['publication_policy'],base_validities=validities,_historical=True)
         if replayed!=original:raise ValueError('embedded original differs from raw publication replay')
         originals.append(original)
     pin=LedgerPin(**descriptor['ledger_pin']) if descriptor['ledger_pin'] is not None else None
-    if _render(originals,paths,descriptor['mode'],pin,limits)!=result:raise ValueError('export differs from pinned raw/ledger replay')
+    if _render(originals,paths,descriptor['mode'],pin,limits,_historical=True)!=result:raise ValueError('export differs from pinned raw/ledger replay')
     return result

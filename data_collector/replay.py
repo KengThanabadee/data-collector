@@ -147,7 +147,7 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
     return _materialize_snapshot(segments,close_record_id,plan,limits=limits)[0]
 
 
-def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits()):
+def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits(),_historical=False):
     """Artifact plus transient pre-correction validity; legacy artifact bytes stay fixed."""
     sha256(close_record_id,'close_record_id')
     if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>limits.max_books:raise ValueError('bounded typed snapshot plan required')
@@ -206,10 +206,19 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             ledger=DurableLedger(empty,ledger_id=pin.ledger_id,capture_scope=scope,capture_id=close.receipt.capture_id,
                 process_session_id='replay-reader',provenance=close.provenance,prior_records=prefix,
                 max_scan_records=limits.max_records,max_scan_bytes=limits.max_scan_bytes,expected_pin=pin)
-            if ledger.pin()!=pin:raise ValueError('close pin excludes corrections already durable before closure')
-            ledger_dependencies=[asdict(d) for d in ledger.dependencies(pin)]
-            known_ledger=ValidityLedger(pin.ledger_id)
-            for entry in ledger.entries(pin):known_ledger.add(entry)
+            if _historical:
+                known_ledger,dependencies=ledger._frozen_knowledge(pin)
+                ledger_dependencies=[asdict(d) for d in dependencies]
+            else:
+                if ledger.pin()!=pin:raise ValueError('close pin excludes corrections already durable before closure')
+                ledger_dependencies=[asdict(d) for d in ledger.dependencies(pin)]
+                known_ledger=ValidityLedger(pin.ledger_id)
+                for entry in ledger.entries(pin):known_ledger.add(entry)
+            buffered_policies=set()
+            if owner_dependencies:
+                for value in ledger._mappings.values():
+                    if value.get('buffered_policy')=='reset-and-timeout/1':
+                        buffered_policies.add(canonical(value['target']))
     admitted={StreamKey(**row['stream']):row for row in closed['payload']['streams']}
     models=[];diagnostics=[dict(count=0,first_reason=None,first_record_id=None,last_record_id=None) for _ in plan.bindings]
     diagnostic_bytes=0
@@ -270,7 +279,7 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
                 if routing_error is not None:raise routing_error
                 if stream==binding.seed_source and record.kind=='rest_response':
                     outcome=model.supply_seed(decode_seed(record,binding.target.profile),now_ns=receipt.monotonic_ns)
-                    if outcome=='invalid':
+                    if outcome=='invalid' or (canonical(asdict(binding.target)) in buffered_policies and isinstance(model,BufferedBook) and model.state=='invalid'):
                         note(i,model.reason,record.record_id)
                         model.reset(now_ns=receipt.monotonic_ns,reason='native_reseed_required')
                 elif stream==binding.ws_source and record.kind=='ws_message':
@@ -278,7 +287,7 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
                     if event is not None:
                         if isinstance(model,BufferedBook) and model.state=='no_book':model.reset(now_ns=receipt.monotonic_ns,reason='native_availability_recheck')
                         outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=receipt.monotonic_ns)
-                        if outcome=='invalid':
+                        if outcome=='invalid' or (canonical(asdict(binding.target)) in buffered_policies and isinstance(model,BufferedBook) and model.state=='invalid'):
                             note(i,model.reason,record.record_id)
                             if isinstance(model,BufferedBook):
                                 model.reset(now_ns=receipt.monotonic_ns,reason='native_reseed_required')

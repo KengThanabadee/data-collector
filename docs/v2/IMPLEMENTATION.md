@@ -48,6 +48,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5aa | Atomic managed scheduler cutovers and allocated-plan health | Approved after fixes; [evidence](implementation/chunk-05aa.json) |
 | 5ab | Bounded durable Deribit shared-socket receiver and automatic native gap mapping | Approved after fixes; [evidence](implementation/chunk-05ab.json) |
 | 5ac | Recover managed snapshot-book native failures directly from raw before certification/startup | Approved after fixes; [evidence](implementation/chunk-05ac.json) |
+| 5ad | Bounded buffered native discovery, timeout/reavailability repair and frozen artifact compatibility | Approved after fixes; [evidence](implementation/chunk-05ad.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -718,3 +719,42 @@ Buffered native profiles, transport/clock/process fault mapping, proof checkpoin
 automatic lifecycle/reconnect, broader feeds, continuous runtime/CLI, independent
 backup/restore and intended-host acceptance remain pending. No live capture or
 deployment was performed for this chunk.
+
+
+## Chunk5ad — buffered native discovery and historical replay
+
+The existing raw-derived certification gate now also replays managed Binance
+spot/UM and Bybit full books. It uses their existing buffered bootstrap models,
+seed decoders and negative mapping path. Foreign-symbol WS/REST input is routed
+before model creation. Per-path native limits stay unchanged; aggregate paths,
+book/seed levels, buffered event count and retained bootstrap bytes are bounded.
+Byte accounting includes seeds and last deltas outside the buffer, checked after
+each path transition. Resource exhaustion stops certification instead of creating
+a synthetic exchange gap.
+
+Buffered timeouts can set invalid state while returning ignored_until_reset;
+this state now establishes a negative discovery. Bybit empty-book reavailability
+resets before the next matching WS event, matching managed replay. New buffered
+negative audits retain schema /2 and name optional buffered_policy
+reset-and-timeout/1. Existing audits without this field retain their old mapper
+semantics and exact retry bytes. Unknown policy values are rejected.
+
+Replay activates the corrected timeout behavior per exact target only when its
+validated policy audit precedes the selected close. This preserves older managed
+snapshot bytes. A private frozen-ledger view is used only to reproduce an existing
+snapshot or its embedded export: it checks the exact pinned chain, dependencies
+and orphan audits, while leaving newly discovered raw negatives to assessment.
+Current ledger certification, new materialization/publication and latest assessed
+exports still require exact repair. Original archives remain unchanged.
+
+Ten new tests cover all three buffered profiles, foreign input, timeout,
+empty-book reavailability, repeated failures, malformed seeds, aggregate bounds,
+legacy audit retries, cross-process startup/marker verification and historical
+snapshot/export reproduction with current certification blocked. Review identified
+the historical managed replay regression; the policy-bound replay and separate
+frozen read path address it. Exact hashes and full-suite results are in the evidence.
+
+Quiet bootstrap expiry without a new receipt still needs transport watchdog
+integration. Transport/clock/process faults, proof checkpoints, automatic feed
+lifecycle, remaining feed models/runtime/CLI, independent backup/restore and
+intended-host acceptance remain pending. No live capture or deployment occurred.

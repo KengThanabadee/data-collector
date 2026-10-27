@@ -67,7 +67,7 @@ def plan_from_descriptor(value):
     except (KeyError,TypeError) as exc:raise ValueError('invalid snapshot plan') from exc
 
 
-def _ledger_view(paths,base,*,pin=None,limits):
+def _ledger_view(paths,base,*,pin=None,limits,_historical=False):
     descriptor=base['descriptor'];closed_pin=LedgerPin(**descriptor['ledger_pin'])
     close=None
     for _,record in _records(paths,limits):
@@ -93,10 +93,14 @@ def _ledger_view(paths,base,*,pin=None,limits):
             selected=durable.pin() if pin is None else pin
             if not isinstance(selected,LedgerPin) or selected.sequence<closed_pin.sequence:
                 raise ValueError('publication ledger cannot precede closure knowledge')
-            projection=ValidityLedger(selected.ledger_id)
-            for entry in durable.entries(selected):projection.add(entry)
+            if _historical:
+                projection,refs=durable._frozen_knowledge(selected)
+                dependencies=[asdict(row) for row in refs]
+            else:
+                projection=ValidityLedger(selected.ledger_id)
+                for entry in durable.entries(selected):projection.add(entry)
+                dependencies=[asdict(row) for row in durable.dependencies(selected)]
             projection.verify_pin(closed_pin)
-            dependencies=[asdict(row) for row in durable.dependencies(selected)]
     needed={row['record_id']:row['raw_sha256'] for row in dependencies};found=set();references={}
     for path,record in _records(paths,limits):
         if record.record_id in needed:
@@ -108,9 +112,9 @@ def _ledger_view(paths,base,*,pin=None,limits):
     return projection,selected,dependencies,[references[key] for key in sorted(references)]
 
 
-def _publication(base,paths,*,pin=None,limits,policy='ledger-at-start/1',base_validities=None):
+def _publication(base,paths,*,pin=None,limits,policy='ledger-at-start/1',base_validities=None,_historical=False):
     if policy not in {'ledger-at-start/1','ledger-at-start/2'}:raise ValueError('unknown snapshot publication policy')
-    ledger,pin,dependencies,segments=_ledger_view(paths,base,pin=pin,limits=limits)
+    ledger,pin,dependencies,segments=_ledger_view(paths,base,pin=pin,limits=limits,_historical=_historical)
     descriptor=dict(base['descriptor']);payload=strict_json(base['payload'])
     plan=plan_from_descriptor(descriptor['plan'])
     if len(payload['books'])!=len(plan.bindings):raise ValueError('snapshot book population mismatch')
@@ -205,9 +209,9 @@ def read_snapshot(root,snapshot_id,segments,*,limits=PublicationLimits()):
     """Return immutable original publication bytes after full raw dependency replay."""
     result=_load(root,snapshot_id,limits);descriptor=result['descriptor']
     paths=_pinned_paths(_paths(segments,limits.replay),descriptor)
-    base,validities=_materialize_snapshot(paths,descriptor['close_record_id'],plan_from_descriptor(descriptor['plan']),limits=limits.replay)
+    base,validities=_materialize_snapshot(paths,descriptor['close_record_id'],plan_from_descriptor(descriptor['plan']),limits=limits.replay,_historical=True)
     replayed=_publication(base,paths,pin=LedgerPin(**descriptor['publication_ledger_pin']),limits=limits.replay,
-        policy=descriptor['publication_policy'],base_validities=validities)
+        policy=descriptor['publication_policy'],base_validities=validities,_historical=True)
     if replayed!=result:raise ValueError('published snapshot differs from verified raw replay')
     return result
 

@@ -1,0 +1,22 @@
+{
+  "chunk": "5ad",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/discoveries.py": "ebbc4bf5435110379fdfc524badfe70f995aad792cb688659082eeb4b49c1b71",
+    "data_collector/gapmap.py": "e2b42d444583caae63dc9008a5e533686c0c404eb5371ac4a29c3cd91acd25ea",
+    "data_collector/ledger.py": "7e176829d6ef0e5d64954d902137ce05b34c9b9face6d2e819ff9104a0922105",
+    "data_collector/replay.py": "f281a0e314d20a4f4ee7e566078a07c1231c1f064380d8a28d65f3c00cdbe50d",
+    "data_collector/snapshots.py": "f397cdf6db26c755e13356abd214eb0210ebb838cc7864847c83f0fc6090a026",
+    "data_collector/exports.py": "ce9ae8ad91330e56760618d6cdfc3c3e5f0e9c2298d5a7f6f3192e3419f4cd9c",
+    "tests/test_dc_buffered_discoveries.py": "4c0aad5ca0ae5f81296d6d6c2e4dd867962360d49b837876fac47d81ee5b7322",
+    "docs/v2/IMPLEMENTATION.md": "19462724d732098b500520e69e5fbc6412e48122d8d3c9316625de5b7e447001"
+  },
+  "reviewer": "dc_chunk5ad_buffered_review",
+  "tests": "Root523 full-suite tests passed in43.584s (488v2+35v1) with ResourceWarning treated as errors, including loopback HTTP fixtures. All10 new tests pass. Reviewer independently ran68 focused tests before historical fixes,31 after initial fix,20 after final assessed-export fix, and compared full historical replay artifact/base validities directly with actual HEAD implementation: identical. git diff --check passes.",
+  "findings_closed": [
+    "Historical managed buffered timeout snapshots changed replay or failed the new raw gate: activate corrected replay only from exact-target policy audits before close, and reproduce original snapshots/embedded exports with a private frozen ledger view; current certification remains gated.",
+    "Historical assessed export still used live discovery gating for its frozen ledger prefix. Propagate historical mode only from read_export final rendering; regression includes an ordinary operational correction after timeout, with new assessed exports still blocked."
+  ],
+  "limits": "Already-supported buffered profiles only. Existing per-path bootstrap limits preserved; aggregate retained state bounded. Optional versioned buffered policy in existing negative audit schema; old audits retain bytes and semantics. No new transport/framework/journal. Quiet timeout without later input still needs watchdog integration. Transport/clock/process faults, checkpoints, lifecycle, remaining feeds/runtime/CLI, independent backup/restore and intended-host acceptance remain pending. No live capture/deployment. PLANS implementation prefix only; unrelated README/research excluded."
+}

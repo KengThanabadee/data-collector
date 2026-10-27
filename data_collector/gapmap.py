@@ -125,6 +125,10 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         max_cutoffs=coordinator.max_cutoffs,max_control_bytes=coordinator.max_control_bytes,
         max_projection_bytes=coordinator.max_projection_bytes)
     if existing is None and restored.pin!=coordinator.pin:raise ValueError('cutoff owner differs from durable gap prefix')
+    # Existing audits retain their original replay semantics and exact bytes.
+    # New buffered audits name the corrected timeout/no-book transition policy.
+    buffered_policy=(None if target.profile in {'deribit_full','bybit_standard'} else
+        ('reset-and-timeout/1' if existing is None else strict_json(existing.body).get('buffered_policy')))
     dependencies={};model=None;proof=None;discovery=None;reason=None
     def depend(record):
         if record.record_id not in dependencies:
@@ -167,7 +171,11 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
             if record.instrument is not None and record.instrument!=target.instrument:raise ValueError('routed native instrument differs')
             if r.stream_key==binding.seed_source:
                 outcome=model.supply_seed(decode_seed(record,target.profile),now_ns=r.monotonic_ns)
-            else:outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=r.monotonic_ns)
+            else:
+                if buffered_policy and isinstance(model,BufferedBook) and model.state=='no_book':
+                    model.reset(now_ns=r.monotonic_ns,reason='native_availability_recheck')
+                outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=r.monotonic_ns)
+            if buffered_policy and model.state=='invalid':outcome='invalid'
         except ValueError as exc:
             failed_exception=True
             outcome='invalid';reason=str(exc).encode()[:256].decode(errors='ignore')
@@ -187,14 +195,16 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         if record.record_id==discovery_record_id:raise ValueError('reported record does not establish a native gap')
     if discovery is None:raise ValueError('durable native gap discovery unavailable')
     first,supported=_first_affected(restored,proof)
-    body=canonical(dict(schema=SCHEMA,rule=RULE,scope=ledger.scope,request_id=request_id,target=asdict(target),
+    body_value=dict(schema=SCHEMA,rule=RULE,scope=ledger.scope,request_id=request_id,target=asdict(target),
         plan_sha256=digest(canonical(asdict(plan))),binding_index=binding_index,discovery_record_id=discovery.record_id,
         native_proof_record_id=None if proof is None else proof.record_id,
         proof_boundary=None if proof is None else _boundary(proof),cutoff_pin=asdict(restored.pin),
         first_cutoff_id=first,recovery_cutoff_id=None,status='invalid' if supported else 'unknown',
         reason=reason,proof_receive_utc_ns=None if proof is None else proof.receipt.receive_utc_ns,
         discovery_receive_utc_ns=discovery.receipt.receive_utc_ns,utc_interval='not_inferred',
-        raw_dependencies=list(dependencies.values())))
+        raw_dependencies=list(dependencies.values()))
+    if buffered_policy is not None:body_value['buffered_policy']=buffered_policy
+    body=canonical(body_value)
     if len(body)>min(max_mapping_bytes,65536):raise ValueError('gap mapping metadata bound; checkpoint required')
     if existing is not None:
         if existing.body!=body:raise ValueError('mapping audit differs from native/barrier replay')
