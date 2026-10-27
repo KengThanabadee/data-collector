@@ -118,7 +118,8 @@ def _verify(inputs, plan):
         current=(record.receipt.capture_id,record.receipt.process_session_id)==(origin.capture_id,origin.process_session_id)
         if current and marker is None and old:
             if ((record.kind,record.channel) not in {('control','cutoffs:'+origin.capture_scope),
-                    ('control','cutoff_recovery:'+origin.capture_scope),('coverage_event','validity:'+origin.capture_scope)} or
+                    ('control','cutoff_recovery:'+origin.capture_scope),('coverage_event','validity:'+origin.capture_scope),
+                    ('coverage_event','gap_mapping:'+origin.capture_scope)} or
                     len(recovery_records)>=inputs.replay_limits.max_records or len(record.body)>1024*1024):
                 raise ValueError('recovery marker must precede new live/clock work')
             recovery_records.append(record)

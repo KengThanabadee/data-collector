@@ -47,6 +47,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5z | Durable managed owner plans, source cutover fences and allocation-pinned replay | Approved after fixes; [evidence](implementation/chunk-05z.json) |
 | 5aa | Atomic managed scheduler cutovers and allocated-plan health | Approved after fixes; [evidence](implementation/chunk-05aa.json) |
 | 5ab | Bounded durable Deribit shared-socket receiver and automatic native gap mapping | Approved after fixes; [evidence](implementation/chunk-05ab.json) |
+| 5ac | Recover managed snapshot-book native failures directly from raw before certification/startup | Approved after fixes; [evidence](implementation/chunk-05ac.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -686,3 +687,34 @@ Automatic reconnect/lifecycle discovery, transport/clock/process correction
 mapping, durable proof checkpoints, broader feeds, continuous runtime/CLI,
 independent backup/restore and intended-host acceptance remain unfinished.
 No network capture or deployment was performed for this chunk.
+
+
+## Chunk5ac — recover native failures from raw
+
+Managed Deribit full and Bybit standard snapshot-book paths now derive missing
+native negatives from existing owner declarations and immutable raw records.
+Public ledger pins, assessments and dependency reads refuse certification while
+an unaudited failure remains. Existing native audit/correction records repair it;
+there is no additional durable schema or journal. Legacy undeclared paths keep
+their existing behavior and published snapshot bytes remain immutable.
+
+The disk owner performs this reconciliation before cutoff operations and snapshot
+input sealing, covering raw admission that races the receiver's mapping callback.
+Startup completes interrupted audits and newly discovered failures before its
+recovery marker. Independent marker verification replays the exact negative-only
+repair prefix, including preallocation history without an existing ledger genesis.
+Earlier receipt timestamps from a partial repair remain verifiable on retry.
+Internal continuity tips do not bypass the public certification gate.
+
+Ten synthetic tests cover certification/export, interrupted audit acknowledgement,
+repeated gaps, owner resets, resource bounds, raw-only startup, omitted/altered
+repair prefixes, partial retries, missing genesis and the cutoff callback race.
+Review prompted source-only startup pin validation, explicit handling of remaining
+uncertified siblings and restricting this projection to snapshot-book profiles.
+The aggregate level cap matches the existing replay default of200000. Full-suite
+results and exact reviewed hashes are recorded in the chunk evidence.
+
+Buffered native profiles, transport/clock/process fault mapping, proof checkpoints,
+automatic lifecycle/reconnect, broader feeds, continuous runtime/CLI, independent
+backup/restore and intended-host acceptance remain pending. No live capture or
+deployment was performed for this chunk.

@@ -1,0 +1,23 @@
+{
+  "chunk": "5ac",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/discoveries.py": "b67145f50c16a723343e8b5729ebadc01d17f11e8b2356d8bd42d67b2a2ce1c1",
+    "data_collector/ledger.py": "2342a7f861b179a1ed6cc9338a8fb52355d3ee97d2cc6bd0f75cd3bfe0d1600a",
+    "data_collector/gapmap.py": "cfa0ba7fea876c4ddc81310b6ea16e027e058c09efaeabb56d741e8939fa4cef",
+    "data_collector/lane.py": "aaea968af761991cb810804a481acec5d805b7c8f0a057f160c1fb849660f11a",
+    "data_collector/recovery.py": "99b0a31761763c4d7f9b0ddbee4d98761882abae917b91156dcfd6c15904e731",
+    "data_collector/publisher.py": "0a7c24bace0d493790b1af0ba003ee23d801e5910a69b7cf34e1089bb76fea64",
+    "tests/test_dc_discoveries.py": "220fb8146af109069454c12a0d31e204b71b78c165612c28e5522a0c0da9138c",
+    "docs/v2/IMPLEMENTATION.md": "5112a07cba6b3d25f87cf3e3345504aa7c0f75056cf878ff3f8897f59b1d038a"
+  },
+  "reviewer": "dc_chunk5ac_discovery_review",
+  "tests": "Root513 full-suite tests passed in45.148s (478v2+35v1) with ResourceWarning treated as errors, including loopback HTTP fixtures. All10 new tests pass; reviewer independently ran22 focused/supporting tests before the last addition and the final no-genesis preallocation test afterward. git diff --check passes.",
+  "findings_closed": [
+    "Validate the frozen source ledger pin independently of partially repaired startup output.",
+    "Use explicitly uncertified continuity tips while sibling native discoveries remain; public certification stays closed.",
+    "Restrict raw discovery projection to managed snapshot-book profiles; buffered bootstrap remains separate."
+  ],
+  "limits": "Managed deribit_full/bybit_standard snapshot-book paths only. Existing raw, owner, audit and correction schemas reused; no new journal. Legacy undeclared replay unchanged. Buffered profiles and transport/clock/process fault reconciliation, checkpoints, lifecycle, remaining feeds/runtime/CLI, independent backup/restore and intended-host acceptance remain pending. No live capture or deployment. PLANS implementation prefix only; unrelated README/research excluded."
+}

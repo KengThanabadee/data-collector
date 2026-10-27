@@ -45,7 +45,7 @@ class DurableLedger:
         self._scan_records=self._scan_bytes=0
         self._max_mapping_bytes=max_ledger_bytes
         self.poisoned=False
-        self.refresh(allow_pending_mappings=True)
+        self.refresh(allow_pending_mappings=True,allow_native_discoveries=True)
 
     @property
     def channel(self):return 'validity:'+self.scope
@@ -167,15 +167,15 @@ class DurableLedger:
         self._positions[r.stream_key]=r.receive_seq
         self._control_ids[entry.sequence]=record.record_id
 
-    def refresh(self, *, allow_pending_mappings=False):
+    def refresh(self, *, allow_pending_mappings=False,allow_native_discoveries=False):
         if self.poisoned:raise ValueError('ledger must be reopened after failure')
         # Revalidate the entire supplied prefix, including its order and evidence
         # availability. Never certify a cached pin after a dependency disappears.
         self._projection=ValidityLedger(self.ledger_id,**self._projection_limits)
         self._evidence,self._positions,self._control_ids={},{},{}
         self._mappings,self._mapping_refs,self._mapping_positions={},{},{}
-        self._mapping_bytes=0;self._pending_mappings=set()
-        count=size=0
+        self._mapping_bytes=0;self._pending_mappings=set();self._pending_native=()
+        count=size=0;managed=False
         try:
             for record in self._all_records():
                 if not isinstance(record,RawRecord):raise ValueError('typed verified raw records required')
@@ -189,6 +189,12 @@ class DurableLedger:
                 self._restore_mapping(record)
                 self._restore_control(record)
                 self._evidence[evidence.record_id]=evidence
+                managed=managed or record.channel=='owner_plans:'+self.scope or record.receipt.connection_id=='control:owners:'+self.scope
+            if managed:
+                from .discoveries import pending_native_discoveries
+                self._pending_native=pending_native_discoveries(self,max_paths=self._projection_limits['max_entries'])
+            if self._pending_native and not allow_native_discoveries:
+                raise ValueError('unmapped native discovery; exact negative required before certification')
             if self._pending_mappings and not allow_pending_mappings:
                 raise ValueError('unresolved native mapping audit; complete exact correction before certification')
             if self._known_pin is not None:
@@ -200,8 +206,12 @@ class DurableLedger:
             self.poisoned=True
             raise
 
-    def _append(self,payload,*,utc_ns,monotonic_ns,clock_epoch,_completing_mappings=False):
-        self.refresh(allow_pending_mappings=isinstance(payload,GapCorrection))
+    def _append(self,payload,*,utc_ns,monotonic_ns,clock_epoch,_completing_mappings=False,_native_start=False):
+        self.refresh(allow_pending_mappings=isinstance(payload,GapCorrection),
+            allow_native_discoveries=isinstance(payload,GapCorrection) or _native_start)
+        if self._pending_native and not (_native_start and isinstance(payload,LedgerStart)):
+            if not isinstance(payload,GapCorrection) or payload.proof_record_id not in self._mappings:
+                raise ValueError('unmapped native discovery requires audited negative correction')
         if self._pending_mappings and (not isinstance(payload,GapCorrection) or payload.proof_record_id not in self._pending_mappings):
             raise ValueError('pending native mapping requires its exact correction')
         count=self._projection.entry_count
@@ -219,7 +229,10 @@ class DurableLedger:
         self.poisoned=True
         self.journal.append(record)
         self._projection.add(entry)
-        if isinstance(payload,GapCorrection):self._pending_mappings.discard(payload.proof_record_id)
+        if isinstance(payload,GapCorrection):
+            self._pending_mappings.discard(payload.proof_record_id)
+            self._pending_native=tuple(d for d in self._pending_native if not (
+                d.plan.bindings[d.binding_index].target==payload.target and d.record_id==payload.evidence_record_id))
         self._evidence[evidence.record_id]=evidence
         self._positions[stream]=receipt.receive_seq
         self._control_ids[entry.sequence]=record.record_id
@@ -229,12 +242,23 @@ class DurableLedger:
         if self._pending_mappings:
             if _completing_mappings:return None
             raise ValueError('other native mapping audits remain unresolved')
+        if self._pending_native:
+            if _completing_mappings or _native_start:return None
+            raise ValueError('other unmapped native discoveries remain unresolved')
         return self._projection.pin()
 
     def initialize(self,*,utc_ns,monotonic_ns,clock_epoch):
         self.refresh()
         if self._projection.entry_count:return self._projection.pin()
         return self._append(LedgerStart(self.scope),utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+
+    def initialize_native_mapping(self,*,utc_ns,monotonic_ns,clock_epoch):
+        """Initialize negative-repair work; the returned tip is not certification."""
+        self.refresh(allow_pending_mappings=True,allow_native_discoveries=True)
+        if self._projection.entry_count:return self._projection.pin()
+        self._append(LedgerStart(self.scope),utc_ns=utc_ns,monotonic_ns=monotonic_ns,
+            clock_epoch=clock_epoch,_native_start=True)
+        return self.recovery_state()[0]
 
     def append(self,payload,*,utc_ns,monotonic_ns,clock_epoch):
         if not isinstance(payload,(GapCorrection,CloseGap)):
@@ -248,7 +272,7 @@ class DurableLedger:
         Public pin/assessment APIs still refuse until every audit is corrected.
         """
         from .gapmap import mapping_payload
-        self.refresh(allow_pending_mappings=True)
+        self.refresh(allow_pending_mappings=True,allow_native_discoveries=True)
         pending=tuple(mapping_payload(value,identity) for identity,value in self._mappings.items()
                       if identity in self._pending_mappings)
         pin=self._projection.pin() if self._projection.entry_count else None
@@ -265,6 +289,17 @@ class DurableLedger:
         for payload in pending:
             self._append(payload,utc_ns=utc_ns,monotonic_ns=monotonic_ns,
                          clock_epoch=clock_epoch,_completing_mappings=True)
+        return self.recovery_state()[0]
+
+    def complete_native_discoveries(self,coordinator,*,utc_ns,monotonic_ns,clock_epoch):
+        """Replay managed raw failures and append exact negatives before startup."""
+        from .gapmap import map_native_gap
+        self.recovery_state()
+        pending=self._pending_native
+        for discovery in pending:
+            map_native_gap(self,coordinator,discovery.plan,discovery.binding_index,discovery.record_id,
+                utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch,
+                max_records=self.max_scan_records,max_scan_bytes=self.max_scan_bytes)
         return self.pin(allow_empty=True)
 
     def pin(self, *, allow_empty=False):

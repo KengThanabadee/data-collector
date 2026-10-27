@@ -90,13 +90,14 @@ def iter_recovery_prefix(segments, *, venue, environment, capture_id, process_se
 
 
 def _validate_mapping_repairs(writer,prior,repairs,*,capture_scope,capture_id,process_session_id,
-                              provenance,max_records,max_scan_bytes):
-    """Independently check the startup-only correction prefix, including replay.
+                              provenance,max_records,max_scan_bytes,utc_ns,monotonic_ns,clock_epoch):
+    """Reproduce the exact negative-only startup prefix from immutable source.
 
-    Only exact negatives from unresolved source audits may precede interruption
-    controls. This also runs when verifying an immutable recovery marker.
+    Repair receipts may retain earlier timestamps after an interrupted retry;
+    every identity, body, dependency and ledger link must match deterministic
+    replay. No positive recovery or new live work is admitted here.
     """
-    from types import SimpleNamespace
+    from dataclasses import replace
     from .ledger import DurableLedger
     from .validity import LedgerEntry
     ledger_id=None;has_mapping=False
@@ -107,18 +108,37 @@ def _validate_mapping_repairs(writer,prior,repairs,*,capture_scope,capture_id,pr
             if ledger_id is not None and ledger_id!=identity:raise ValueError('startup source ledger identity differs')
             ledger_id=identity
     if ledger_id is None:
-        if repairs or has_mapping:raise ValueError('startup mapping repair lacks source ledger')
-        return
-    empty=SimpleNamespace(identity=writer.identity,encoded_records=lambda **kwargs:iter(()))
+        if has_mapping:raise ValueError('startup mapping repair lacks source ledger')
+        if repairs:
+            first=repairs[0]
+            if first.channel!='validity:'+capture_scope:raise ValueError('startup native repair requires ledger genesis')
+            ledger_id=LedgerEntry.from_bytes(first.body).ledger_id
+        else:
+            # An empty legacy prefix needs no genesis. Still replay managed raw
+            # so a forged marker cannot omit a first native repair/genesis.
+            ledger_id='startup-native-projection'
+    class RepairReplay:
+        identity=writer.identity
+        limits=writer.limits
+        def __init__(self):self.records=[]
+        def encoded_records(self,*,allow_unsealed=False):yield from self.records
+        def append(self,record):
+            if len(self.records)>=len(repairs):raise ValueError('startup requires exactly the pending native mapping repairs')
+            actual=repairs[len(self.records)]
+            normalized=replace(actual,receipt=replace(actual.receipt,
+                receive_utc_ns=record.receipt.receive_utc_ns,monotonic_ns=record.receipt.monotonic_ns))
+            if normalized!=record:raise ValueError('startup requires exactly the pending replayed native mapping repairs')
+            self.records.append(actual.to_bytes())
+    replay=RepairReplay()
     args=dict(ledger_id=ledger_id,capture_scope=capture_scope,capture_id=capture_id,
         process_session_id=process_session_id,provenance=provenance,prior_records=prior,
         max_scan_records=max_records,max_scan_bytes=max_scan_bytes)
-    source=DurableLedger(empty,**args)
-    pin,pending=source.recovery_state()
-    if tuple(LedgerEntry.from_bytes(r.body).payload for r in repairs)!=pending:
-        raise ValueError('startup requires exactly the pending native mapping corrections')
-    restored=DurableLedger(writer,expected_pin=pin,**args)
-    restored.pin(allow_empty=True) # full chain/evidence replay must leave no orphan audit
+    ledger=DurableLedger(replay,**args)
+    ledger.complete_native_mappings(utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+    coordinator=CutoffCoordinator(replay,capture_scope=capture_scope,capture_id=capture_id,
+        process_session_id=process_session_id,provenance=provenance,prior_records=prior)
+    ledger.complete_native_discoveries(coordinator,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+    if len(replay.records)!=len(repairs):raise ValueError('startup contains unrelated native repair controls')
 
 
 def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_id, process_session_id,
@@ -174,7 +194,7 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
             if marker is not None or record.kind!='control' or r.connection_id!='control:cutoff-recovery:'+capture_scope or r.receive_seq!=0:
                 raise ValueError('conflicting recovery marker')
             marker=record
-        elif record.channel=='validity:'+capture_scope:
+        elif record.channel in {'validity:'+capture_scope,'gap_mapping:'+capture_scope}:
             if marker is not None or interruptions or record.kind!='coverage_event':
                 raise ValueError('mapping repairs must precede cutoff recovery controls')
             repairs.append(record)
@@ -187,7 +207,8 @@ def reconcile_cutoffs(writer, segments, expected_pin, *, capture_scope, capture_
             interruptions.append(record)
         target.append(record)
     _validate_mapping_repairs(writer,prior,repairs,capture_scope=capture_scope,capture_id=capture_id,
-        process_session_id=process_session_id,provenance=provenance,max_records=max_records,max_scan_bytes=max_scan_bytes)
+        process_session_id=process_session_id,provenance=provenance,max_records=max_records,max_scan_bytes=max_scan_bytes,
+        utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
     coordinator=CutoffCoordinator(writer,capture_scope=capture_scope,capture_id=capture_id,
         process_session_id=process_session_id,provenance=provenance,prior_records=prior,
         max_cutoffs=max_cutoffs,max_control_bytes=max_control_bytes,max_projection_bytes=max_projection_bytes,

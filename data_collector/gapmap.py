@@ -102,12 +102,14 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
             count+=1;size+=len(record.to_bytes())+64
             if count>max_records or size>max_scan_bytes:raise ValueError('native gap scan bound; checkpoint required')
             yield record
-    existing=None;next_seq=0
+    existing=None;next_seq=0;known_negatives=set()
     connection='control:gap-mapping:'+ledger.scope;channel='gap_mapping:'+ledger.scope
     for record in all_records():
         if record.channel==channel:
             if record.receipt.process_session_id==ledger.session:next_seq=record.receipt.receive_seq+1
             value=strict_json(record.body)
+            if value.get('schema')==SCHEMA and value.get('target')==asdict(target):
+                known_negatives.add(value['discovery_record_id'])
             if value.get('request_id')==request_id:
                 if existing is not None:raise ValueError('duplicate mapping request identity')
                 existing=record
@@ -159,6 +161,7 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         if model is None:
             model=(SnapshotBook(target.instrument,target.profile,depth=binding.depth,signed_prices=binding.signed_prices)
                 if target.profile in {'deribit_full','bybit_standard'} else BufferedBook(target.instrument,target.profile,now_ns=r.monotonic_ns))
+        failed_exception=False
         try:
             if error is not None:raise error
             if record.instrument is not None and record.instrument!=target.instrument:raise ValueError('routed native instrument differs')
@@ -166,13 +169,19 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
                 outcome=model.supply_seed(decode_seed(record,target.profile),now_ns=r.monotonic_ns)
             else:outcome=model.receive(event) if isinstance(model,SnapshotBook) else model.receive(event,now_ns=r.monotonic_ns)
         except ValueError as exc:
+            failed_exception=True
             outcome='invalid';reason=str(exc).encode()[:256].decode(errors='ignore')
             model.invalidate('native_decode_or_apply_failed')
         if outcome=='control':
             if record.record_id==discovery_record_id:raise ValueError('control delivery cannot prove a native gap')
             continue
         if outcome=='invalid':
-            if record.record_id!=discovery_record_id:raise ValueError('earlier native gap must be mapped first')
+            if record.record_id!=discovery_record_id:
+                if record.record_id not in known_negatives:raise ValueError('earlier native gap must be mapped first')
+                if isinstance(model,BufferedBook):
+                    model.reset(now_ns=r.monotonic_ns,reason='native_reseed_required')
+                    if not failed_exception and r.stream_key==binding.ws_source:model.receive(event,now_ns=r.monotonic_ns)
+                reason=None;continue
             discovery=record;reason=reason or model.reason or 'native_continuity_invalid';break
         if model.state=='live' and outcome in {'applied','live'} and target.profile!='bybit_standard':proof=record
         if record.record_id==discovery_record_id:raise ValueError('reported record does not establish a native gap')
@@ -196,7 +205,7 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         if len(marker.to_bytes())>ledger.journal.limits.max_record_bytes:raise ValueError('gap audit record byte bound')
     correction=mapping_payload(strict_json(body),marker.record_id)
     if existing is None:
-        ledger.initialize(utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+        ledger.initialize_native_mapping(utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
         ledger.journal.append(marker)
     # A pending audit is durable negative knowledge. Only its exact correction
     # may complete it; public ledger pins/assessments stay blocked meanwhile.
@@ -204,6 +213,7 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
         if record.kind=='coverage_event' and record.channel==ledger.channel:
             entry=LedgerEntry.from_bytes(record.body)
             if isinstance(entry.payload,GapCorrection) and entry.payload.correction_id==correction.correction_id:
-                return GapMapping(marker.record_id,digest(marker.to_bytes()),correction.correction_id,first,ledger.pin())
-    pin=ledger.append(correction,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch)
+                return GapMapping(marker.record_id,digest(marker.to_bytes()),correction.correction_id,first,ledger.recovery_state()[0])
+    ledger._append(correction,utc_ns=utc_ns,monotonic_ns=monotonic_ns,clock_epoch=clock_epoch,_completing_mappings=True)
+    pin=ledger.recovery_state()[0] # continuity tip only; public certification replays all raw discoveries
     return GapMapping(marker.record_id,digest(marker.to_bytes()),correction.correction_id,first,pin)

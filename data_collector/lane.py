@@ -448,13 +448,21 @@ class ArchiveLane:
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],
             max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
         expected_ledger=None if value['ledger_pin'] is None else LedgerPin(**value['ledger_pin'])
-        ledger=DurableLedger(self.writer,ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
+        from types import SimpleNamespace
+        empty=SimpleNamespace(identity=self.writer.identity,limits=self.writer.limits,encoded_records=lambda **kwargs:iter(()))
+        args=dict(ledger_id=self._cutoff_ledger_id,capture_scope=self._cutoff_scope,
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
-            prior_records=prior,expected_pin=expected_ledger,max_scan_records=self.snapshot_limits.max_records,
-            max_scan_bytes=self.snapshot_limits.max_scan_bytes)
-        if ledger.recovery_state()[0]!=expected_ledger:raise ValueError('startup ledger knowledge differs from expected pin')
+            prior_records=prior,max_scan_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+        source=DurableLedger(empty,**args)
+        if source.recovery_state()[0]!=expected_ledger:raise ValueError('startup ledger knowledge differs from expected pin')
+        ledger=DurableLedger(self.writer,expected_pin=expected_ledger,**args)
         ledger.complete_native_mappings(utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,
             clock_epoch=request.receipt.clock_epoch)
+        native_coordinator=CutoffCoordinator(self.writer,capture_scope=self._cutoff_scope,capture_id=self.identity['capture_id'],
+            process_session_id=self.identity['process_session_id'],provenance=self.provenance,prior_records=prior,
+            expected_prior_pin=CutoffPin(**value['cutoff_pin']))
+        ledger.complete_native_discoveries(native_coordinator,utc_ns=request.receipt.receive_utc_ns,
+            monotonic_ns=request.receipt.monotonic_ns,clock_epoch=request.receipt.clock_epoch)
         result=reconcile_cutoffs(self.writer,segments,CutoffPin(**value['cutoff_pin']),capture_scope=self._cutoff_scope,
             capture_id=self.identity['capture_id'],process_session_id=self.identity['process_session_id'],provenance=self.provenance,
             utc_ns=request.receipt.receive_utc_ns,monotonic_ns=request.receipt.monotonic_ns,clock_epoch=request.receipt.clock_epoch,
@@ -726,10 +734,15 @@ class ArchiveLane:
             value['discovery_record_id'],utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,clock_epoch=r.clock_epoch,
             max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes)
 
+    def _repair_native_discoveries(self,receipt):
+        owners=self._cutoff_owners()
+        return owners.ledger.complete_native_discoveries(owners.coordinator,utc_ns=receipt.receive_utc_ns,
+            monotonic_ns=receipt.monotonic_ns,clock_epoch=self._clock.assessment.anchor.clock_epoch)
+
     def _execute_cutoff(self, request):
         """Disk-owner call only: all bound controls share the raw FIFO owner."""
         body=strict_json(request.body);r=request.receipt
-        self._cutoff_owners()
+        self._repair_native_discoveries(r)
         args=dict(utc_ns=r.receive_utc_ns,monotonic_ns=r.monotonic_ns,boot_id=body['boot_id'])
         payload=body['payload']
         if body['operation']=='allocate':
@@ -793,6 +806,7 @@ class ArchiveLane:
         return future
 
     def _seal_snapshot_inputs(self, request):
+        self._repair_native_discoveries(request.receipt)
         """Disk-owner call: seal before exposing any path to a live publisher."""
         value=strict_json(request.body)
         if self._snapshot_inputs is not None and self._snapshot_inputs[0]==value:
