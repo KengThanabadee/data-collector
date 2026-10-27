@@ -1,0 +1,19 @@
+{
+  "chunk": "5af",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/bookstate.py": "6e5ceaf14b29f12d53830eb8b9942b88f1468aff98e94273709a4fd6edd9fe8a",
+    "data_collector/checkpoints.py": "8043be5ecbe4f0f82f5942514434584af0eb83fbec5c61c851cee8ca8b9582f0",
+    "data_collector/replay.py": "41d117a4f091a787f142f247f48764d53385caabc5884ab816a0067c17daa30e",
+    "tests/test_dc_checkpoints.py": "2533ec270f95e7174eaf853e716cc0ea08e03339918ad5aae40b321464d3e8d3",
+    "experiments/native_checkpoint_probe.py": "13be03e716c6654e504dbb4b0c49c4c548009da251da85e312322a4f6cb92fbb",
+    "docs/v2/NATIVE_CHECKPOINTS.md": "09a3c6557046bdf0274e29924c10bfef55c401fcb7f8fc4e4b8dc4a875a993de",
+    "docs/v2/experiments/native_checkpoint_probe.json": "b8aa8df4b454c088b36325b886e191cd91be2959108bd73b6d4de52cfc7e360a",
+    "docs/v2/IMPLEMENTATION.md": "beca18c14d12e0dbe9ef375fdae8ffbb6db667718c46ca4c03b38ac5a21dc2a6"
+  },
+  "reviewer": "dc_chunk5af_checkpoint_review",
+  "tests": "Root556 full-suite tests passed in51.664s (521v2+35v1), ResourceWarning treated as errors, including loopback HTTP fixtures. Root40 focused checkpoint/replay/snapshot tests passed; reviewer independently48 checkpoint/replay/termination tests and final14 checkpoint tests passed. Reviewer reran10k/100k/1m synthetic native continuation probe: exact final state hashes and692/694/696byte sizes reproduce. Model-only timing does not establish archive/runtime/RSS performance. All8 source hashes and probe source hashes reviewed; git diff --check passes.",
+  "findings_closed": [],
+  "limits": "Verified snapshot-book native-state prerequisite only. Current consumers do not resume capture/control projections from checkpoints; verification rebuilds from raw. Buffered native state, suffix orchestration, compact raw-prefix proof and incremental ledger/owner/clock/cutoff/metadata are pending, so all existing capture caps remain. Single-run synthetic model timing is not archive/runtime/RSS/host acceptance. No current certification bypass, raw deletion, journal/framework migration, live capture or deployment. Full original production scope retained. PLANS implementation prefix only; unrelated README/research excluded."
+}

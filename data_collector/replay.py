@@ -147,7 +147,7 @@ def materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Rep
     return _materialize_snapshot(segments,close_record_id,plan,limits=limits)[0]
 
 
-def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits(),_historical=False):
+def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=ReplayLimits(),_historical=False,_native_state=None):
     """Artifact plus transient pre-correction validity; legacy artifact bytes stay fixed."""
     sha256(close_record_id,'close_record_id')
     if not isinstance(plan,SnapshotPlan) or len(plan.bindings)>limits.max_books:raise ValueError('bounded typed snapshot plan required')
@@ -345,4 +345,6 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
         payload_sha256=digest(payload))
     if owner_dependencies:descriptor['owner_plan_dependencies']=list(owner_dependencies)
     identity=digest(canonical(descriptor))
+    if _native_state is not None:
+        _native_state.update(models=tuple(models),terminated=tuple(i in transport_ended for i in range(len(models))))
     return dict(snapshot_id=identity,descriptor=descriptor,payload=payload),tuple(base_validities)

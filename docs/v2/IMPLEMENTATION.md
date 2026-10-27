@@ -50,6 +50,7 @@ User-directed workflow: implement a bounded chunk, execute relevant tests, spawn
 | 5ac | Recover managed snapshot-book native failures directly from raw before certification/startup | Approved after fixes; [evidence](implementation/chunk-05ac.json) |
 | 5ad | Bounded buffered native discovery, timeout/reavailability repair and frozen artifact compatibility | Approved after fixes; [evidence](implementation/chunk-05ad.json) |
 | 5ae | Managed Deribit connection-end negatives, durable shutdown and non-healing replay | Approved after fixes; [evidence](implementation/chunk-05ae.json) |
+| 5af | Verified snapshot-book continuation state and immutable native checkpoint prerequisite | Approved; [evidence](implementation/chunk-05af.json) |
 | 5 remaining | Venue-isolated async capture, REST discovery/recovery, quotas, bounded configuration, CLI and health | Pending |
 | 6 | Independent backup/restore interfaces, archive dependency verification, operational integration and compatibility packaging | Pending |
 | 7a | Bounded Deribit BTC/ETH native-book evidence harness | Harness approved after fixes; [evidence](implementation/chunk-07a.json); first live run archived/replayed successfully; quiet-contract delta gate failed ([result](implementation/deribit-probe-quiet.json)) |
@@ -807,3 +808,38 @@ such control can be written still requires runtime/clock/process fault mapping.
 Automatic reconnect/lifecycle, durable proof checkpoints, other feed models,
 continuous runtime/CLI, independent backup/restore and intended-host acceptance
 remain pending. No network capture or deployment was performed.
+
+
+## Chunk5af — verified native checkpoint prerequisite
+
+`bookstate.py` saves/restores every existing SnapshotBook continuation field,
+including observed watermarks and last fingerprint omitted by display views.
+Native price precision, configured level cap, epoch, invalid/bootstrapping state
+and raw source identities survive restoration. Unknown state shapes and resource
+excess are rejected. The existing materializer exposes final native state through
+a private optional sink after all validation; its normal output bytes are unchanged.
+
+`checkpoints.py` derives an immutable checkpoint at an exact closed raw frontier,
+retaining its full snapshot descriptor/ledger pin/owner and raw references,
+source receipt frontiers, last-applied raw proof and terminal latches. Marker-last
+publication reuses existing immutable file writes. Readers check identity/bounds
+and independently replay raw to compare the entire checkpoint; recomputing a
+checksum around altered hidden state cannot pass. Ledger history/open negatives
+stay referenced and unchanged, not silently reset or hydrated by this module.
+
+Fourteen tests cover hidden state with identical views but different future
+acceptance, exact suffix state, duplicate/conflict/stale/reset rules, native
+precision/caps, hash-consistent semantic tampering, missing/pinned dependencies,
+pre-allocation resource checks, interrupted marker publication, immutable retry,
+and terminal/owner/open-negative preservation. A bounded synthetic experiment
+at10k/100k/1m native events demonstrates equal full state after restoring and
+applying a1000-event suffix. See [scope and measurements](NATIVE_CHECKPOINTS.md).
+Exact reviewed hashes and full-suite results are recorded in the chunk evidence.
+
+This is a prerequisite for acceleration, not continuous capture qualification.
+Only snapshot-seeded Deribit/Bybit-standard models are supported. Buffered state,
+native suffix orchestration, compact raw-prefix proofs and incremental ledger/
+owner/cutoff/metadata/clock projections remain pending. Existing256-dependency/
+64KiB proof, scan and projection limits remain in force; reading a checkpoint
+still replays full raw. Other feeds/lifecycle/runtime/CLI, independent backup/
+restore and intended-host acceptance remain unfinished. No network/deployment.
