@@ -2,6 +2,26 @@
 
 V1 implementation follows the preserved [SPEC v1](docs/SPEC_V1.md). V2 design follows [SPEC.md](SPEC.md). Source repository: [KengThanabadee/option-collector](https://github.com/KengThanabadee/option-collector) (private). Deployment and recurring collection have not been performed.
 
+## Next delivery — usable Deribit capture path
+
+The full SPEC.md scope remains the final target. Following independent review
+and the user's direction, prioritize a runnable vertical slice over further
+infrastructure refinement. Approved component counts are not release readiness.
+
+1. Wire existing discovery, raw metadata, clock, receiver, archive and replay into
+   one documented v2 command with explicit environment, data root and symbols.
+2. Run a declared bounded Deribit capture; stop cleanly, verify committed raw,
+   read/export it independently, and show received data and coverage/gaps.
+3. Ask a fresh high-reasoning agent to review actual usability and unnecessary
+   complexity. Fix blockers before committing; defer speculative edge cases,
+   generic abstractions and optimizations unless a measured failure needs them.
+4. Use capture evidence to address the existing long-run proof horizon, then
+   qualify longer operation, backup/restore and intended-host acceptance.
+   Extend the remaining venue/feed families without claiming this slice is full v2.
+
+The first capture is a partial Deribit book workflow, not full-universe or
+multi-venue production acceptance. Keep unsupported/pending scope explicit.
+
 ## V2 runtime implementation — resumed
 
 The user authorized chunked implementation with a fresh **high-reasoning** agent review after each chunk. Follow [chunk progress and exact review evidence](docs/v2/IMPLEMENTATION.md).
@@ -56,13 +76,14 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5al: bounded DeribitCapture owns clock warmup, durable owner-before-timer startup and ordered publication/socket/clock drain; startup-stop/cleanup review findings fixed,598 combined tests pass. Raw lane/HTTP/quota/discovery and CLI ownership remain external.
 - [x] Chunk5am: durable Deribit any-currency discovery and complete BTC/ETH metadata index retain blocked/excluded families and stale prior universe; no-retry HTTP/quota/cooldown review findings fixed;615 combined tests pass. Metadata publication, lifecycle/config/CLI wiring remain pending.
 - [x] Chunk5an: raw-verified metadata batches share the disk FIFO; reserved namespace/proof and aggregate-budget findings repaired; owner/replay/audit dependencies remain verifiable;623 combined tests pass. Bootstrap config/CLI and complete live lifecycle remain pending.
+- [x] Chunk5ao: runnable bounded Deribit config/discover/capture/verify-run path composes existing clock, metadata, receiver and archive; independent replay/raw export and snapshot integration tested. Fresh high-reasoning review approved thin composition after capture-truth fixes. Real Linux/chrony exchange capture remains unverified.
 - [ ] Investigate reuse of verified immutable input within one certification operation before adding persistent projection state; preserve mutation/removal/pending-negative gates and remeasure.
 - [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
 - User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current623 combined tests pass:588 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+V2 now has a bounded Deribit CLI path; see docs/v2/RUNNING.md. Final chunk5ao validation is recorded in docs/v2/implementation/chunk-05ao.json. This remains partial v2 code: no deployment, real Linux/chrony CLI capture or unbounded capture is certified.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

@@ -36,11 +36,11 @@ class MinuteCutoffs:
                  healthy_streams_for_plan=None):
         if not isinstance(lane,ArchiveLane) or not callable(plan) or not callable(healthy_streams):
             raise ValueError('local lane and synchronous plan/health providers required')
-        integer(first_cutoff_utc_ns,'first cutoff UTC')
+        if first_cutoff_utc_ns is not None:integer(first_cutoff_utc_ns,'first cutoff UTC')
         integer(max_cutoffs,'scheduled cutoff bound',1);integer(max_plan_bytes,'schedule plan byte bound',1)
         text(boot_id,'schedule boot identity')
         clock=lane.health()['clock']
-        if (first_cutoff_utc_ns%MINUTE_NS or first_cutoff_utc_ns>2**63-1-MINUTE_NS or max_cutoffs>10000 or
+        if ((first_cutoff_utc_ns is not None and (first_cutoff_utc_ns%MINUTE_NS or first_cutoff_utc_ns>2**63-1-MINUTE_NS)) or max_cutoffs>10000 or
                 len(boot_id.encode())>128 or clock is None or clock['cutoff_scope'] is None or
                 clock['cutoff_allocations_submitted']!=clock['cutoff_history_count'] or not clock['recovery_ready'] or
                 (clock['recovery_next_utc_ns'] is not None and first_cutoff_utc_ns!=clock['recovery_next_utc_ns']) or
@@ -161,6 +161,11 @@ class MinuteCutoffs:
         if self._started:raise ScheduleStopped('schedule can run once per local scope')
         self._started=True;active=None
         try:
+            if self.first_cutoff is None:
+                # A fresh runtime selects its first minute after clock warmup,
+                # not before the >=60s alignment interval.
+                utc,_,_=self._stamp()
+                self.first_cutoff=(utc//MINUTE_NS+1)*MINUTE_NS
             for index in range(self.max_cutoffs):
                 if self._stop.is_set():break
                 label=self.first_cutoff+index*MINUTE_NS

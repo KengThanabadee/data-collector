@@ -1190,3 +1190,47 @@ configuration/bootstrap orchestration, multi-group sharding, lifecycle updates,
 CLI, scalable checkpoints, remaining venues/feeds, independent backup/restore
 and intended-host acceptance remain pending. No exchange request, live daemon
 query, service change or deployment occurred in this chunk.
+
+
+## Chunk5ao — runnable bounded Deribit capture and readback
+
+The next delivery is a usable vertical slice rather than another infrastructure
+refinement. `python -m data_collector` and the packaged `data-collector` entry
+point expose `config-check`, `discover`, `capture`, and `verify-run`. The existing
+v1 entry point/configuration remain unchanged. Strict versioned TOML normalizes
+effective settings and hashes them; the root is separately bound by environment
+and exclusively owned during collection. V1 roots and unbound existing contents
+are rejected. Collector Python source and effective config are retained.
+
+`app.py` composes the existing writer, raw lane, quota, discovery, metadata,
+receiver, schedule and publisher. A narrow clock `prime()` admits actual evidence
+before discovery; recurring sampler ownership and measured warmup stay with
+DeribitCapture. A fresh schedule can choose its first future minute after
+warmup. One or two explicit active BTC/ETH option symbols use declared agg2 book
+channels. This profile stops within120 seconds or64 incoming frames, with existing
+byte/proof limits retained; it can stop before a minute snapshot is available.
+A duration timer requests normal drain. Ctrl-C drains admitted raw work, and
+failed/cancelled runs keep their durable prefix and terminal error.
+
+Independent committed reads verify segments and metadata sources, replay selected
+books and compare final state, verify available snapshots, and optionally export
+lossless original raw envelopes as a new JSONL file. Review found and fixed three
+usability issues: ACK-only capture cannot succeed; final success is published only
+after readback verification; known-inadmissible long durations are rejected by
+config before discovery. The reviewer considers this thin composition appropriate
+and found no need for an additional orchestration framework.
+
+All639 tests pass in66.908 seconds with ResourceWarning errors (604v2+35v1).
+Final16 focused tests pass in6.768 seconds; the independent reviewer reran them
+in6.395 seconds. They cover actual CLI-to-runtime wiring with fixture transport,
+raw/discovery/metadata capture, snapshot publication, replay/export, cancellation,
+root safety and the two capture-truth regressions. The distributable wheel builds
+and includes both entry points. These use synthetic exchange/clock fixtures, not
+live Linux/chrony or intended-host evidence. Exact hashes are recorded below.
+
+The full SPEC remains the final scope. Real exchange operation of this CLI on a
+Linux/chrony host, long-run proof horizon/capacity, automatic crashed-session
+reconciliation, all remaining feeds/venues, complete vendor source/schema freeze,
+independent backup/restore and production acceptance remain pending. This host is
+macOS; no live service, deployment, clock modification or production-readiness
+claim occurred. See RUNNING.md for the actual commands and current boundaries.

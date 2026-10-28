@@ -1,0 +1,15 @@
+# Bounded v2 discovery bootstrap; not a full release or capture configuration.
+# Run discover first, then set current option symbols before capture.
+[data_collector]
+schema = "dc.config/2"
+venue = "deribit"
+environment = "testnet"
+data_root = "../data/v2/testnet"
+max_response_bytes = 4194304
+max_instruments = 10000
+timeout_seconds = 30
+warmup_timeout_seconds = 180
+chronyc = "chronyc"
+symbols = []
+duration_seconds = 90
+max_frames = 64

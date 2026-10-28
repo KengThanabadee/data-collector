@@ -1,0 +1,29 @@
+{
+  "chunk": "5ao",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "reviewer": "capture_path_review",
+  "sources": {
+    "AGENTS.md": "040e3c2a4e0e5c9f86e7277292bf1c366ee9df3881a6d4771141035a27c9cbc7",
+    "pyproject.toml": "621633e3f45c65cf027d594af0d045a17cb1ebcb35f5c0fcf1359ca40fc698f5",
+    "data_collector/__main__.py": "935a1c1166b0c1ea35a82256345000bf2c73ded718d77773bc27a71ecce28f7d",
+    "data_collector/app.py": "53388531f2c95dc80aaa1e12efbb80d2cc2bbbeddea2dae33d5965a3eb321b89",
+    "data_collector/cli.py": "a7c6e44bf975677eb949636f82f467e32e9844c866fd08d9beb1cee0b262e829",
+    "data_collector/config.py": "de9eaa244c74cca7977348658842ff6a7286e5471d03479f67f12ac16fb0ba27",
+    "data_collector/clocksource.py": "ad3f87a0263ad67c19ca63259285f03a60e2f1ab9c9ff7133eaf286da1f6ca1d",
+    "data_collector/schedule.py": "15b4a68018c170275448c3c465a180d7badac13fca56a48bc8ca6b88872ea51e",
+    "config/v2-discovery.toml": "ab5fafb7b6901697a1d557c9480aba289661fc6bdbd57e0b6bb01fdabe7517c4",
+    "tests/test_dc_config.py": "d8ff5907d32ea2ffd6448572bb7c46959c3438b57390bd6adfafba42dfa62dda",
+    "tests/test_dc_app.py": "9509e82e14888652256e93f3205c43f7e5f2ed80446de052776c65c201661d42",
+    "docs/v2/RUNNING.md": "8f61a8784c4f37d4ffea37379fd86e3a766adbfed7785a85080407f606a0d0e1",
+    "docs/v2/IMPLEMENTATION.md": "413df2f41cc43d4e862c24e8c3b2a86f7ab08ac06c91c8d49dc419e4de352d80"
+  },
+  "tests": "Full639 tests passed66.908s with ResourceWarning errors (604v2+35v1). Final16 focused passed6.768s; reviewer independently16 passed6.395s. Wheel build succeeds with both CLI entry points packaged. git diff --check passes.",
+  "findings_closed": [
+    "ACK-only bounded runs must fail before native snapshots exist for all selected books.",
+    "Verify committed raw/replay before publishing immutable success result.",
+    "Reject durations beyond this bounded120s profile before network/metadata work."
+  ],
+  "limits": "Partial bounded Deribit agg2 option-book CLI, one or two explicit symbols, max120s/64frames and existing proof limits. All original SPEC scope retained. Actual Linux/chrony live exchange run, deployment, continuous capture/capacity, remaining feeds/venues, restart CLI reconciliation, full vendor source-schema freeze and off-host backup/restore acceptance pending. No new generic orchestration framework, persistent cache or raised proof limits. Unrelated research stays excluded.",
+  "plan_prefix_sha256": "a3b53ad8a98500847c6f29b96c8615199ebfd59d81952d7ed1fd362f1ffbd1b9"
+}

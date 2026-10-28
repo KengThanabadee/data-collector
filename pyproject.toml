@@ -11,6 +11,7 @@ dependencies = ["aiohttp==3.14.5"]
 
 [project.scripts]
 option-collector = "option_collector.cli:main"
+data-collector = "data_collector.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["option_collector*", "data_collector*"]

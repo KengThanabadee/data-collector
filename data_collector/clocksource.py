@@ -123,7 +123,17 @@ class ChronyClockSampler:
         self.read=read or read_tracking;self.wait_until=wait_until or self._sleep_until
         self._stop=asyncio.Event();self.updated=asyncio.Event();self._started=self._terminal=self._cancelled=False
         self.samples=self.failures=0;self.last_ack=None
+        self._primed=False
         lane._reference_sampler=self
+
+    async def prime(self):
+        """Admit one real measurement before discovery; run() still owns warmup."""
+        if self._primed or self._started or self._stop.is_set():
+            raise ValueError('prime once before clock sampling starts')
+        self._primed=True
+        await self._sample_once()
+        if self._cancelled:raise asyncio.CancelledError
+        return self.last_ack
 
     async def _sleep_until(self,deadline):
         await asyncio.sleep(max(0,deadline-time.monotonic_ns())/1_000_000_000)

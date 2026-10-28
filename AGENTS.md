@@ -25,7 +25,7 @@ Run these with `.venv/bin/python`:
 - `-m unittest tests.test_dc_snapshots -v`: run a focused suite.
 - `-m option_collector status --json`: inspect local collector status.
 
-The v1 `collect-once` command performs a real public-API capture. Planned v2 CLI commands are not yet available.
+The v1 `collect-once` command performs a real public-API capture. V2 `python -m data_collector` exposes `config-check`, `discover`, bounded `capture`, and `verify-run`; see `docs/v2/RUNNING.md`. Continuous production and the remaining spec commands are pending.
 
 ## Coding Style & Naming Conventions
 
