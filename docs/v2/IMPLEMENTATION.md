@@ -1074,3 +1074,64 @@ universe/discovery/lifecycle, raw lane/process supervision, remaining venues/
 feeds, checkpoint capacity, standalone CLI, independent backup/restore and actual
 Linux chrony/full-target soak acceptance remain pending. No live capture,
 system-service change or deployment occurred.
+
+
+## Chunk5am — durable Deribit discovery and raw-backed universe index
+
+`DeribitDiscovery` in `data_collector/discovery.py` captures bounded public
+`get_instruments` attempts through the existing measured raw lane and shared
+venue quota. [Current primary API documentation](https://docs.deribit.com/api-reference/market-data/public-get_instruments)
+qualifies `currency=any` across settlement currencies and a distinct1request/s
+limit. The fixed query also uses `kind=any`, `expired=false`, `extended=true`.
+Derivatives are selected by explicit BTC/ETH base metadata, including contracts
+settled in another currency; `is_active=false` is retained, not silently omitted.
+This is discovery evidence, not atomic market-state data or feed enablement.
+
+Each call archives request intent, then obtains its final quota grant immediately
+before starting HTTP acquisition. A mandatory shared `get_instruments` pool
+has capacity1 and a window of at least1s, alongside the caller's frozen venue
+cost pools. No archive await can age a grant before application dispatch.
+`discovery_session()` qualifies pinned aiohttp3.14.5 by disabling its internal
+idempotent-request retry; default retry-enabled sessions are rejected. Per-call
+middleware and status-error overrides retain HTTP errors for raw capture.
+Dependency upgrades must requalify this private transport switch. The factory
+has no cookies, environment-proxy trust or credentials; callers own its closure.
+
+Exact bounded response bodies, public request parameters, request source/hash,
+request-start/receipt clocks, HTTP status and allowlisted relevant headers are archived
+before parsing. Redirects/decompression are disabled. Partial reads, timeout,
+oversize and cancellation preserve the observed prefix with explicit incomplete
+status; they never publish a partial universe. Received429 cooldown is applied
+at headers before body awaits or cancellation. A single qualified numeric
+Retry-After up to3600s defers every charged pool; absent/ambiguous/unsupported
+cooldown fails that venue's REST quota closed rather than guessing a delay.
+Admitted archive writes drain before cancellation; an unconfirmed ack poisons
+the discovery owner. No automatic HTTP retry is introduced.
+
+`project_instruments` returns an immutable `dc.deribit-universe/1` index with
+selected/excluded/blocked rows, source/row pointers, native IDs plus creation
+incarnations and explicit zero counts for known families. Native decimal values
+become declared decimal strings in metadata; untouched raw preserves original
+lexemes and unknown fields. Metadata effective time remains unknown, never
+backdated to contract creation. Combo candidates remain blocked until all legs
+are verified; unknown native kinds remain visible. Identity/schema/row/byte
+bounds reject the whole candidate instead of choosing a prefix. Empty or bad
+refreshes retain the last accepted universe with stale health, including an
+exhausted refresh budget. A repeatable raw projection does not certify missing
+request dependencies or publish `metadata_version`/owner transitions itself.
+
+Seventeen new tests cover raw/decimal/linear/inactive fidelity, complete family
+classification, empty/bad refresh retention, partial/oversized errors, cancel
+before dispatch and during reads, lost acknowledgements, count/identity caps,
+transport/config gates and the four independent-review regressions. Real local
+HTTP servers verify exactly one request on disconnect and preservation of429
+body/cooldown despite inherited status errors or retry middleware. Full615 tests
+pass in61.370s with ResourceWarning errors (580v2+35v1); reviewer independently
+ran15 non-loopback tests and inspected all17 passing focused results.
+
+The source/index are implemented; frozen release configuration, dependency-
+complete bootstrap/metadata emission, lifecycle subscription/audit scheduling,
+full-universe sharding/capacity, CLI and the remaining original multi-venue/
+feed/checkpoint/backup/host acceptance scope remain pending. No exchange HTTP
+request or deployment occurred in this chunk. Exact source hashes, closed
+findings and approval are recorded in chunk evidence.

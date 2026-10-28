@@ -1,0 +1,19 @@
+{
+  "chunk": "5am",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/discovery.py": "1abe1bbd03ba668866e5ff9f4a8154f7b53a6d5d27a9c6d6c54e18e04c242398",
+    "tests/test_dc_discovery.py": "735e5b1a9c3d7c6a902bc96516d4d48bc2b3f756091588cc67e9d0a403908c86",
+    "docs/v2/IMPLEMENTATION.md": "723992c4bbd1e86446014bb57bba0c4dcb7d7bb93c8295a14ec13e141e17c4ef"
+  },
+  "reviewer": "dc_chunk5am_discovery_review",
+  "tests": "Root615 full-suite tests passed61.370s with ResourceWarning errors (580v2+35v1), including loopback HTTP fixtures. All17 discovery tests pass /tmp/dc-05am-focused.log; reviewer independently15 non-loopback tests pass and inspected17-test log. Real local HTTP disconnect proves one request/one grant; real429 verifies exact error bytes retained under inherited raise_for_status/retry middleware. Regressions cover delayed intent ack vs shared quota, cancellation preserving provider cooldown, and refresh cap retaining stale last universe. Exact body/index roundtrip, decimal fidelity, all-family classification, incomplete prefix/cancel/ack poisoning and identity/cap/encoding gates pass. git diff --check passes.",
+  "findings_closed": [
+    "Disable pinned aiohttp implicit idempotent GET retry and reject unqualified sessions; override status-error and middleware behavior.",
+    "Obtain final shared quota admission after durable request intent, immediately before application dispatch.",
+    "Apply known HTTP429 shared-pool cooldown before response-body await/cancellation; fail unsupported cooldown closed.",
+    "Mark prior accepted universe stale when a refresh request cap prevents a new acquisition."
+  ],
+  "limits": "Bounded Deribit raw discovery acquisition/index only; currencyany/kindany with BTC/ETH metadata selection across settlement currencies. Combos remain blocked pending leg scope; unknown kinds visible, non-targetbases excluded; explicit zero family counts. Declared decimal-string index retains raw source/row pointers and unknown effective times. No prefix subset/implicit HTTPretry/newdeps/secret capture. Pinned aiohttp3.14.5 private retry switch requires upgrade requalification. Callerowns lane/session/sharedquota and futuredependency-complete metadata publication/lifecycle/config/CLI. Index alone is not enabled-feed readiness or missing-dependency certification. Original complete multi-venue/feed/checkpoint/capacity/backup/host acceptance remains pending. No exchange request or deployment. PLANS implementation prefix only; unrelated research excluded."
+}
