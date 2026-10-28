@@ -1234,3 +1234,40 @@ reconciliation, all remaining feeds/venues, complete vendor source/schema freeze
 independent backup/restore and production acceptance remain pending. This host is
 macOS; no live service, deployment, clock modification or production-readiness
 claim occurred. See RUNNING.md for the actual commands and current boundaries.
+
+
+## Chunk5ap — size the runnable profile from actual Deribit discovery
+
+A real public get_instruments experiment found two blockers in the initial CLI
+profile: the4MiB response cap stopped a successfulHTTP200 response, and the8MiB
+retained metadata-proof budget rejected the complete2653-row derivation before
+writes. The failed runs and their raw/WAL evidence remain unchanged on disk.
+Read-only reconstruction measured about14.17MB of combined raw response and derived
+metadata evidence; the same proof fails at8MiB and verifies at16MiB.
+
+The CLI default response cap is now8MiB and its explicit pilot replay profile has
+a16MiB metadata-proof budget. The profile is frozen in result.json and passed
+consistently through archive admission, independent metadata verification and
+snapshot readback. Reports without it retain the original8MiB library default.
+Generic replay/library defaults, proof verification and other resource bounds
+are unchanged. This is a measured sizing fix, not a new orchestration layer.
+
+The bounded live rerun completed:4,421,429 response bytes,5134 native instrument
+rows,2653 selected BTC/ETH metadata versions,2606 active option symbols,2658
+committed records. A separate verify-run invocation successfully reread the
+archive and verified source dependencies. The small public metrics and exact
+hashes are in chunk-05ap-live.json; raw archives remain ignored.
+
+This experiment used actual macOS UTC/monotonic clocks and a process identity via
+the existing observer seam, with the real absent chronyc invocation retained as
+unhealthy FileNotFoundError evidence. It performed REST discovery only; no healthy
+UTC alignment, WebSocket capture, minute snapshot, Linux CLI qualification,
+intended-host capacity or production acceptance is claimed. No preflight was
+relaxed in the public CLI. A Linux VM can qualify that path before a VPS purchase.
+
+All640 tests pass in71.064 seconds with ResourceWarning errors. The independent
+reviewer ran17 app/config tests, including a response above4MiB whose full proof
+fails under8MiB but succeeds under the frozen16MiB profile. The reviewer approved
+the measured fix and found no actionable issue or unnecessary abstraction. Full
+SPEC scope, remaining feeds/venues, long-running operation, Linux/chrony capture,
+independent backup/restore and intended-host acceptance remain pending.

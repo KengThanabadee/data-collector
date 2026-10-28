@@ -24,13 +24,17 @@ from .pipeline import SnapshotPipeline
 from .publisher import SnapshotPublisher
 from .queues import ByteQueue
 from .quota import PriorityQuota, QuotaWindow
-from .replay import BookBinding, SnapshotPlan, _book_message
+from .replay import BookBinding, ReplayLimits, SnapshotPlan, _book_message
 from .runtime import DeribitCapture
 from .schedule import MinuteCutoffs
 from .segments import _mkdir, iter_segment_records
-from .snapshots import plan_from_descriptor, read_snapshot
+from .snapshots import PublicationLimits, plan_from_descriptor, read_snapshot
 from .validity import FeedTarget
 from .writer import SessionWriter, _lock
+
+# Sized from the retained raw discovery response plus the complete derived batch.
+# Library defaults stay unchanged; each run freezes this bounded pilot profile.
+PILOT_REPLAY_LIMITS = ReplayLimits(max_metadata_bytes=16*1024*1024)
 
 
 def observe():
@@ -87,6 +91,7 @@ def verify_run(root, *, export=None):
 
 def _verify_report(root, report, *, export=None):
     if report.get('schema') != 'dc.capture-result/2':raise ValueError('v2 capture result required')
+    limits = ReplayLimits(**report.get('replay_limits',{}))
     paths = []
     for name in report['segments']:
         path = (root/name).resolve()
@@ -95,7 +100,8 @@ def _verify_report(root, report, *, export=None):
     def records():
         for path in paths:yield from iter_segment_records(path)
     metadata = [r for r in records() if r.kind=='metadata_version']
-    verify_metadata_sources(records, metadata)
+    verify_metadata_sources(records, metadata,max_records=limits.max_records,
+        max_scan_bytes=limits.max_scan_bytes,max_source_bytes=limits.max_metadata_bytes)
     plan = None if report['plan'] is None else plan_from_descriptor(report['plan'])
     models = [] if plan is None else [SnapshotBook(b.target.instrument,b.target.profile) for b in plan.bindings]
     count = messages = 0
@@ -119,7 +125,7 @@ def _verify_report(root, report, *, export=None):
     books = [strict_json(canonical(model.view())) for model in models]
     equal = books==report['books']
     for snapshot_id in report['snapshot_ids']:
-        read_snapshot(root/'published'/'snapshots',snapshot_id,paths)
+        read_snapshot(root/'published'/'snapshots',snapshot_id,paths,limits=PublicationLimits(replay=limits))
     return dict(records=count,ws_messages=messages,metadata_versions=len(metadata),
         archive_verified=True,book_replay_equal=equal,books=books,
         snapshots_verified=len(report['snapshot_ids']),capture_status=report['status'])
@@ -158,6 +164,7 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
     failure = None
     result = dict(schema='dc.capture-result/2',status='failed',mode='discovery' if discover_only else 'capture',
         environment=config.environment,symbols=list(config.symbols),plan=None,books=[],snapshot_ids=[],segments=[],
+        replay_limits=asdict(PILOT_REPLAY_LIMITS),
         limitations=['Bounded Deribit option books, agg2 cadence; other feeds/venues pending',
                      'No full-universe, historical sufficiency, off-host restore or production acceptance claim'])
     try:
@@ -175,7 +182,8 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
             capture_id=capture_id,process_session_id=process,provenance=provenance,started_utc_ns=utc)
         emergency = Journal(root/'emergency.wal',venue='deribit',environment=config.environment,create=True)
         lane = ArchiveLane(writer,ByteQueue(),emergency_writer=emergency,observe=observer,max_connections=16,
-            clock_policy=DEFAULT_POLICY,cutoff_scope=capture_id,cutoff_ledger_id='ledger-'+root.name)
+            clock_policy=DEFAULT_POLICY,cutoff_scope=capture_id,cutoff_ledger_id='ledger-'+root.name,
+            snapshot_limits=PILOT_REPLAY_LIMITS)
         raw_task = asyncio.create_task(lane.run())
         await asyncio.sleep(0)
         sampler = ChronyClockSampler(lane,executable=config.chronyc,read=clock_read,wait_until=clock_wait,

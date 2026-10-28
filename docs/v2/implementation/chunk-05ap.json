@@ -1,0 +1,21 @@
+{
+  "chunk": "5ap",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "reviewer": "dc_live_discovery_review",
+  "sources": {
+    "data_collector/app.py": "91ac1fc03e25c3883da521210f311c02b6fe04d32c04fb38c3aaf4ab005ba920",
+    "data_collector/config.py": "7cf4f5a8f49f93881fe7e2522013f46b86f86106199de4341caecb53ac5778e2",
+    "config/v2-discovery.toml": "00e2483cb53906deda8edb6be6a7467c5d0fc2b74da9368127cffc1c1be3ed43",
+    "tests/test_dc_app.py": "d1d8cc26ce24302a5cc64edc5f40ad392f3f817f50e4471deebfc595b8ec6afd",
+    "docs/v2/RUNNING.md": "95cb0de109d7a299e37a8950caa0bf8208dac2b052dc605074aaf764c0e2e4ec",
+    "docs/v2/IMPLEMENTATION.md": "47942b58c292166eb116f3d077ce9044ae0cdcc74d813c335a2f76ead2417737",
+    "docs/v2/implementation/chunk-05ap-live.json": "166541b1d93ee1ece0895cf25810ea13bb13b6c6a1774bb70df4fe8545f64fcd"
+  },
+  "tests": "Full640 tests passed71.064s with ResourceWarning errors. Independent17 app/config tests passed including realistic response/proof sizing regression. Actual REST discovery rerun and separate verify-run succeeded. git diff --check passes.",
+  "findings_closed": [
+    "Live HTTP200 discovery response exceeds original4MiB default.",
+    "Complete raw response plus all derivedmetadata proof exceeds8MiB; fixed pilot16MiB verified against raw evidence."
+  ],
+  "limits": "Sized bounded Deribit REST discovery profile only. Pilotlimits frozen and propagated to lane/verifier/snapshotread; oldreports fallback andgenericlibrarydefaults unchanged. Genuineunavailablechrony evidence with realMacclocks viaobserverseam; nohealthyUTC/WebSocket/snapshot/Linux/productionqualification. FullSPECremains; noVPS purchase or deployment. Rawfailed/successarchives retainedignored; research changes excluded."
+}

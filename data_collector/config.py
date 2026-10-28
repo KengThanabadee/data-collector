@@ -19,7 +19,7 @@ class DiscoveryConfig:
     environment: str
     schema: str = SCHEMA
     venue: str = "deribit"
-    max_response_bytes: int = 4 * 1024 * 1024
+    max_response_bytes: int = 8 * 1024 * 1024
     max_instruments: int = 10000
     timeout_seconds: int = 30
     warmup_timeout_seconds: int = 180

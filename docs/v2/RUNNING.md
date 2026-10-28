@@ -40,6 +40,12 @@ minute snapshot is produced. A run receiving only ACKs fails; it must acquire
 native book snapshots for all selected symbols. Inspect `runtime`, `books`,
 `snapshot_ids`, `status` and any `error` in the printed result and `result.json`.
 
+The default REST response bound is8MiB. This pilot freezes a16MiB metadata-proof
+budget in each run result and uses it consistently for capture and readback.
+These values were sized after an actual public discovery response exceeded4MiB
+and its complete response-plus-derived-metadata proof exceeded8MiB. Larger future
+universes still fail closed; this is not a full-universe capacity certificate.
+
 ## Read back and export
 
 Replace `RUN_ROOT` with the printed run directory:

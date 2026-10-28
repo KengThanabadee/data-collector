@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from data_collector.app import run, verify_run, _bind_root
+from data_collector.app import run, verify_run, _bind_root, _verify_report
 from data_collector.cli import main
 from data_collector.config import DiscoveryConfig
 from data_collector.contracts import canonical, strict_json
@@ -99,6 +99,27 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['available_symbols'],['BTC-TEST-C'])
         self.assertFalse(self.session.connected)
         self.assertEqual(verify_run(result['root'])['metadata_versions'],1)
+
+    async def test_discovery_sized_response_and_proofs_use_the_frozen_pilot_budget(self):
+        # Real discovery exceeded4MiB and response+metadata proof exceeded8MiB.
+        # Preserve an unknown native field rather than weakening proof checks.
+        body = self.session.responses[0].body.replace(b'"new_field":{"x":1e-20}',
+            b'"new_field":{"x":1e-20,"fixture":"'+b'x'*(17*1024*1024//4)+b'"}')
+        response = Response(body)
+        async def read(size):
+            chunk = response.body[response.offset:response.offset+size]
+            response.offset+=len(chunk)
+            return chunk
+        response.read = read
+        self.session.responses = [response]
+        result = await self.capture(discover_only=True)
+        self.assertEqual(result['status'],'discovery_complete',result)
+        self.assertGreater(len(body),4*1024*1024)
+        self.assertEqual(result['replay_limits']['max_metadata_bytes'],16*1024*1024)
+        self.assertTrue(verify_run(result['root'])['archive_verified'])
+        smaller = dict(result,replay_limits=dict(result['replay_limits'],max_metadata_bytes=8*1024*1024))
+        with self.assertRaisesRegex(ValueError,'retained byte bound'):
+            _verify_report(Path(result['root']),smaller)
 
     async def test_capture_publishes_a_minute_snapshot_after_clock_alignment(self):
         self.config = replace(self.config,max_frames=8,duration_seconds=120)
