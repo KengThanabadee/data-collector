@@ -49,6 +49,8 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5ae: managed Deribit connection-end corrections, shielded shutdown and policy-bound non-healing replay; unmanaged/dependency findings repaired and high-reasoning re-review approved.
 - [x] Chunk5af: verified snapshot-book state and immutable native checkpoint prerequisite; high-reasoning review approved,556 tests pass; capture limits unchanged.
 - [x] Chunk5ag: checkpoint-to-cutoff native continuation with exact raw artifact equivalence and policy/admission fallback; high-reasoning re-review approved,567 combined tests pass.
+- [x] Chunk5ah: measured actual unchanged managed ledger pins at100/1,000/10,000 events; defer native-only cache because repeated raw verification dominates this fixture. No runtime changes; focused41 tests pass.
+- [ ] Investigate reuse of verified immutable input within one certification operation before adding persistent projection state; preserve mutation/removal/pending-negative gates and remeasure.
 - [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
 - User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.

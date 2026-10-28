@@ -85,3 +85,40 @@ quiet cutoffs, owner/clock changes and open negatives. At identical close/ledger
 pins, raw-only and checkpoint replay must agree in both reader modes, while
 native suffix work stays bounded by checkpoint interval. This experiment and
 intended-host acceptance have not yet passed.
+
+
+## Managed ledger measurement before further optimization
+
+Run `.venv/bin/python experiments/ledger_refresh_probe.py --output experiments/results/ledger-refresh-scaling.json`.
+The [saved result](experiments/ledger_refresh_probe.json) records source hashes,
+machine/Python details, three unprofiled samples per size and a separate profile.
+It uses the actual `DurableLedger.pin()` path over a real rotated immutable
+segment, one managed Deribit instrument, two retained price levels and one owner
+declaration. Setup/fsync costs are excluded. Repeated filesystem reads are warm;
+there are no gaps, corrections, cutoff publications, concurrent capture or
+network requests in the measured interval.
+
+| Native events | Physical records | Encoded raw bytes | Median unchanged pin |
+|---|---|---|---|
+| 100 | 103 | 138,719 | 0.034 s |
+| 1,000 | 1,003 | 1,353,720 | 0.329 s |
+| 10,000 | 10,003 | 13,559,921 | 3.207 s |
+
+Every repeat preserves the ledger pin. The separate profiled call dispatches
+all 10,000 old native messages again. At that size, profiled cumulative pin time
+is 9.850 s, `RawRecord.from_bytes` 5.509 s, `_book_message` 0.523 s and
+`SnapshotBook.receive` 0.245 s. These are nested cumulative timings with profiler
+overhead: do not add them or compare their seconds directly with unprofiled
+samples. Generator call counts include resumptions, not just records. The
+100,036 `from_bytes` calls expose repeated decoding/verification work in this
+specific immutable-segment path.
+
+Decision: defer the proposed native-discovery-only in-memory cache. The
+measurement does not support prioritizing another mutable projection while
+full-prefix raw/owner/evidence scans remain dominant. Next investigate reuse of
+already verified immutable input within one certification operation, with raw
+mutation/removal and pending-negative regressions, before introducing persistent
+cache state. Preserve all existing verification gates and scan limits. This is
+an ordering decision, not proof of a safe reuse design, predicted speedup or a
+waiver of continuous-capture capacity requirements. Measure full-universe load
+and actual host acceptance separately.

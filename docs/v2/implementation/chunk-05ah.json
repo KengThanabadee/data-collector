@@ -1,0 +1,15 @@
+{
+  "chunk": "5ah",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "experiments/ledger_refresh_probe.py": "791ef741a22229a5c670bd4a5b116caeecba09f805fd4dfe48e3feb41913a526",
+    "docs/v2/experiments/ledger_refresh_probe.json": "af3514e31369973cda804acf7478d8be2b7a31e126f2fab5bb7b87eff3679f45",
+    "docs/v2/NATIVE_CHECKPOINTS.md": "5a9030270b8a691199e4df2b2ecee86a5dcf5731663f5d17c9f64460dcc0865f",
+    "docs/v2/IMPLEMENTATION.md": "4c2f10a905bf24070ed40d10000eef384419eabafe2c6be655e02dffad6a3c88"
+  },
+  "reviewer": "dc_chunk5ah_measurement_review",
+  "tests": "Root ran actual SessionWriter immutable-segment probe at100/1000/10000 native events, three unprofiled repeats and one separate cProfile per size; every pin identical and exact native dispatch counts asserted. Focused discovery/owner/termination suite:41 tests passed in12.176s with ResourceWarning errors. Reviewer independently ran counts1/10 repeats1 and rejected invalid count0. Final four source hashes and PLANS implementation prefix approved; no findings. Full repository suite not rerun: production source unchanged; previous567-test baseline remains historical, not a new acceptance result.",
+  "findings_closed": [],
+  "limits": "Synthetic single-instrument two-level healthy managed Deribit book, one declaration and warm local immutable segment reads. Setup/fsync excluded; no gap/correction/cutoff history, concurrent capture, network, full universe, queue/RSS/publication or intended-host acceptance. Profile timings nested/overlapping and instrumented; no predicted cache speedup. Native-only cache deferred in favor of investigating within-operation verified immutable-input reuse; safe design not established. Runtime modules, dependencies, schema, scan caps and certification rules unchanged. PLANS implementation prefix only; unrelated research excluded."
+}

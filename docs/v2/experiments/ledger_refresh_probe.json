@@ -1,0 +1,936 @@
+{
+  "limitations": "profiled times include profiler overhead and overlap; not comparable to unprofiled samples; no capture throughput, queue latency, publication, full-universe or deployment measurement",
+  "machine": "arm64",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+  "rows": [
+    {
+      "native_events": 100,
+      "physical_records": 103,
+      "pin_unchanged": true,
+      "profiled_functions": [
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.10020225,
+          "function": "ledger.py:pin",
+          "line": 312,
+          "own_seconds": 2.624e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.100189417,
+          "function": "ledger.py:refresh",
+          "line": 176,
+          "own_seconds": 0.000157939
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.07135712500000001,
+          "function": "discoveries.py:pending_native_discoveries",
+          "line": 24,
+          "own_seconds": 0.000501901
+        },
+        {
+          "calls": 316,
+          "cumulative_seconds": 0.059172537000000004,
+          "function": "writer.py:encoded_records",
+          "line": 271,
+          "own_seconds": 0.000163697
+        },
+        {
+          "calls": 212,
+          "cumulative_seconds": 0.058282453000000005,
+          "function": "owners.py:_scan_records",
+          "line": 72,
+          "own_seconds": 9.6298e-05
+        },
+        {
+          "calls": 1036,
+          "cumulative_seconds": 0.054514952000000005,
+          "function": "contracts.py:from_bytes",
+          "line": 180,
+          "own_seconds": 0.003697881
+        },
+        {
+          "calls": 212,
+          "cumulative_seconds": 0.052952200000000005,
+          "function": "owners.py:_records",
+          "line": 68,
+          "own_seconds": 0.00012219300000000001
+        },
+        {
+          "calls": 732,
+          "cumulative_seconds": 0.04974267,
+          "function": "segments.py:_validated_rows",
+          "line": 244,
+          "own_seconds": 0.0004931800000000001
+        },
+        {
+          "calls": 724,
+          "cumulative_seconds": 0.047291238000000006,
+          "function": "segments.py:add",
+          "line": 107,
+          "own_seconds": 0.0018972980000000002
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.036356083000000004,
+          "function": "owners.py:__init__",
+          "line": 45,
+          "own_seconds": 8.376e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.036341333,
+          "function": "owners.py:refresh",
+          "line": 136,
+          "own_seconds": 0.00022022600000000002
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.029077249000000003,
+          "function": "segments.py:iter_segment_records",
+          "line": 306,
+          "own_seconds": 1.7379e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.028781083000000002,
+          "function": "segments.py:verify_segment",
+          "line": 254,
+          "own_seconds": 1.2708000000000001e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.028502125000000003,
+          "function": "segments.py:_verify_contents",
+          "line": 260,
+          "own_seconds": 0.000119587
+        },
+        {
+          "calls": 16390,
+          "cumulative_seconds": 0.023537644,
+          "function": "contracts.py:text",
+          "line": 47,
+          "own_seconds": 0.0033440640000000003
+        },
+        {
+          "calls": 104,
+          "cumulative_seconds": 0.022824205,
+          "function": "ledger.py:_all_records",
+          "line": 56,
+          "own_seconds": 5.8535e-05
+        },
+        {
+          "calls": 729,
+          "cumulative_seconds": 0.018399053000000002,
+          "function": "contracts.py:to_bytes",
+          "line": 170,
+          "own_seconds": 0.001185105
+        },
+        {
+          "calls": 2919,
+          "cumulative_seconds": 0.014540438000000001,
+          "function": "contracts.py:strict_json",
+          "line": 36,
+          "own_seconds": 0.0006500970000000001
+        },
+        {
+          "calls": 154293,
+          "cumulative_seconds": 0.013249417000000001,
+          "function": "contracts.py:<genexpr>",
+          "line": 48,
+          "own_seconds": 0.009372354000000001
+        },
+        {
+          "calls": 1136,
+          "cumulative_seconds": 0.012893350000000001,
+          "function": "contracts.py:__post_init__",
+          "line": 146,
+          "own_seconds": 0.001498435
+        }
+      ],
+      "profiled_native_dispatches": 100,
+      "profiled_native_functions": [
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.005167921000000001,
+          "function": "replay.py:_book_message",
+          "line": 98,
+          "own_seconds": 0.000271177
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.002597794,
+          "function": "decoders.py:decode_depth",
+          "line": 85,
+          "own_seconds": 0.00019914700000000002
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.002452086,
+          "function": "books.py:receive",
+          "line": 169,
+          "own_seconds": 0.00011538500000000001
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.0017621260000000001,
+          "function": "books.py:fingerprint",
+          "line": 74,
+          "own_seconds": 5.4333e-05
+        },
+        {
+          "calls": 200,
+          "cumulative_seconds": 0.0012720560000000001,
+          "function": "decoders.py:native_json",
+          "line": 29,
+          "own_seconds": 0.000106043
+        },
+        {
+          "calls": 200,
+          "cumulative_seconds": 0.0009583770000000001,
+          "function": "decoders.py:_levels",
+          "line": 54,
+          "own_seconds": 0.000152373
+        },
+        {
+          "calls": 606,
+          "cumulative_seconds": 0.000937896,
+          "function": "books.py:decimal_value",
+          "line": 15,
+          "own_seconds": 0.000472075
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.000544709,
+          "function": "books.py:apply",
+          "line": 96,
+          "own_seconds": 0.000179284
+        },
+        {
+          "calls": 202,
+          "cumulative_seconds": 0.00039943000000000004,
+          "function": "decoders.py:_number",
+          "line": 45,
+          "own_seconds": 5.1708e-05
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 0.00037858,
+          "function": "books.py:__post_init__",
+          "line": 61,
+          "own_seconds": 0.000148884
+        },
+        {
+          "calls": 101,
+          "cumulative_seconds": 0.00033200000000000005,
+          "function": "books.py:__post_init__",
+          "line": 42,
+          "own_seconds": 3.9248e-05
+        },
+        {
+          "calls": 598,
+          "cumulative_seconds": 0.000124265,
+          "function": "decoders.py:_int",
+          "line": 23,
+          "own_seconds": 9.840100000000001e-05
+        },
+        {
+          "calls": 600,
+          "cumulative_seconds": 9.4543e-05,
+          "function": "decoders.py:_pairs",
+          "line": 14,
+          "own_seconds": 9.4543e-05
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 4.9089000000000004e-05,
+          "function": "decoders.py:_identity",
+          "line": 71,
+          "own_seconds": 4.4708e-05
+        },
+        {
+          "calls": 301,
+          "cumulative_seconds": 3.2508e-05,
+          "function": "books.py:<genexpr>",
+          "line": 71,
+          "own_seconds": 2.8543e-05
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 3.2172e-05,
+          "function": "books.py:level_count",
+          "line": 122,
+          "own_seconds": 2.2096e-05
+        },
+        {
+          "calls": 100,
+          "cumulative_seconds": 7.537000000000001e-06,
+          "function": "decoders.py:deribit_session_end",
+          "line": 179,
+          "own_seconds": 7.537000000000001e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 2.666e-06,
+          "function": "books.py:__init__",
+          "line": 137,
+          "own_seconds": 1.666e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 6.67e-07,
+          "function": "books.py:reset",
+          "line": 157,
+          "own_seconds": 5.01e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 3.3300000000000003e-07,
+          "function": "books.py:__init__",
+          "line": 90,
+          "own_seconds": 2.91e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 1.66e-07,
+          "function": "books.py:clear",
+          "line": 119,
+          "own_seconds": 1.66e-07
+        }
+      ],
+      "raw_encoded_bytes": 138719,
+      "unchanged_pin_median_seconds": 0.034089917317032814,
+      "unchanged_pin_seconds": [
+        0.034959542099386454,
+        0.034089917317032814,
+        0.03371866699308157
+      ]
+    },
+    {
+      "native_events": 1000,
+      "physical_records": 1003,
+      "pin_unchanged": true,
+      "profiled_functions": [
+        {
+          "calls": 1,
+          "cumulative_seconds": 1.001687292,
+          "function": "ledger.py:pin",
+          "line": 312,
+          "own_seconds": 3.125e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 1.0016721670000002,
+          "function": "ledger.py:refresh",
+          "line": 176,
+          "own_seconds": 0.0013823940000000001
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.681743917,
+          "function": "discoveries.py:pending_native_discoveries",
+          "line": 24,
+          "own_seconds": 0.004835232
+        },
+        {
+          "calls": 3016,
+          "cumulative_seconds": 0.603663598,
+          "function": "writer.py:encoded_records",
+          "line": 271,
+          "own_seconds": 0.001445008
+        },
+        {
+          "calls": 10036,
+          "cumulative_seconds": 0.5672012820000001,
+          "function": "contracts.py:from_bytes",
+          "line": 180,
+          "own_seconds": 0.038557852000000004
+        },
+        {
+          "calls": 2012,
+          "cumulative_seconds": 0.554110703,
+          "function": "owners.py:_scan_records",
+          "line": 72,
+          "own_seconds": 0.0009300700000000001
+        },
+        {
+          "calls": 7032,
+          "cumulative_seconds": 0.5221097880000001,
+          "function": "segments.py:_validated_rows",
+          "line": 244,
+          "own_seconds": 0.004916969
+        },
+        {
+          "calls": 2012,
+          "cumulative_seconds": 0.502442606,
+          "function": "owners.py:_records",
+          "line": 68,
+          "own_seconds": 0.001126788
+        },
+        {
+          "calls": 7024,
+          "cumulative_seconds": 0.501514115,
+          "function": "segments.py:add",
+          "line": 107,
+          "own_seconds": 0.019300713
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.33809062500000003,
+          "function": "owners.py:__init__",
+          "line": 45,
+          "own_seconds": 9.628e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 0.33807554100000003,
+          "function": "owners.py:refresh",
+          "line": 136,
+          "own_seconds": 0.0019921680000000003
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.315748126,
+          "function": "segments.py:iter_segment_records",
+          "line": 306,
+          "own_seconds": 2.3415000000000002e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.315354584,
+          "function": "segments.py:verify_segment",
+          "line": 254,
+          "own_seconds": 1.7874000000000002e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 0.31489395800000003,
+          "function": "segments.py:_verify_contents",
+          "line": 260,
+          "own_seconds": 0.000974235
+        },
+        {
+          "calls": 1004,
+          "cumulative_seconds": 0.263072858,
+          "function": "ledger.py:_all_records",
+          "line": 56,
+          "own_seconds": 0.000567157
+        },
+        {
+          "calls": 159490,
+          "cumulative_seconds": 0.24440992800000003,
+          "function": "contracts.py:text",
+          "line": 47,
+          "own_seconds": 0.035087031000000005
+        },
+        {
+          "calls": 7029,
+          "cumulative_seconds": 0.176975389,
+          "function": "contracts.py:to_bytes",
+          "line": 170,
+          "own_seconds": 0.011356262
+        },
+        {
+          "calls": 28119,
+          "cumulative_seconds": 0.148377757,
+          "function": "contracts.py:strict_json",
+          "line": 36,
+          "own_seconds": 0.006432321
+        },
+        {
+          "calls": 1497993,
+          "cumulative_seconds": 0.137108745,
+          "function": "contracts.py:<genexpr>",
+          "line": 48,
+          "own_seconds": 0.09641413400000001
+        },
+        {
+          "calls": 11036,
+          "cumulative_seconds": 0.13312690400000002,
+          "function": "contracts.py:__post_init__",
+          "line": 146,
+          "own_seconds": 0.015142858
+        }
+      ],
+      "profiled_native_dispatches": 1000,
+      "profiled_native_functions": [
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.051794677000000004,
+          "function": "replay.py:_book_message",
+          "line": 98,
+          "own_seconds": 0.002632965
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.025780451000000003,
+          "function": "decoders.py:decode_depth",
+          "line": 85,
+          "own_seconds": 0.001879816
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.024389894000000002,
+          "function": "books.py:receive",
+          "line": 169,
+          "own_seconds": 0.001111007
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.017615349000000002,
+          "function": "books.py:fingerprint",
+          "line": 74,
+          "own_seconds": 0.0005264310000000001
+        },
+        {
+          "calls": 2000,
+          "cumulative_seconds": 0.012872976000000001,
+          "function": "decoders.py:native_json",
+          "line": 29,
+          "own_seconds": 0.001085765
+        },
+        {
+          "calls": 2000,
+          "cumulative_seconds": 0.009370851000000001,
+          "function": "decoders.py:_levels",
+          "line": 54,
+          "own_seconds": 0.0014246600000000001
+        },
+        {
+          "calls": 6006,
+          "cumulative_seconds": 0.009247185,
+          "function": "books.py:decimal_value",
+          "line": 15,
+          "own_seconds": 0.004621401000000001
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.005366266000000001,
+          "function": "books.py:apply",
+          "line": 96,
+          "own_seconds": 0.001749045
+        },
+        {
+          "calls": 2002,
+          "cumulative_seconds": 0.003901068,
+          "function": "decoders.py:_number",
+          "line": 45,
+          "own_seconds": 0.00049398
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.003816088,
+          "function": "books.py:__post_init__",
+          "line": 61,
+          "own_seconds": 0.0014991210000000002
+        },
+        {
+          "calls": 1001,
+          "cumulative_seconds": 0.003291725,
+          "function": "books.py:__post_init__",
+          "line": 42,
+          "own_seconds": 0.00037662000000000004
+        },
+        {
+          "calls": 5998,
+          "cumulative_seconds": 0.0012428740000000001,
+          "function": "decoders.py:_int",
+          "line": 23,
+          "own_seconds": 0.0009717310000000001
+        },
+        {
+          "calls": 6000,
+          "cumulative_seconds": 0.000931333,
+          "function": "decoders.py:_pairs",
+          "line": 14,
+          "own_seconds": 0.000931333
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.000473062,
+          "function": "decoders.py:_identity",
+          "line": 71,
+          "own_seconds": 0.00042644700000000005
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 0.000327683,
+          "function": "books.py:level_count",
+          "line": 122,
+          "own_seconds": 0.000209356
+        },
+        {
+          "calls": 3001,
+          "cumulative_seconds": 0.00032571,
+          "function": "books.py:<genexpr>",
+          "line": 71,
+          "own_seconds": 0.00028588400000000003
+        },
+        {
+          "calls": 1000,
+          "cumulative_seconds": 7.047700000000001e-05,
+          "function": "decoders.py:deribit_session_end",
+          "line": 179,
+          "own_seconds": 7.047700000000001e-05
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 2.8330000000000002e-06,
+          "function": "books.py:__init__",
+          "line": 137,
+          "own_seconds": 1.917e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 6.25e-07,
+          "function": "books.py:reset",
+          "line": 157,
+          "own_seconds": 5.000000000000001e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 2.91e-07,
+          "function": "books.py:__init__",
+          "line": 90,
+          "own_seconds": 2.49e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 1.2500000000000002e-07,
+          "function": "books.py:clear",
+          "line": 119,
+          "own_seconds": 1.2500000000000002e-07
+        }
+      ],
+      "raw_encoded_bytes": 1353720,
+      "unchanged_pin_median_seconds": 0.3288065828382969,
+      "unchanged_pin_seconds": [
+        0.32647554110735655,
+        0.3288065828382969,
+        0.39869224978610873
+      ]
+    },
+    {
+      "native_events": 10000,
+      "physical_records": 10003,
+      "pin_unchanged": true,
+      "profiled_functions": [
+        {
+          "calls": 1,
+          "cumulative_seconds": 9.849926708,
+          "function": "ledger.py:pin",
+          "line": 312,
+          "own_seconds": 2.708e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 9.849912583,
+          "function": "ledger.py:refresh",
+          "line": 176,
+          "own_seconds": 0.016043474000000002
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 6.967261416,
+          "function": "discoveries.py:pending_native_discoveries",
+          "line": 24,
+          "own_seconds": 0.047853936
+        },
+        {
+          "calls": 30016,
+          "cumulative_seconds": 5.776399937000001,
+          "function": "writer.py:encoded_records",
+          "line": 271,
+          "own_seconds": 0.014574895000000001
+        },
+        {
+          "calls": 20012,
+          "cumulative_seconds": 5.682481186,
+          "function": "owners.py:_scan_records",
+          "line": 72,
+          "own_seconds": 0.009295936000000001
+        },
+        {
+          "calls": 100036,
+          "cumulative_seconds": 5.509190501,
+          "function": "contracts.py:from_bytes",
+          "line": 180,
+          "own_seconds": 0.37084748100000003
+        },
+        {
+          "calls": 20012,
+          "cumulative_seconds": 5.156027353000001,
+          "function": "owners.py:_records",
+          "line": 68,
+          "own_seconds": 0.011492654000000001
+        },
+        {
+          "calls": 70032,
+          "cumulative_seconds": 4.955118592000001,
+          "function": "segments.py:_validated_rows",
+          "line": 244,
+          "own_seconds": 0.046823418000000006
+        },
+        {
+          "calls": 70024,
+          "cumulative_seconds": 4.769116384,
+          "function": "segments.py:add",
+          "line": 107,
+          "own_seconds": 0.184090301
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 3.5090741660000004,
+          "function": "owners.py:__init__",
+          "line": 45,
+          "own_seconds": 1.2208e-05
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 3.509055833,
+          "function": "owners.py:refresh",
+          "line": 136,
+          "own_seconds": 0.020097274000000002
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 2.760713125,
+          "function": "segments.py:iter_segment_records",
+          "line": 306,
+          "own_seconds": 3.0458000000000002e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 2.760134292,
+          "function": "segments.py:verify_segment",
+          "line": 254,
+          "own_seconds": 2.7292000000000002e-05
+        },
+        {
+          "calls": 4,
+          "cumulative_seconds": 2.7595827070000003,
+          "function": "segments.py:_verify_contents",
+          "line": 260,
+          "own_seconds": 0.008025230000000001
+        },
+        {
+          "calls": 1590490,
+          "cumulative_seconds": 2.368732986,
+          "function": "contracts.py:text",
+          "line": 47,
+          "own_seconds": 0.33819331
+        },
+        {
+          "calls": 10004,
+          "cumulative_seconds": 2.284656571,
+          "function": "ledger.py:_all_records",
+          "line": 56,
+          "own_seconds": 0.0057969070000000004
+        },
+        {
+          "calls": 70029,
+          "cumulative_seconds": 1.8260109530000002,
+          "function": "contracts.py:to_bytes",
+          "line": 170,
+          "own_seconds": 0.11666773700000001
+        },
+        {
+          "calls": 280119,
+          "cumulative_seconds": 1.4503148380000002,
+          "function": "contracts.py:strict_json",
+          "line": 36,
+          "own_seconds": 0.06327263100000001
+        },
+        {
+          "calls": 14934993,
+          "cumulative_seconds": 1.320370429,
+          "function": "contracts.py:<genexpr>",
+          "line": 48,
+          "own_seconds": 0.9339639660000001
+        },
+        {
+          "calls": 110036,
+          "cumulative_seconds": 1.294950982,
+          "function": "contracts.py:__post_init__",
+          "line": 146,
+          "own_seconds": 0.150583559
+        }
+      ],
+      "profiled_native_dispatches": 10000,
+      "profiled_native_functions": [
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.522715014,
+          "function": "replay.py:_book_message",
+          "line": 98,
+          "own_seconds": 0.026279599
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.26103423800000003,
+          "function": "decoders.py:decode_depth",
+          "line": 85,
+          "own_seconds": 0.018874123
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.244896142,
+          "function": "books.py:receive",
+          "line": 169,
+          "own_seconds": 0.010964991
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.177265003,
+          "function": "books.py:fingerprint",
+          "line": 74,
+          "own_seconds": 0.005287279000000001
+        },
+        {
+          "calls": 20000,
+          "cumulative_seconds": 0.12994544500000002,
+          "function": "decoders.py:native_json",
+          "line": 29,
+          "own_seconds": 0.010751504
+        },
+        {
+          "calls": 20000,
+          "cumulative_seconds": 0.09452055100000001,
+          "function": "decoders.py:_levels",
+          "line": 54,
+          "own_seconds": 0.014566798
+        },
+        {
+          "calls": 60006,
+          "cumulative_seconds": 0.093128658,
+          "function": "books.py:decimal_value",
+          "line": 15,
+          "own_seconds": 0.046304236000000006
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.053703115,
+          "function": "books.py:apply",
+          "line": 96,
+          "own_seconds": 0.017290404000000002
+        },
+        {
+          "calls": 20002,
+          "cumulative_seconds": 0.039258157,
+          "function": "decoders.py:_number",
+          "line": 45,
+          "own_seconds": 0.004966848
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.038259829,
+          "function": "books.py:__post_init__",
+          "line": 61,
+          "own_seconds": 0.014889169
+        },
+        {
+          "calls": 10001,
+          "cumulative_seconds": 0.033145688,
+          "function": "books.py:__post_init__",
+          "line": 42,
+          "own_seconds": 0.00374872
+        },
+        {
+          "calls": 59998,
+          "cumulative_seconds": 0.012792792,
+          "function": "decoders.py:_int",
+          "line": 23,
+          "own_seconds": 0.010027866
+        },
+        {
+          "calls": 60000,
+          "cumulative_seconds": 0.009345424,
+          "function": "decoders.py:_pairs",
+          "line": 14,
+          "own_seconds": 0.009345424
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.004767403,
+          "function": "decoders.py:_identity",
+          "line": 71,
+          "own_seconds": 0.0042978240000000004
+        },
+        {
+          "calls": 30001,
+          "cumulative_seconds": 0.0032319880000000003,
+          "function": "books.py:<genexpr>",
+          "line": 71,
+          "own_seconds": 0.00282822
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.003213169,
+          "function": "books.py:level_count",
+          "line": 122,
+          "own_seconds": 0.002107069
+        },
+        {
+          "calls": 10000,
+          "cumulative_seconds": 0.000704718,
+          "function": "decoders.py:deribit_session_end",
+          "line": 179,
+          "own_seconds": 0.000704718
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 3.041e-06,
+          "function": "books.py:__init__",
+          "line": 137,
+          "own_seconds": 1.791e-06
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 8.33e-07,
+          "function": "books.py:reset",
+          "line": 157,
+          "own_seconds": 6.660000000000001e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 4.1700000000000004e-07,
+          "function": "books.py:__init__",
+          "line": 90,
+          "own_seconds": 3.7600000000000003e-07
+        },
+        {
+          "calls": 1,
+          "cumulative_seconds": 1.67e-07,
+          "function": "books.py:clear",
+          "line": 119,
+          "own_seconds": 1.67e-07
+        }
+      ],
+      "raw_encoded_bytes": 13559921,
+      "unchanged_pin_median_seconds": 3.20674058329314,
+      "unchanged_pin_seconds": [
+        3.2024946250021458,
+        3.21655754186213,
+        3.20674058329314
+      ]
+    }
+  ],
+  "run_utc": "2026-10-27T06:22:25.189490+00:00",
+  "schema": "dc.ledger-refresh-probe/1",
+  "scope": "synthetic single-instrument warm local immutable segment; unchanged managed ledger pins only",
+  "source_sha256": {
+    "data_collector/books.py": "d9aaf64357e3d7900c005f3e1bc964dc2d979efe1c94eaa666dcfae412233f5c",
+    "data_collector/contracts.py": "62107c54af98242399d0b2707f4e76a5370bee5285c74430f9d09f981160f6a8",
+    "data_collector/decoders.py": "0c1a66a81c24986045bdc31d981947131ab9a7e7788c3f1c72134a1125153b35",
+    "data_collector/discoveries.py": "9968773adb162087de5ea7997679d258d4866c242a3830b664db740ef1d615f6",
+    "data_collector/journal.py": "41a5c3d9cc64016ccdef3f75dafa4c9cba45cf301593a3da23f289c8c50e5194",
+    "data_collector/ledger.py": "eb3d31a2c111e7d863a92de4fcb87155ea6d4de5375890928a20d6503c913ea1",
+    "data_collector/owners.py": "0c6844585a250a169aedb07340dce5a666c18729ace2fcbd610e93039cbbb775",
+    "data_collector/replay.py": "4075209d21ab2300728cad84ca6c155c23dbbcb14608474dd0509b5719771a24",
+    "data_collector/segments.py": "8af16d5660dc92fbff03274284d8ad4b0531530c932e8d0db0b6a2ae67cf7f82",
+    "data_collector/writer.py": "c2e1c89f01468b42a7ef7437b316fda4ede8c478bfe97e6c28073f0e7e174ce1",
+    "experiments/ledger_refresh_probe.py": "791ef741a22229a5c670bd4a5b116caeecba09f805fd4dfe48e3feb41913a526"
+  }
+}

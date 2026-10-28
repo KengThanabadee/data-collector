@@ -879,3 +879,25 @@ remove capture proof/scan caps or establish end-to-end acceleration. Incremental
 control projections, compact raw-prefix proofs, runtime checkpoint scheduling,
 buffered state, other feeds/lifecycle/CLI, independent backup/restore and actual
 host acceptance remain pending. No network capture or deployment occurred.
+
+
+## Chunk5ah — measure managed ledger cost before adding state
+
+Added a bounded, network-free `experiments/ledger_refresh_probe.py`, using an
+actual fsynced SessionWriter and rotated immutable segment. Three unchanged
+managed ledger pins at 100/1,000/10,000 native events have median durations
+0.034/0.329/3.207 seconds on this local machine. Separate profiles assert exact
+native dispatch counts, and every call checks unchanged ledger identity.
+Machine details, raw sizes, profile attribution and exact source hashes are
+saved in `docs/v2/experiments/ledger_refresh_probe.json`.
+
+The one-instrument, two-level healthy fixture establishes repeated old native
+work but also shows larger raw decoding/verification costs. Defer the proposed
+native-discovery-only cache; investigate reuse of verified immutable input
+within one certification operation first. No runtime module, schema, dependency,
+scan cap or certification rule changed. Nested profile timings overlap and
+include instrumentation overhead; this is neither a cache speedup estimate nor
+capture/publication/full-universe/host acceptance. See NATIVE_CHECKPOINTS.md for
+method, limits and the revised next step. Focused discovery/owner/termination
+regressions pass (41 tests); independent high-reasoning review includes separate
+probe smoke and argument-bound checks. Exact approval is in chunk evidence.
