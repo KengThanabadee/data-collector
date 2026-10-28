@@ -150,6 +150,15 @@ def map_native_gap(ledger,coordinator,plan,binding_index,discovery_record_id,*,u
             for owner in owners.plans[:last+1]:
                 owner_dependencies.add(owner.record_id)
                 owner_dependencies.update(owners.metadata[b.metadata_version_id].source_record_id for b in owner.plan.bindings)
+                for owner_binding in owner.plan.bindings:
+                    owner_dependencies.update(owners.metadata_dependencies.get(owner_binding.metadata_version_id,()))
+    if owner_dependencies:
+        stack=list(owner_dependencies)
+        while stack:
+            for identity in owners.metadata_proofs.get(stack.pop(),()):
+                if identity not in owner_dependencies:
+                    if len(owner_dependencies)>=max_dependencies:raise ValueError('gap metadata dependency bound; checkpoint required')
+                    owner_dependencies.add(identity);stack.append(identity)
     dependencies={};model=None;proof=None;discovery=None;reason=None;ended=False
     def depend(record):
         if record.record_id not in dependencies:

@@ -1135,3 +1135,58 @@ full-universe sharding/capacity, CLI and the remaining original multi-venue/
 feed/checkpoint/backup/host acceptance scope remain pending. No exchange HTTP
 request or deployment occurred in this chunk. Exact source hashes, closed
 findings and approval are recorded in chunk evidence.
+
+
+## Chunk5an — discovery-backed metadata through the disk FIFO
+
+`ArchiveLane.submit_deribit_metadata()` queues a complete universe for metadata
+publication. The existing single disk owner revalidates the exact manifest
+against its raw request/response, including official query/endpoint, checksums,
+physical order, acquisition position and process/provenance context. It then
+emits the complete batch as existing `dc.metadata/2` records through IngressWriter;
+it returns `DurableMetadataAck` only after every write. Timeliness is explicit
+and must be checked by callers. Canceling the client future does not cancel an
+admitted disk batch. No adapter reads the active WAL outside the disk owner.
+
+The stable per-process `derived:deribit-metadata` stream has consecutive receipt
+positions and correct superseded-version chains. Ordinary raw adapters cannot
+write the reserved derived namespace. Economic/native attributes contain a
+static derivation policy and exact decimal-string metadata; acquisition pointers
+live in native fields. Identical later discovery therefore leaves attributes
+identical and allows a metadata-only plan refresh to retain its native owner.
+Effective time remains unknown, rather than being backdated to listing creation.
+No subscription/owner plan is automatically enabled by this API.
+
+`deribit_metadata.py` recomputes the universe from bounded raw and checks each
+row/key/body against it. Owner declaration, raw snapshot replay and correction
+audits retain the source dependency contract; a native-gap audit includes both
+REST records and any predecessor metadata/source dependencies. Proof graphs are
+direct edges with bounded expansion, not copies of whole ancestry per version.
+The receiver's conservative proof headroom includes metadata batches. Legacy
+metadata without this derivation policy/reserved namespace keeps its old path
+and artifact bytes. Source and universe lookup caches exist only for a bounded
+verification pass; every operation still revalidates raw.
+
+Re-review fixed two issues: source proofs are required for the reserved stream
+even if a body marker is removed, and batch preflight now runs the same downstream
+verifier over history plus exact would-be persisted records before the first
+append. This includes ingress-ordinal expansion, source dependencies, recovered
+prefixes and existing metadata budgets. Known source/proof and budget failures are rejected
+before metadata writes. Partial fsync/ack failures still require existing
+WAL recovery; they cannot return an acknowledged complete batch.
+
+Eight new tests cover durable metadata/raw equivalence, unchanged attributes and
+owner preservation across refresh, missing/mutated/future/stripped proof,
+forged-manifest zero-write rejection, combined-budget zero-write rejection,
+client cancellation, namespace exclusion, and valid snapshot materialization
+followed by a portable invalid assessment after a late gap. Independent high-
+reasoning re-review ran59 supporting tests and both original reproducers, then
+reran the strengthened snapshot/export test and final8 metadata tests. Full623
+tests pass in59.008s with ResourceWarning errors (588v2+35v1). Exact hashes and
+approval are in the chunk evidence.
+
+This connects discovery evidence to usable verified metadata. Full release
+configuration/bootstrap orchestration, multi-group sharding, lifecycle updates,
+CLI, scalable checkpoints, remaining venues/feeds, independent backup/restore
+and intended-host acceptance remain pending. No exchange request, live daemon
+query, service change or deployment occurred in this chunk.

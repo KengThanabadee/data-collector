@@ -141,6 +141,7 @@ class OwnerPlans:
         metadata_required=for_declaration or any(r.channel==self.channel or r.receipt.connection_id==self.connection for r in self._scan_records())
         self.plans=[];self.allocations=[];self.open_allocations={};self.positions={};self.configs={};self.metadata={};self.used=set()
         self.head=None;self.bytes=0;metadata_bytes=0
+        derived_metadata=[];self.metadata_dependencies={};self.metadata_proofs={}
         from .snapshots import plan_from_descriptor
         for record in self._scan_records():
             r=record.receipt
@@ -169,6 +170,8 @@ class OwnerPlans:
                 metadata_bytes+=len(record.body)
                 if metadata_bytes>self.max_metadata_bytes:raise ValueError('owner metadata byte bound')
                 self.metadata[metadata.version_id]=metadata
+                if (record.receipt.connection_id=='derived:deribit-metadata' or
+                        value['attributes'].get('schema')=='dc.deribit-instrument/1'):derived_metadata.append((record,metadata.version_id))
             elif metadata_required and record.channel=='validity:'+self.scope and record.kind=='coverage_event':
                 payload=LedgerEntry.from_bytes(record.body).payload
                 if isinstance(payload,GapCorrection):
@@ -178,6 +181,13 @@ class OwnerPlans:
             self.positions[r.stream_key]=r.receive_seq
             if r.stream_key not in self.configs:self.configs[r.stream_key]=record.provenance.config_sha256
             elif self.configs[r.stream_key]!=record.provenance.config_sha256:self.configs[r.stream_key]=None
+
+        if derived_metadata:
+            from .deribit_metadata import verify_metadata_sources
+            references=verify_metadata_sources(self._scan_records,[r for r,_ in derived_metadata],
+                max_records=self.max_records,max_scan_bytes=self.max_scan_bytes,max_source_bytes=self.max_metadata_bytes)
+            self.metadata_dependencies={identity:references[r.record_id] for r,identity in derived_metadata}
+            self.metadata_proofs=references
 
     def check_next_allocation(self,dependencies,streams):
         self.refresh()

@@ -281,7 +281,7 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
         diagnostic_bytes=sum(len(row['first_reason'].encode())+128 for row in diagnostics if row['first_reason'] is not None)
         if diagnostic_bytes>limits.max_diagnostic_bytes:raise ReplayResourceError('replay diagnostic projection bound')
         if sum(model.book.level_count for model in models)>limits.max_total_levels:raise ValueError('aggregate L2 projection bound')
-    history=MetadataHistory();superseded_metadata=set();metadata_bytes=0;positions={};last_hashes={}
+    history=MetadataHistory();superseded_metadata=set();metadata_bytes=0;positions={};last_hashes={};derived_metadata=[]
     for record in prefix():
         receipt=record.receipt;stream=receipt.stream_key
         if stream not in admitted or admitted[stream]['admitted_seq'] is None or receipt.receive_seq>admitted[stream]['admitted_seq']:continue
@@ -295,6 +295,8 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
             if set(value)!={'schema','effective_at_ns','attributes','supersedes'} or value['schema']!='dc.metadata/2':raise ValueError('unknown metadata schema')
             history.add(MetadataVersion(record.instrument,receipt,value['effective_at_ns'],canonical(value['attributes']),value['supersedes']))
             if value['supersedes'] is not None:superseded_metadata.add(value['supersedes'])
+            if (record.receipt.connection_id=='derived:deribit-metadata' or
+                        value['attributes'].get('schema')=='dc.deribit-instrument/1'):derived_metadata.append(record)
         for i,binding in enumerate(plan.bindings):
             model=models[i]
             if stream not in {binding.ws_source,binding.seed_source}:continue
@@ -347,6 +349,10 @@ def _materialize_snapshot(segments,close_record_id,plan:SnapshotPlan,*,limits=Re
                 model.invalidate('native_decode_or_apply_failed')
                 if isinstance(model,BufferedBook):model.reset(now_ns=receipt.monotonic_ns,reason='native_reseed_required')
         if sum(m.book.level_count for m in models if m is not None)>limits.max_total_levels:raise ValueError('aggregate L2 projection bound')
+    if derived_metadata:
+        from .deribit_metadata import verify_metadata_sources
+        verify_metadata_sources(prefix,derived_metadata,max_records=limits.max_records,
+            max_scan_bytes=limits.max_scan_bytes,max_source_bytes=limits.max_metadata_bytes)
     applied=[]
     for stream,row in admitted.items():
         if row['admitted_seq'] is not None and (positions.get(stream)!=row['admitted_seq'] or last_hashes.get(stream)!=row['record_hash']):

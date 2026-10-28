@@ -1,0 +1,22 @@
+{
+  "chunk": "5an",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/deribit_metadata.py": "01a14e94dcba1417d765ede79f7a438b563789ede814d7d3a655a3d3ff76caa6",
+    "data_collector/lane.py": "b779cfa40edfe9256aed8fe32c0e32628280807a6d145e27059bf765685e7f1e",
+    "data_collector/owners.py": "5361f2ceefed9b225780b42b5c8b41ada69bdf32ce6837d6d7faf109e2a1060b",
+    "data_collector/replay.py": "bc208ea525ab36185df19eccc3708d57b77a4886f8925e10034e845e0980ba1c",
+    "data_collector/gapmap.py": "4c1862612c168ff73f0584a2af461c9fa2234060df3c38ab3fb6f094e25708b9",
+    "data_collector/deribit.py": "dac37124c8e2d621ad3b4137308ceaf4e2ce9d96a19a4a108d7f17193e55980e",
+    "tests/test_dc_deribit_metadata.py": "1cded0aaf26f64d5481dae2211cf5a5b4fb16d06a8064f11354285b8ebcf925f",
+    "docs/v2/IMPLEMENTATION.md": "95eecfbd8ab1d300720831802810271e0692ccb49a57c3fb65cfe0a2fef3066d"
+  },
+  "reviewer": "dc_chunk5an_metadata_review",
+  "tests": "Root623 full-suite tests passed59.008s with ResourceWarning errors (588v2+35v1), including loopback HTTP fixtures. Eight new metadata tests pass including actual valid snapshot materialization and portable invalid assessment after late gap with REST dependencies retained. Reviewer independently59 supporting tests passed, both original reproducers failed closed after fixes, then final8 metadata tests and strengthened snapshot/export case passed. Six production hashes unchanged after approval, finaltesthash approved separately. git diff --check passes.",
+  "findings_closed": [
+    "Reserved derived metadata requires source proof even after attributes schema/proof marker removal; owner/replay cannot downgrade it to legacy.",
+    "Preflight combined source/history and exact stored-record proof budgets, including ingress ordinal expansion, before the first metadata append."
+  ],
+  "limits": "Verified complete Deribit metadata batch publication on existing raw FIFO, existing dc.metadata/2 plus static derivation attributes/native proof fields. Stable reserved per-process stream, explicit unknown effective time and supersedes chain; identical native attributes preserve owner on metadata refresh. Bounded per-pass raw/universe lookup and direct proof DAG; no raw cache bypass or increased existing scan/proof/metadata caps. Conservative receiver headroom accounts for batch sources; legacy metadata/artifact branches retained. Partial write/ack failures require existing recovery. No automatic subscriber/owner enablement, releaseconfig/bootstraporchestration/sharding/lifecycle/CLI/checkpointcapacity/allremainingvenuesfeeds/backup/hostacceptance completion claim. No exchange/liveclock/service/deployment action. PLANS implementation prefix only; unrelated research excluded."
+}

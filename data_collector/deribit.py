@@ -100,9 +100,9 @@ class DeribitBookSession:
         clock=self.lane.health()['clock']
         # Terminal policy also requires the managed declaration chain and its
         # metadata. Prior raw count conservatively bounds recovered prerequisites.
-        owner_proof=self.lane._source_records+51*self.lane._owner_plan_requests+len(self.plan.bindings)+1
+        owner_proof=self.lane._source_records+53*(self.lane._owner_plan_requests+self.lane._metadata_requests)+len(self.plan.bindings)+3
         future_owners=max(0,self.limits.max_attempts-self._attempts-1)
-        dependencies=2*self.limits.max_frames+6*self.limits.max_attempts+51*future_owners+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)+owner_proof
+        dependencies=2*self.limits.max_frames+6*self.limits.max_attempts+53*future_owners+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)+owner_proof
         if dependencies>256 or any(len(canonical(asdict(b.target)))+6000+dependencies*200>65536 for b in self.plan.bindings):
             raise ValueError('native proof headroom requires shorter capture or checkpoints')
         # Leave conservative room for raw envelopes, clock/cutoff/publication

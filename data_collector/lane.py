@@ -22,6 +22,7 @@ from .journal import Journal
 from .clock import ClockAssessment, ClockSample
 from .clocklog import ClockPin, DurableClock, SOURCE, CONTROL, validate_clock_source
 from .replay import ReplayLimits
+from .metadata import MetadataVersion
 from .deliveries import delivery_base, validate_delivery
 from .recovery import CutoffRecovery, RecoveryRequest, RecoverySegment, iter_recovery_prefix, reconcile_cutoffs
 from .cutoffs import CutoffPin
@@ -139,6 +140,13 @@ class DurableOwnerPlanAck:
 
 
 @dataclass(frozen=True, slots=True)
+class DurableMetadataAck:
+    versions: tuple[MetadataVersion,...]
+    receive_to_durable_ns: int | None
+    timing_valid: bool
+
+
+@dataclass(frozen=True, slots=True)
 class DurableGapAck:
     mapping: GapMapping | NativeRecovery | None
     receive_to_durable_ns: int | None
@@ -159,6 +167,7 @@ class _Pending:
     snapshot_delivery: bool = False
     recovery: bool = False
     owner_plan: bool = False
+    metadata_bootstrap: bool = False
     gap_mapping: bool = False
 
 
@@ -241,7 +250,7 @@ class ArchiveLane:
         self._clock_checks_submitted = 0
         self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
         self._cutoffs = None
-        self._owner_plan_requests=0
+        self._owner_plan_requests=0;self._metadata_requests=0
         self._gap_requests_submitted=0
         self._recovery_request=recovery;self._recovery_result=None
         self._recovery_submitted=False;self._recovery_ready=recovery is None
@@ -357,7 +366,7 @@ class ArchiveLane:
         if (record.venue, record.environment, r.capture_id, r.process_session_id,
             record.provenance.source_sha256, record.provenance.config_sha256) != (
                 self.identity['venue'], self.identity['environment'], self.identity['capture_id'], self.identity['process_session_id'],
-                self.provenance.source_sha256, self.provenance.config_sha256) or r.connection_id.startswith('control:'):
+                self.provenance.source_sha256, self.provenance.config_sha256) or r.connection_id.startswith(('control:','derived:')):
             raise ValueError('foreign raw/collector-control namespace')
         if len(canonical(r.connection_id)) > 130 or len(canonical(r.clock_epoch)) > 130:
             raise ValueError('runtime connection/clock identifier byte bound')
@@ -650,6 +659,80 @@ class ArchiveLane:
             # limits govern publication, not whether legacy raw cutoffs can allocate.
             prior_records=owners.ledger.prior_records,max_plan_bytes=self.snapshot_limits.max_payload_bytes,
             max_metadata_bytes=self.snapshot_limits.max_metadata_bytes)
+
+    def submit_deribit_metadata(self,manifest,*,utc_ns,monotonic_ns):
+        """Queue a complete raw-verified metadata batch; never select a prefix."""
+        self._require_clock()
+        if self.writer.identity[0]!='deribit' or not self._clock_submitted:raise ValueError('measured Deribit lane required')
+        if type(manifest) is not bytes or len(manifest)>self.snapshot_limits.max_metadata_bytes:
+            raise ValueError('bounded immutable universe required')
+        value=strict_json(manifest)
+        if not isinstance(value,dict) or value.get('schema')!='dc.deribit-universe/1' or not isinstance(value.get('selected'),list):
+            raise ValueError('typed discovery universe required')
+        count=len(value['selected'])
+        if self._admission_count+count+self._cutoff_commands_submitted>=2**63:raise QueueCapacity('metadata ordinal bound')
+        if not 1<=count<=10000 or self._metadata_requests>=10000:raise ValueError('metadata batch count bound')
+        integer(utc_ns,'metadata UTC');integer(monotonic_ns,'metadata monotonic')
+        if max(utc_ns,monotonic_ns)>2**63-1 or (self._last_submitted_mono is not None and monotonic_ns<self._last_submitted_mono):
+            raise ValueError('metadata observation range/order')
+        source=StreamKey(self.identity['capture_id'],self.identity['process_session_id'],'derived:deribit-metadata')
+        if source not in self._submitted and len(self._submitted.keys()|self._failed_connections.keys())>=self.max_connections:
+            raise QueueCapacity('metadata source connection bound')
+        if source in self._failed_connections:raise LaneStopped('metadata source halted')
+        first=self._submitted.get(source,-1)+1
+        request=RawRecord(Receipt(source.capture_id,source.process_session_id,'control:metadata-request',self._metadata_requests,
+            utc_ns,monotonic_ns,self._last_observation[2]),*self.writer.identity,'control','metadata_request','control',
+            manifest,self.provenance,native_fields_json=canonical(dict(first_seq=first)))
+        future=asyncio.get_running_loop().create_future()
+        try:ticket=self.queue.offer(request.to_bytes(),extra_bytes=4096)
+        except Exception:
+            future.cancel();self._failure('metadata_queue_admission_failed',global_scope=True);raise
+        self._pending[ticket]=_Pending(request.record_id,request.receipt,future,timing_epoch=self._last_observation[2],metadata_bootstrap=True)
+        self._submitted[source]=first+count-1;self._admission_count+=count;self._metadata_requests+=1;self._last_submitted_mono=monotonic_ns;self._wakeup.set()
+        return future
+
+    def _execute_metadata(self,request):
+        from .deribit_metadata import metadata_records,verify_metadata_sources,verify_universe,marked
+        source=StreamKey(self.identity['capture_id'],self.identity['process_session_id'],'derived:deribit-metadata')
+        previous=[];heads={};previous_bytes=0;metadata_body_bytes=0
+        def raw_prefix():
+            if self._recovery_request is not None:
+                yield from iter_recovery_prefix(self._recovery_request.segments,venue=self.identity['venue'],
+                    environment=self.identity['environment'],capture_id=self.identity['capture_id'],
+                    process_session_id=self.identity['process_session_id'],max_records=self.snapshot_limits.max_records,
+                    max_scan_bytes=self.snapshot_limits.max_scan_bytes)
+            yield from self.writer.raw_records(allow_unsealed=True)
+        def prefix():
+            nonlocal previous_bytes,metadata_body_bytes
+            for record in raw_prefix():
+                if record.kind=='metadata_version' and record.instrument is not None:metadata_body_bytes+=len(record.body)
+                if marked(record):
+                    previous_bytes+=len(record.to_bytes())
+                    if previous_bytes>self.snapshot_limits.max_metadata_bytes:raise ValueError('metadata history byte bound')
+                    previous.append(record)
+                    if record.receipt.stream_key==source:
+                        body=strict_json(record.body)
+                        version=MetadataVersion(record.instrument,record.receipt,body['effective_at_ns'],canonical(body['attributes']),body['supersedes'])
+                        heads[record.instrument]=version.version_id
+                yield record
+        options=dict(max_records=self.snapshot_limits.max_records,max_scan_bytes=self.snapshot_limits.max_scan_bytes,
+                     max_source_bytes=self.snapshot_limits.max_metadata_bytes)
+        value,found=verify_universe(prefix,request.body,**options)
+        if self._clock.assessment is None:raise ValueError('metadata needs preceding measured clock')
+        receipt=Receipt(source.capture_id,source.process_session_id,source.connection_id,
+            strict_json(request.native_fields_json)['first_seq'],request.receipt.receive_utc_ns,
+            request.receipt.monotonic_ns,self._clock.assessment.anchor.clock_epoch)
+        records=metadata_records(value,found,receipt=receipt,provenance=self.provenance,heads=heads)
+        planned=tuple(replace(r,native_fields_json=canonical(dict(strict_json(r.native_fields_json),
+            collector_ingress_ordinal=self.ingress.ordinal+i))) for i,r in enumerate(records))
+        if (metadata_body_bytes+sum(len(r.body) for r in records)>self.snapshot_limits.max_metadata_bytes or
+                any(len(r.to_bytes())>self.writer.limits.max_record_bytes for r in planned)):
+            raise ValueError('metadata batch output byte bound')
+        def candidate():
+            yield from raw_prefix()
+            yield from planned
+        verify_metadata_sources(candidate,[*previous,*planned],**options)
+        return tuple(self.ingress.append(record) for record in records)
 
     def submit_owner_plan(self,plan,*,utc_ns,monotonic_ns):
         """Freeze a managed owner plan on the disk FIFO before allocating its cutoff."""
@@ -1054,6 +1137,21 @@ class ArchiveLane:
                         self._snapshot_inputs_pending=False
                         self.queue.ack(lease);self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
+                        continue
+                    if pending.metadata_bootstrap:
+                        records=await self._disk(self._execute_metadata,record)
+                        latency,timely=self._timing(lease,record.receipt,epoch=pending.timing_epoch)
+                        versions=[]
+                        for stored in records:
+                            fields=strict_json(stored.body)
+                            versions.append(MetadataVersion(stored.instrument,stored.receipt,fields['effective_at_ns'],
+                                canonical(fields['attributes']),fields['supersedes']))
+                            self._durable[stored.receipt.stream_key]=dict(stream=asdict(stored.receipt.stream_key),
+                                receive_seq=stored.receipt.receive_seq,record_id=stored.record_id,raw_sha256=digest(stored.to_bytes()),
+                                monotonic_ns=stored.receipt.monotonic_ns,receive_utc_ns=stored.receipt.receive_utc_ns,clock_epoch=stored.receipt.clock_epoch)
+                        self._durable_count+=len(records)
+                        self.queue.ack(lease);self._pending.pop(lease.ordinal)
+                        if not pending.future.done():pending.future.set_result(DurableMetadataAck(tuple(versions),latency,timely))
                         continue
                     if pending.owner_plan:
                         declaration=await self._disk(self._execute_owner_plan,record)
