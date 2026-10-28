@@ -925,3 +925,46 @@ reviewer independently passed78 focused tests. Measurement evidence is in
 `experiments/ledger_typed_comparison.json`; interpretation is documented in
 NATIVE_CHECKPOINTS.md. This reduces redundant work only: it does not make scans
 incremental, remove continuous-capture bounds or establish host readiness.
+
+
+## Chunk5aj — bounded reconnect inside the existing Deribit owner
+
+`DeribitBookSession.run()` can now replace a failed socket without restarting its
+exclusive MinuteCutoffs/SnapshotPipeline or clearing a lane failure. The default
+`DeribitLimits.max_attempts=1` preserves terminal single-attempt behavior. An
+explicit profile can request up to8 attempts with `retry_delay_ms` from1 to60000;
+existing proof/scan/queue limits may reject that profile before connection. The
+same quota, metadata/channel group and cumulative frame/byte/run-time budget
+apply to all attempts. Headroom accounts conservatively for future owner
+controls, terminal evidence and corrections; attempts cannot renew capacity.
+
+Only `socket_closed_or_error` and successfully mapped `native_resync_required`
+failures are retry candidates. The old attempt first archives stopped evidence,
+confirms every binding's connection-end mapping and confirms socket close. Any
+unconfirmed cleanup, cancellation, storage/clock/quota error, deadline, resource
+bound, stopped scheduler or exhausted retry budget remains terminal. Idle or
+connect timeouts are not automatically retried in this increment. Backoff is
+interruptible. No scheduler or lane halt is reset, and no new supervisor
+framework is introduced.
+
+A replacement gets fresh source/owner identities, sequence zero, ACK state and
+empty native models. Existing `replace_plan()` provides the durable atomic
+cutover. Previously allocated cutoffs keep their frozen plan and cannot borrow
+a replacement's health; that connection needs its own snapshot before becoming
+healthy. Native/end proof histories remain immutable. Terminal records report
+per-attempt frames/bytes/corrections, while receiver health exposes cumulative
+counters and attempt count.
+
+Nine new tests cover fresh identity/anchor and successful publication, cumulative
+frame/byte/time bounds, retry exhaustion, failed close/end acknowledgement,
+stop/cancellation during backoff, profile bounds and three actual publications
+across a cutover: the already allocated old plan stays missing and the following
+fresh plan publishes valid. Focused47 tests pass; the complete581-test suite
+passes in55.416s with ResourceWarning errors (546v2+35v1). Exact independent
+review/source hashes are recorded in the chunk evidence.
+
+This is a bounded frozen-group reconnect path, not continuous-capacity or host
+acceptance. Universe/listing/expiry changes, more retryable transport classes,
+automatic reference sampling/reconciliation, scalable checkpoint integration,
+other venues/feeds, CLI, backup/restore and full production acceptance remain
+in the original scope. No live network capture or deployment occurred.

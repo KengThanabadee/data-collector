@@ -2,8 +2,8 @@
 
 The caller supplies an aiohttp-compatible HTTP session, samples clock health,
 and owns the snapshot pipeline. This receiver opens and owns its bounded socket
-until close. It stops on resync/fault; reconnect and lifecycle supervision remain
-separate. No book state is applied before exact raw durability acknowledgement.
+until close. Optional bounded reconnect handles confirmed transport/native loss;
+other faults remain terminal and broader lifecycle supervision remains separate. No book state is applied before exact raw durability acknowledgement.
 """
 import asyncio
 from dataclasses import asdict,dataclass,replace
@@ -35,10 +35,13 @@ class DeribitLimits:
     bootstrap_timeout_seconds: int = 30
     idle_timeout_seconds: int = 30
     max_total_levels: int = 100000
+    max_attempts: int = 1
+    retry_delay_ms: int = 1000
 
     def __post_init__(self):
         for name,value in asdict(self).items():integer(value,name,1)
-        if self.max_frames>100000 or self.max_seconds>7200 or self.max_message_bytes>2*1024*1024:
+        if (self.max_frames>100000 or self.max_seconds>7200 or self.max_message_bytes>2*1024*1024
+                or self.max_attempts>8 or self.retry_delay_ms>60000):
             raise ValueError('bounded Deribit receiver profile required')
 
 
@@ -79,7 +82,8 @@ class DeribitBookSession:
         self._stop=asyncio.Event();self._started=self._terminal=self._cancelled=False
         self._seq=self._frames=self._bytes=self._controls=0
         self._acked=False;self._failed=False;self.reason=None;self.gaps=[];self.ends=[];self._end_record=None
-        self._start_ns=self._last_receive_ns=None
+        self._start_ns=self._last_receive_ns=self._run_start_ns=None
+        self._attempts=0;self._retryable=False
         envelope=RawRecord(Receipt(self.source.capture_id,self.source.process_session_id,self.source.connection_id,
             2**63-1,2**63-1,2**63-1,self.source.process_session_id+':clock:1023'),
             *self.lane.writer.identity,self.product,'public/set_heartbeat','control',b'',self.lane.provenance,None,
@@ -97,12 +101,13 @@ class DeribitBookSession:
         # Terminal policy also requires the managed declaration chain and its
         # metadata. Prior raw count conservatively bounds recovered prerequisites.
         owner_proof=self.lane._source_records+51*self.lane._owner_plan_requests+len(self.plan.bindings)+1
-        dependencies=2*self.limits.max_frames+6+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)+owner_proof
+        future_owners=max(0,self.limits.max_attempts-self._attempts-1)
+        dependencies=2*self.limits.max_frames+6*self.limits.max_attempts+51*future_owners+2*(clock['cutoff_allocations_submitted']+self.schedule.max_cutoffs)+owner_proof
         if dependencies>256 or any(len(canonical(asdict(b.target)))+6000+dependencies*200>65536 for b in self.plan.bindings):
             raise ValueError('native proof headroom requires shorter capture or checkpoints')
         # Leave conservative room for raw envelopes, clock/cutoff/publication
         # controls and one audit/correction per selected binding.
-        records=2*self.limits.max_frames+64*len(self.models)+40*self.schedule.max_cutoffs+32
+        records=2*self.limits.max_frames+64*len(self.models)*self.limits.max_attempts+40*self.schedule.max_cutoffs+32
         size=2*(self.limits.max_bytes+self.limits.max_message_bytes)+records*4096+len(canonical(asdict(self.plan)))*2
         if (self.lane._source_records+self.lane.writer.state.records+records>self.lane.snapshot_limits.max_records or
                 self.lane._source_bytes+self.lane.writer.state.valid_bytes+size>self.lane.snapshot_limits.max_scan_bytes):
@@ -185,7 +190,7 @@ class DeribitBookSession:
         now=self.lane._sample()[1]
         timely=(self._last_receive_ns is not None and self._start_ns is not None and
             self._last_receive_ns<=now<self._last_receive_ns+self.limits.idle_timeout_seconds*1_000_000_000 and
-            now<self._start_ns+self.limits.max_seconds*1_000_000_000)
+            now<self._run_start_ns+self.limits.max_seconds*1_000_000_000)
         if timely and self._acked and not self._failed and not self._stop.is_set() and all(m.state=='live' for m in self.models):
             streams.add(self.source)
         return tuple(sorted(streams,key=lambda s:s.connection_id))
@@ -211,7 +216,8 @@ class DeribitBookSession:
             if sum(m.book.level_count for m in self.models)>self.limits.max_total_levels:
                 raise DeribitStopped('aggregate native book level bound')
         if selected:
-            self._failed=True;self.schedule.stop()
+            self._failed=True
+            if self.limits.max_attempts==1:self.schedule.stop()
             for index in selected:
                 utc,mono,_=self.lane._sample()
                 ack=await self._owned(self.lane.submit_native_gap(self.plan,index,record.record_id,utc_ns=utc,monotonic_ns=mono))
@@ -221,10 +227,56 @@ class DeribitBookSession:
             raise DeribitStopped('native_resync_required')
 
     async def run(self,session):
+        """Own at most max_attempts fresh sockets under one cumulative budget.
+
+        Retry only an exact native resync or transport-end failure after its
+        durable end mappings and socket close succeed. Never revive a stopped
+        scheduler or replenish frame/byte/time budgets.
+        """
         if self._started:raise DeribitStopped('receiver can run once')
-        self._started=True;failure=None;socket=None
+        self._started=True
         try:
-            self._proof_budget()
+            self._run_start_ns=self.lane._sample()[1]
+            while True:
+                try:
+                    await self._attempt(session)
+                    break
+                except Exception:
+                    now=self.lane._sample()[1]
+                    if (not self._retryable or self._attempts>=self.limits.max_attempts or
+                            self._frames>=self.limits.max_frames or self._bytes>=self.limits.max_bytes or
+                            now+self.limits.retry_delay_ms*1_000_000>=self._run_start_ns+self.limits.max_seconds*1_000_000_000):
+                        raise
+                    try:
+                        await asyncio.wait_for(self._stop.wait(),self.limits.retry_delay_ms/1000)
+                        self.reason='requested_stop';break
+                    except TimeoutError:pass
+                    if self._stop.is_set():self.reason='requested_stop';break
+                    if self.lane._sample()[1]>=self._run_start_ns+self.limits.max_seconds*1_000_000_000:
+                        raise DeribitStopped('session_or_bootstrap_deadline')
+                    if not self.lane.health()['accepting'] or self.schedule.health()['stopping'] or self.schedule.health()['terminal']:
+                        raise DeribitStopped('reconnect owner stopped')
+                    identity=self.lane.identity
+                    self.source=StreamKey(identity['capture_id'],identity['process_session_id'],'deribit:'+uuid.uuid4().hex)
+                    self.plan=replace(self.plan,bindings=tuple(replace(b,ws_source=self.source,ws_start_seq=0,
+                        target=replace(b.target,owner_epoch=new_owner_epoch())) for b in self.plan.bindings))
+                    self.models=[SnapshotBook(b.target.instrument,b.target.profile,signed_prices=b.signed_prices) for b in self.plan.bindings]
+                    self._seq=0;self._acked=self._failed=self._retryable=False
+                    self._end_record=self._last_receive_ns=self._start_ns=None;self.reason=None
+        except asyncio.CancelledError:
+            self._cancelled=True;self.reason='receiver_cancelled';raise
+        except Exception:
+            if self.lane.health()['accepting']:self.lane.halt_snapshot_schedule('snapshot_schedule_failure')
+            raise
+        finally:
+            self._retryable=False;self._stop.set();self.schedule.stop();self._terminal=True
+        return self.health()
+
+    async def _attempt(self,session):
+        failure=None;socket=None;self._retryable=False
+        frame_start,byte_start,gap_start=self._frames,self._bytes,len(self.gaps)
+        try:
+            self._proof_budget();self._attempts+=1
             await self.schedule.replace_plan(self.plan)
             endpoint=('wss://www.deribit.com/ws/api/v2' if self.lane.writer.identity[1]=='production' else
                 'wss://test.deribit.com/ws/api/v2')
@@ -238,7 +290,7 @@ class DeribitBookSession:
                 if self._frames>=self.limits.max_frames:
                     self.reason='session_frame_bound';break
                 now=self.lane._sample()[1]
-                deadlines=[start+self.limits.max_seconds*1_000_000_000,last+self.limits.idle_timeout_seconds*1_000_000_000]
+                deadlines=[self._run_start_ns+self.limits.max_seconds*1_000_000_000,last+self.limits.idle_timeout_seconds*1_000_000_000]
                 if not self._acked:deadlines.append(start+self.limits.ack_timeout_seconds*1_000_000_000)
                 if any(m.state!='live' for m in self.models):deadlines.append(bootstrap+self.limits.bootstrap_timeout_seconds*1_000_000_000)
                 if now>=min(deadlines):raise DeribitStopped('session_or_bootstrap_deadline')
@@ -276,12 +328,16 @@ class DeribitBookSession:
         except Exception as exc:
             failure=exc;self.reason=str(exc)[:256]
         finally:
-            self._stop.set();self.schedule.stop()
+            recoverable=(self.limits.max_attempts>1 and isinstance(failure,DeribitStopped) and
+                str(failure) in {'socket_closed_or_error','native_resync_required'} and
+                not self._cancelled and not self._stop.is_set())
+            if not recoverable:self._stop.set();self.schedule.stop()
             if failure is not None:self._failed=True
+            ended=False;closed=False
             try:
                 if self.lane.health()['accepting']:
                     stopped=await self._archive(canonical(dict(schema='dc.deribit-session/2',event='stopped',reason=self.reason,
-                        frames=self._frames,bytes=self._bytes,corrections=len(self.gaps))), 'deribit_session','control')
+                        frames=self._frames-frame_start,bytes=self._bytes-byte_start,corrections=len(self.gaps)-gap_start)), 'deribit_session','control')
                     end=self._end_record or stopped
                     # A native reset can recover on an open socket; a terminated
                     # connection is an independent cause that cannot be healed.
@@ -292,23 +348,27 @@ class DeribitBookSession:
                         if not isinstance(ack,DurableGapAck) or not ack.timing_valid:
                             raise DeribitStopped('connection end correction unconfirmed')
                         if ack.mapping is not None:self.ends.append(ack.mapping)
+                    ended=True
             except Exception as exc:
+                recoverable=False
                 if failure is None:failure=exc
-            if failure is not None and self.lane.health()['accepting']:
+            if failure is not None and not recoverable and self.lane.health()['accepting']:
                 self.lane.halt_snapshot_schedule('snapshot_schedule_failure')
             try:
                 if socket is not None:
                     await self._owned(asyncio.ensure_future(asyncio.wait_for(socket.close(),self.limits.ack_timeout_seconds)))
+                    closed=True
             except Exception as exc:
+                recoverable=False
                 if failure is None:failure=exc;self.reason='socket_close_unconfirmed'
                 if self.lane.health()['accepting']:self.lane.halt_snapshot_schedule('snapshot_schedule_failure')
-            finally:self._terminal=True
+            self._retryable=(recoverable and ended and closed and not self._cancelled and not self._stop.is_set()
+                and self.lane.health()['accepting'] and not self.schedule.health()['stopping'] and not self.schedule.health()['terminal'])
         if self._cancelled:raise asyncio.CancelledError
         if failure is not None:raise failure
-        return self.health()
 
     def health(self):
-        return dict(started=self._started,terminal=self._terminal,reason=self.reason,acked=self._acked,
+        return dict(started=self._started,terminal=self._terminal,reason=self.reason,acked=self._acked,attempts=self._attempts,
             frames=self._frames,bytes=self._bytes,controls=self._controls,corrections=len(self.gaps),
             connection_end_corrections=len(self.ends),
             source=asdict(self.source),books=tuple(m.view() for m in self.models))

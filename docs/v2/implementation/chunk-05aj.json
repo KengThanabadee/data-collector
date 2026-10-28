@@ -1,0 +1,14 @@
+{
+  "chunk": "5aj",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/deribit.py": "8f3b949ec30e46af6ee9fb1414ad661ec099bac58bf6339a7e988e9597e7b8f2",
+    "tests/test_dc_deribit_reconnect.py": "95bfe88728ed7e23c089fbbe45641802d9316d3fd69c9f10e18bd14f86290b03",
+    "docs/v2/IMPLEMENTATION.md": "ec7812f05ba29632c4a7dc1670477e84b155d68bb546e56724177d77f7080e72"
+  },
+  "reviewer": "dc_chunk5aj_reconnect_review",
+  "tests": "Root581 full-suite tests passed in55.416s with ResourceWarning errors (546v2+35v1), including loopback HTTP fixtures. Focused47 tests passed12.085s. Nine new reconnect tests verify fresh source/owner/anchor, actual three-publication cutover, cumulative frame/byte/time limits, exhaustion, cleanup failure, backoff stop/cancel and config bounds. Reviewer independently28 tests pass; additional gated cancellation during socket close, three attempts with cumulative frames/socket cleanup, and insufficient lane connection capacity fail-closed probes pass. Root source unchanged since full run; git diff --check passes.",
+  "findings_closed": [],
+  "limits": "Optional bounded frozen Deribit group reconnect only; default1 attempt, profile bound8 and retry1..60000ms subject to existing proof/scan/connection/queue caps. Only exact socket-end/native-resync failures after all durable end acknowledgements and confirmed close can retry. One exclusive receiver/scheduler/pipeline/shared quota retained, fresh source/owner/ACK/seq/models, cumulative frame/byte/run-time budgets. Any cleanup/storage/clock/quota/deadline/resource/cancel or exhausted budget stays terminal; no lane halt reset. Other timeout/connect retry classes, universe/lifecycle/reference/reconciliation, scalable checkpoints, remaining venues/feeds/CLI/backup and intended-host acceptance remain pending. No live network or deployment. PLANS implementation prefix only; unrelated research excluded."
+}
