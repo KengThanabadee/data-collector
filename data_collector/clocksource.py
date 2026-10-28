@@ -121,7 +121,7 @@ class ChronyClockSampler:
         self.lane=lane;self.max_samples=max_samples;self.interval_ns=interval_ns
         self.timeout_seconds=timeout_seconds;self.max_reference_age_ns=max_reference_age_ns;self.executable=executable
         self.read=read or read_tracking;self.wait_until=wait_until or self._sleep_until
-        self._stop=asyncio.Event();self._started=self._terminal=self._cancelled=False
+        self._stop=asyncio.Event();self.updated=asyncio.Event();self._started=self._terminal=self._cancelled=False
         self.samples=self.failures=0;self.last_ack=None
         lane._reference_sampler=self
 
@@ -167,7 +167,7 @@ class ChronyClockSampler:
         ack=await self._owned(self.lane.submit_clock(sample,source))
         if (not isinstance(ack,DurableClockAck) or not ack.timing_valid or
                 ack.assessment.evidence_sha256!=sample.evidence_sha256):raise ValueError('clock durability unconfirmed or late')
-        self.last_ack=ack;self.samples+=1
+        self.last_ack=ack;self.samples+=1;self.updated.set()
         return mono
 
     async def run(self):
@@ -195,6 +195,6 @@ class ChronyClockSampler:
         except Exception:
             if self.lane.health()['accepting']:self.lane.halt_snapshot_schedule('snapshot_schedule_clock_invalid')
             raise
-        finally:self._terminal=True
+        finally:self._terminal=True;self.updated.set()
         if self._cancelled:raise asyncio.CancelledError
         return dict(samples=self.samples,failures=self.failures,terminal=self._terminal)

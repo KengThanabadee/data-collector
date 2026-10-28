@@ -79,7 +79,7 @@ class DeribitBookSession:
             target=replace(b.target,owner_epoch=new_owner_epoch())) for b in original.bindings))
         self.models=[SnapshotBook(b.target.instrument,b.target.profile,signed_prices=b.signed_prices) for b in self.plan.bindings]
         self._channels={b.native_channel:i for i,b in enumerate(self.plan.bindings)}
-        self._stop=asyncio.Event();self._started=self._terminal=self._cancelled=False
+        self._stop=asyncio.Event();self.declared=asyncio.Event();self._started=self._terminal=self._cancelled=False
         self._seq=self._frames=self._bytes=self._controls=0
         self._acked=False;self._failed=False;self.reason=None;self.gaps=[];self.ends=[];self._end_record=None
         self._start_ns=self._last_receive_ns=self._run_start_ns=None
@@ -237,7 +237,7 @@ class DeribitBookSession:
         self._started=True
         try:
             self._run_start_ns=self.lane._sample()[1]
-            while True:
+            while not self._stop.is_set():
                 try:
                     await self._attempt(session)
                     break
@@ -263,6 +263,7 @@ class DeribitBookSession:
                     self.models=[SnapshotBook(b.target.instrument,b.target.profile,signed_prices=b.signed_prices) for b in self.plan.bindings]
                     self._seq=0;self._acked=self._failed=self._retryable=False
                     self._end_record=self._last_receive_ns=self._start_ns=None;self.reason=None
+            self.reason=self.reason or 'requested_stop'
         except asyncio.CancelledError:
             self._cancelled=True;self.reason='receiver_cancelled';raise
         except Exception:
@@ -278,51 +279,54 @@ class DeribitBookSession:
         try:
             self._proof_budget();self._attempts+=1
             await self.schedule.replace_plan(self.plan)
-            endpoint=('wss://www.deribit.com/ws/api/v2' if self.lane.writer.identity[1]=='production' else
-                'wss://test.deribit.com/ws/api/v2')
-            socket=await asyncio.wait_for(session.ws_connect(endpoint,max_msg_size=self.limits.max_message_bytes,
-                autoping=True,compress=0),self.limits.ack_timeout_seconds)
-            start=self.lane._sample()[1];last=start;bootstrap=start;self._start_ns=start
-            await self._archive(canonical(dict(schema='dc.deribit-session/2',event='connected')),'deribit_session','control')
-            await self._send(socket,dict(jsonrpc='2.0',id=1,method='public/subscribe',params=dict(channels=list(self._channels))))
-            await self._send(socket,dict(jsonrpc='2.0',id=2,method='public/set_heartbeat',params=dict(interval=10)))
-            while not self._stop.is_set():
-                if self._frames>=self.limits.max_frames:
-                    self.reason='session_frame_bound';break
-                now=self.lane._sample()[1]
-                deadlines=[self._run_start_ns+self.limits.max_seconds*1_000_000_000,last+self.limits.idle_timeout_seconds*1_000_000_000]
-                if not self._acked:deadlines.append(start+self.limits.ack_timeout_seconds*1_000_000_000)
-                if any(m.state!='live' for m in self.models):deadlines.append(bootstrap+self.limits.bootstrap_timeout_seconds*1_000_000_000)
-                if now>=min(deadlines):raise DeribitStopped('session_or_bootstrap_deadline')
-                delivery=await self._receive(socket,(min(deadlines)-now)/1_000_000_000)
-                if delivery is None:break
-                message,record,future=delivery
-                record=await self._ack(record,future)
-                if message.type not in {aiohttp.WSMsgType.TEXT,aiohttp.WSMsgType.BINARY}:
-                    if deribit_session_end(record) is not None:self._end_record=record
-                    raise DeribitStopped('socket_closed_or_error')
-                body=record.body
-                self._frames+=1;self._bytes+=len(body);last=record.receipt.monotonic_ns
-                try:value=native_json(body,max_bytes=self.limits.max_message_bytes)
-                except ValueError:
-                    await self._apply(record,None)
-                    raise DeribitStopped('native JSON rejected')
-                if value.get('method')=='heartbeat':
-                    params=value.get('params')
-                    if isinstance(params,dict) and params.get('type')=='test_request':
-                        await self._send(socket,dict(jsonrpc='2.0',id=100+self._frames,method='public/test',params={}))
-                if 'error' in value or value.get('success') is False:await self._apply(record,value)
-                if type(value.get('id')) is int and value['id']==1:
-                    if ('error' in value or not isinstance(value.get('result'),list) or
-                            len(value['result'])!=len(self._channels) or any(not isinstance(c,str) for c in value['result']) or
-                            set(value['result'])!=set(self._channels)):
-                        raise DeribitStopped('subscription_ack_rejected_or_incomplete')
-                    self._acked=True
-                await self._apply(record,value)
-                if self.lane._sample()[1]-record.receipt.monotonic_ns>5_000_000_000:
-                    raise DeribitStopped('receive_apply_deadline')
-                if self._bytes>self.limits.max_bytes:raise DeribitStopped('session_byte_bound')
-            self.reason=self.reason or ('receiver_cancelled' if self._cancelled else 'requested_stop')
+            self.declared.set()
+            if self._stop.is_set():self.reason='requested_stop'
+            else:
+                endpoint=('wss://www.deribit.com/ws/api/v2' if self.lane.writer.identity[1]=='production' else
+                    'wss://test.deribit.com/ws/api/v2')
+                socket=await asyncio.wait_for(session.ws_connect(endpoint,max_msg_size=self.limits.max_message_bytes,
+                    autoping=True,compress=0),self.limits.ack_timeout_seconds)
+                start=self.lane._sample()[1];last=start;bootstrap=start;self._start_ns=start
+                await self._archive(canonical(dict(schema='dc.deribit-session/2',event='connected')),'deribit_session','control')
+                await self._send(socket,dict(jsonrpc='2.0',id=1,method='public/subscribe',params=dict(channels=list(self._channels))))
+                await self._send(socket,dict(jsonrpc='2.0',id=2,method='public/set_heartbeat',params=dict(interval=10)))
+                while not self._stop.is_set():
+                    if self._frames>=self.limits.max_frames:
+                        self.reason='session_frame_bound';break
+                    now=self.lane._sample()[1]
+                    deadlines=[self._run_start_ns+self.limits.max_seconds*1_000_000_000,last+self.limits.idle_timeout_seconds*1_000_000_000]
+                    if not self._acked:deadlines.append(start+self.limits.ack_timeout_seconds*1_000_000_000)
+                    if any(m.state!='live' for m in self.models):deadlines.append(bootstrap+self.limits.bootstrap_timeout_seconds*1_000_000_000)
+                    if now>=min(deadlines):raise DeribitStopped('session_or_bootstrap_deadline')
+                    delivery=await self._receive(socket,(min(deadlines)-now)/1_000_000_000)
+                    if delivery is None:break
+                    message,record,future=delivery
+                    record=await self._ack(record,future)
+                    if message.type not in {aiohttp.WSMsgType.TEXT,aiohttp.WSMsgType.BINARY}:
+                        if deribit_session_end(record) is not None:self._end_record=record
+                        raise DeribitStopped('socket_closed_or_error')
+                    body=record.body
+                    self._frames+=1;self._bytes+=len(body);last=record.receipt.monotonic_ns
+                    try:value=native_json(body,max_bytes=self.limits.max_message_bytes)
+                    except ValueError:
+                        await self._apply(record,None)
+                        raise DeribitStopped('native JSON rejected')
+                    if value.get('method')=='heartbeat':
+                        params=value.get('params')
+                        if isinstance(params,dict) and params.get('type')=='test_request':
+                            await self._send(socket,dict(jsonrpc='2.0',id=100+self._frames,method='public/test',params={}))
+                    if 'error' in value or value.get('success') is False:await self._apply(record,value)
+                    if type(value.get('id')) is int and value['id']==1:
+                        if ('error' in value or not isinstance(value.get('result'),list) or
+                                len(value['result'])!=len(self._channels) or any(not isinstance(c,str) for c in value['result']) or
+                                set(value['result'])!=set(self._channels)):
+                            raise DeribitStopped('subscription_ack_rejected_or_incomplete')
+                        self._acked=True
+                    await self._apply(record,value)
+                    if self.lane._sample()[1]-record.receipt.monotonic_ns>5_000_000_000:
+                        raise DeribitStopped('receive_apply_deadline')
+                    if self._bytes>self.limits.max_bytes:raise DeribitStopped('session_byte_bound')
+                self.reason=self.reason or ('receiver_cancelled' if self._cancelled else 'requested_stop')
         except asyncio.CancelledError:
             self._cancelled=True;failure=DeribitStopped('receiver_cancelled');self.reason='receiver_cancelled'
         except Exception as exc:

@@ -53,13 +53,14 @@ The user authorized chunked implementation with a fresh **high-reasoning** agent
 - [x] Chunk5ai: streaming typed raw reads remove redundant segment encode/reparse in ledger/owner scans; all verification/limits retained, high-reasoning review approved;572 combined tests pass.
 - [x] Chunk5aj: optional bounded Deribit reconnect retains one scheduler/quota and cumulative frame/byte/time budgets; exact end mapping and close precede fresh source/owner;581 combined tests pass.
 - [x] Chunk5ak: read-only local chrony source and recurring bounded clock admission preserve raw results, uncertainty, FIFO order and durable replay;588 combined tests pass. Host chrony qualification and supervisor wiring remain pending.
+- [x] Chunk5al: bounded DeribitCapture owns clock warmup, durable owner-before-timer startup and ordered publication/socket/clock drain; startup-stop/cleanup review findings fixed,598 combined tests pass. Raw lane/HTTP/quota/discovery and CLI ownership remain external.
 - [ ] Investigate reuse of verified immutable input within one certification operation before adding persistent projection state; preserve mutation/removal/pending-negative gates and remeasure.
 - [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
 - User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
 - [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
 - [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
 
-Current588 combined tests pass:553 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
+Current598 combined tests pass:563 v2 and35 v1. This is actual partial v2 code, not full collection readiness. No deployment or unbounded capture is running.
 
 ## Cryptofeed reuse evaluation — decision recorded
 

@@ -1,0 +1,20 @@
+{
+  "chunk": "5al",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/runtime.py": "65f3cc75b1697383bb1485934fbdef34a4699f726a33b769549f5b019c378e69",
+    "data_collector/clocksource.py": "4c311233a764adfd3769a79b6930568df0a6462da866c3e0d881573d1bd7af58",
+    "data_collector/deribit.py": "69389e3e6ac998a29f2f64063d132fd23f6c5f22a51f8875c669e5fbe593c1a8",
+    "tests/test_dc_runtime.py": "2f5e610cbe436d5817dba4ce99d7931c3b5f3c6e1c7d88db50b350d08843909f",
+    "docs/v2/IMPLEMENTATION.md": "8ababf210d032214d94defea7b3a1524ffc855a0ee1ab28482f9e774685e260b"
+  },
+  "reviewer": "dc_chunk5al_runtime_review",
+  "tests": "Root598 full-suite tests passed59.896s with ResourceWarning errors (563v2+35v1), including loopback HTTP fixtures. Focused45 tests passed10.392s. Ten new runtime tests pass; reviewer independently reran10 after fixes and strengthened exact report-referenced valid-book artifact test, plus original receiver cleanup-suppression probe. Operator stop/cancel drains admitted publication/report before socket/end mappings and clock sampling. Startup no socket after ownerstop, cleanup failure propagates. Exact production hashes unchanged since review; git diff --check passes.",
+  "findings_closed": [
+    "Reject stopped or already used nested scheduler/publisher owners, including busy/submitted publisher state.",
+    "Propagate receiver stop synchronously during startup phases so an acknowledged owner cannot connect after a requested stop.",
+    "Replace early return inside receiver protected try with conditional connect path so finally cleanup errors cannot be suppressed."
+  ],
+  "limits": "Bounded one-group component task ownership on an alreadyrunning measured raw lane with frozen metadata/plan. Caller stillowns rawlane/HTTP/sharedquota/discovery; warmup currentclockcheck and durableowner selection precede network/timer use, no owner rearm. Default raw caps/schema/proof limits unchanged; no cache/framework/new dependency. Hard stuck I/O requires external process supervision. Actual standaloneCLI/releaseconfig/universe/lifecycle/allfeeds/checkpointcapacity/independentbackup/hostchrony/soak/fullproduction acceptance remain pending. No live capture/service change/deployment. PLANS implementation prefix only; unrelated research excluded."
+}

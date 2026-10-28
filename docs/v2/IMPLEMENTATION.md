@@ -1024,3 +1024,53 @@ The local subprocess tests use fake executables; no live daemon was queried and
 no system time/service configuration changed. Clock negative-ledger integration,
 supervisor wiring, remaining feeds/lifecycle/checkpoint/CLI/backup and full
 production acceptance remain pending. Exact hashes/review are in chunk evidence.
+
+
+## Chunk5al — bounded clock/feed/publication task ownership
+
+`DeribitCapture` in `data_collector/runtime.py` owns one unstarted clock sampler,
+Deribit receiver and snapshot pipeline on the same already-running raw lane.
+The constructor rejects mismatched lanes/schedules/boot identities, previously
+stopped/started components, stale nested timer/publisher state and competing
+capture owners. It installs the receiver's allocated-plan health provider.
+The caller still owns the raw lane task, HTTP session, shared quota and frozen
+metadata/universe acquisition; drain this group before closing those resources.
+This is neither the standalone CLI nor a cross-venue/process supervisor.
+
+Startup waits for new sampler evidence and a fresh timely durable clock check.
+Historical sample alignment alone cannot start the socket. An ended or failed
+clock source, stopped group or warmup deadline prevents further startup. The
+receiver then commits its managed owner cutover before the timer can allocate.
+Two small event notifications expose committed clock progress/termination and
+owner selection; there is no polling loop or mutable replay cache.
+
+A component's completion, failure, user stop or cancellation ends the bounded
+group. Admitted publication/report handling drains while feed/clock owners are
+still available, then the receiver archives its end mappings and closes its
+socket, then the clock sampler drains. Caller cancellation is re-raised only
+after this ownership chain finishes. Warmup deadlines do not cancel an admitted
+clock write; hard stuck I/O still requires the eventual process supervisor.
+Raw lane shutdown/recovery and HTTP/quota cleanup remain caller obligations.
+
+Fresh high-reasoning review caught two startup-stop issues: propagating stop to
+the receiver only in the finalizer could open a socket after owner acknowledgement,
+and a return inside the receiver's protected try could suppress an end-cleanup
+failure stored by finally. Startup stop now synchronously stops the receiver;
+active publication/draining retains the prior ordered behavior. The receiver
+honors stop before an attempt and conditionally skips connect after owner ack,
+while always propagating cleanup failures. No stopped owner is rearmed.
+
+Ten new integration tests cover healthy warmup through raw capture/publication/
+durable report and exact valid-book readback, unaligned source exhaustion,
+provider/connect failure, stop-before-run, warmup timeout, stopped nested owners,
+stop/cancel during publication, and stop during owner acknowledgement with both
+successful and failed cleanup. Independent re-review approved all repairs and
+the strengthened artifact assertion. Full598 tests pass in59.896s with
+ResourceWarning as errors (563v2+35v1); focused45 tests pass in10.392s. Exact
+source hashes and review are recorded in chunk evidence.
+
+This integrates bounded frozen-group components only. Release configuration,
+universe/discovery/lifecycle, raw lane/process supervision, remaining venues/
+feeds, checkpoint capacity, standalone CLI, independent backup/restore and actual
+Linux chrony/full-target soak acceptance remain pending. No live capture,
+system-service change or deployment occurred.
