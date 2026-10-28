@@ -968,3 +968,59 @@ acceptance. Universe/listing/expiry changes, more retryable transport classes,
 automatic reference sampling/reconciliation, scalable checkpoint integration,
 other venues/feeds, CLI, backup/restore and full production acceptance remain
 in the original scope. No live network capture or deployment occurred.
+
+
+## Chunk5ak — local chrony reference evidence and recurring admission
+
+`ChronyClockSampler` in `data_collector/clocksource.py` reads the local daemon
+using fixed read-only `chronyc -c -h 127.0.0.1 tracking`. It neither installs nor
+configures chrony, adjusts the clock, or implements NTP. The subprocess has a
+runtime timeout and bounded stdout/stderr; cancellation and overflow kill/reap
+the owned child and drain pipes. No shell is used. Raw successful/failed command
+outputs are base64-preserved in `dc.chrony-source/1` measurement bodies. When
+acquisition cannot return complete output, `output_complete=false` explicitly
+marks that absence; no complete measurement is claimed.
+
+The strict14-field parser follows the [chrony4.8 client source](https://raw.githubusercontent.com/mlichvar/chrony/4.8/client.c).
+It rejects local/unknown references, unsynchronized/leap states, invalid numeric
+fields, and stale/future upstream reference times. The independently pinned
+reference-age limit defaults300s, capped3600s; it is separate from collector
+sample freshness. Decimal arithmetic and upward rounding preserve a conservative
+nanosecond interval. [Chrony's documented error bound](https://chrony-project.org/doc/4.8/chronyc.html)
+is conditional on a correct external stratum-1 source. We use its absolute bound
+as zero-centred uncertainty (`offset_ns=0` is not a directional zero-offset
+measurement), add3ns formatting allowance, acquisition age and wall/monotonic
+mismatch. The actual reported correction remains in raw stdout. This does not
+authenticate the daemon or reference source.
+
+After asynchronous acquisition the sampler takes fresh paired clocks and
+admits source/sample to the existing raw FIFO in the same event-loop turn.
+Intervening native ingress therefore cannot put a newly admitted sample behind
+its old command-start timestamp. Failed/unusable readings create a durable
+unaligned sample with maximum uncertainty, never healthy zero. Exact source
+hash and timely durable acknowledgement are checked. Admitted clock pairs drain
+before cancellation returns, and replay uses the unchanged ClockSample,
+assessment and ClockPin contracts.
+
+The bounded single-owner loop defaults100 samples, at half the monitor's sample
+interval (30s under the default policy). This leaves freshness margin while the
+existing monitor still requires two healthy observations separated by one full
+policy interval before alignment. Stop/cancellation interrupts timer waits;
+early timers, process-epoch faults, queue/durability failures stay fail-closed.
+Caller owns the raw lane and must stop/drain the sampler before stopping it.
+There is no continuous supervisor/CLI wiring in this increment.
+
+Seven new tests cover exact source replay and warm-up, durable provider failure
+and recovery, ingress during acquisition, cancellation during clock-pair fsync,
+stop/early-timer behavior, parser rejection/rounding, and real subprocess output,
+oversize, timeout and cancellation with PID reaping. Full588 tests pass in58.094s
+with ResourceWarning as errors (553v2+35v1); independent high-reasoning review
+approved both source hashes and independently ran the focused tests.
+
+Intended Linux installation/version, pinned chrony configuration/external UTC
+source trust, service-user read access, root-distance behavior during ordinary
+slewing and the configured reference-age limit remain host acceptance gates.
+The local subprocess tests use fake executables; no live daemon was queried and
+no system time/service configuration changed. Clock negative-ledger integration,
+supervisor wiring, remaining feeds/lifecycle/checkpoint/CLI/backup and full
+production acceptance remain pending. Exact hashes/review are in chunk evidence.

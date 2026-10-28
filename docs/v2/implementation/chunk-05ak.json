@@ -1,0 +1,14 @@
+{
+  "chunk": "5ak",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/clocksource.py": "8d43488a8d13581e09d3ad8934ebe298cffdf7acc1cd83c101054b523371a73c",
+    "tests/test_dc_clocksource.py": "99d2e3f66991a7038d999a6d3d221fd5cb1a74b0802685c368d5e345fdfee31f",
+    "docs/v2/IMPLEMENTATION.md": "57deb2943d1eece964d344e0d2282b62c868cef2095e03b97b36595a0c817055"
+  },
+  "reviewer": "dc_chunk5ak_clocksource_review",
+  "tests": "Root588 full-suite tests passed in58.094s with ResourceWarning errors (553v2+35v1), including loopback HTTP fixtures. Seven new tests pass; independent reviewer reran7 and inspected local chrony4.8 primary docs/source field order, numeric bound, pipe/cancel ownership and lane FIFO/replay contracts. Tests use real fake-executable subprocesses for exact bytes, output overflow, timeout and cancel/PID reaping; clock-pair cancellation drains admitted writes, provider failures recover via existing two-spaced-healthy rule. git diff --check passes.",
+  "findings_closed": [],
+  "limits": "Read-only local chrony tracking source and bounded recurring clock admission, max10000 samples; default100 at half monitor sample interval. No NTP implementation, daemon install/configuration, time adjustment, credentials, shell, live daemon query or deployment. Strict chrony4.8 CSV14field profile and conservative zero-centred uncertainty; no directional zero-offset claim or UTC authentication. Actual Linux chrony version/config/source trust/service access/slew behavior/reference-age bounds remain acceptance gates. Failure output absence explicitly output_complete=false; unavailable reference never healthyzero. Existing schemas/clock replay/FIFO durability retained. Supervisor wiring, clock negatives, all original feeds/lifecycle/checkpoint/CLI/backup and production acceptance remain pending. PLANS implementation prefix only; unrelated research excluded."
+}
