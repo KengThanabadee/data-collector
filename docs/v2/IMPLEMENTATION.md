@@ -901,3 +901,27 @@ capture/publication/full-universe/host acceptance. See NATIVE_CHECKPOINTS.md for
 method, limits and the revised next step. Focused discovery/owner/termination
 regressions pass (41 tests); independent high-reasoning review includes separate
 probe smoke and argument-bound checks. Exact approval is in chunk evidence.
+
+
+## Chunk5ai — avoid segment encode/reparse during certification
+
+Journal and SessionWriter now offer a streaming `raw_records()` view. Ledger
+and owner scans prefer it while retaining the encoded-only source fallback.
+Committed segments still undergo complete verification before exposing records;
+the active WAL still checks frame bytes and unexpected suffixes. The typed view
+passes existing decoded segment records directly to projections instead of
+serializing them only for the next layer to decode them again. The encoded API
+is unchanged. No records are retained between calls, no persistent cache is
+introduced, and all full-prefix scans and resource limits remain in force.
+
+Five regression tests cover typed/encoded binary byte equality across rotations
+and an active WAL, repeated whole-segment verification before first yield, bad
+WAL frames/suffixes, sealed/closed restrictions, encoded-only source fallback,
+missing raw and pending-native-negative poisoning. Independent high-reasoning
+review additionally checked exact pin/evidence/control/position/owner-plan
+identity, lazy reads, generator close propagation and append after early close.
+Full repository suite:572 tests passed in53.317s with ResourceWarning as errors;
+reviewer independently passed78 focused tests. Measurement evidence is in
+`experiments/ledger_typed_comparison.json`; interpretation is documented in
+NATIVE_CHECKPOINTS.md. This reduces redundant work only: it does not make scans
+incremental, remove continuous-capture bounds or establish host readiness.

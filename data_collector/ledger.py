@@ -55,8 +55,12 @@ class DurableLedger:
 
     def _all_records(self):
         yield from self.prior_records()
-        for encoded in self.journal.encoded_records(allow_unsealed=True):
-            yield RawRecord.from_bytes(encoded)
+        typed = getattr(self.journal, 'raw_records', None)
+        if typed is not None:
+            yield from typed(allow_unsealed=True)
+        else:
+            for encoded in self.journal.encoded_records(allow_unsealed=True):
+                yield RawRecord.from_bytes(encoded)
 
     def _evidence_value(self,record):
         return Evidence(record.record_id,digest(record.to_bytes()),record.receipt.capture_id,record.venue,

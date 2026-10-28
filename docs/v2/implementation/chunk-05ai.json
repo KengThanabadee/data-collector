@@ -1,0 +1,19 @@
+{
+  "chunk": "5ai",
+  "status": "approved",
+  "reasoning_effort": "high",
+  "sources": {
+    "data_collector/journal.py": "b12b87baa0758e3fb19bd1b437bec05379e723d28f2bc909b930a88c3ddf6b03",
+    "data_collector/writer.py": "41516c6273d94a4df71827660c26ab70354233157457dc6cea723cf3e98d18ee",
+    "data_collector/ledger.py": "f7f7142267adb9ce6e2022328498dae4198b4d13d12bce2d4e1bc83f725d9745",
+    "data_collector/owners.py": "5079651a54a19489c56e52142cc49178a004d934f4ff56918ec3ad6d50fc2f14",
+    "tests/test_dc_typed_records.py": "907d7a179ef38798187f1977ed50c9ef137fb260b81d4580aeca71d04d7e3dc4",
+    "docs/v2/experiments/ledger_typed_comparison.json": "29453fec67f7d6581f266f9e9619a7583ee119ecdea1d032510e5b28d1d9c26d",
+    "docs/v2/NATIVE_CHECKPOINTS.md": "d9798e559c5d7772b0c3ae7444cf0e6766277d376a46d8fbd04bc0e07dc26763",
+    "docs/v2/IMPLEMENTATION.md": "5c16b8784a755a6c84a40f8aa5a63d1d16e505ef1e90a052856d9c475cfcf14c"
+  },
+  "reviewer": "dc_chunk5ai_typed_review",
+  "tests": "Full572-test repository suite passed in53.317s with ResourceWarning errors, including35 v1 tests and loopback HTTP fixtures. Five new typed reader regressions pass. Reviewer independently ran78 focused tests and additional exact typed/encoded pin/evidence/control/position/owner-plan equivalence, lazy/early-close/sealed/fallback checks. Sequential baseline/current unchanged probe on10000 events: median3.172166/2.339640s; from_bytes calls100036/70024;10000 native dispatches both. Exact source hashes, samples, machine and scope in saved comparison.",
+  "findings_closed": [],
+  "limits": "Streaming typed view removes encode/reparse round trips only. No persistent cache, state collection, schema/dependency/cap changes or verification bypass; existing encoded API preserved. Whole-segment verification before exposing rows, active WAL frame checks and full-prefix ledger/owner/native replay remain. Local warm single-instrument two-level healthy synthetic comparison excludes setup/fsync, network, concurrent capture, cutoff/gap/correction history. Sequential timing is not randomized and establishes neither universal speedup nor full-universe/host/continuous readiness. Original feed/lifecycle/checkpoint/CLI/backup/acceptance scope remains pending. PLANS implementation prefix only; unrelated research excluded."
+}

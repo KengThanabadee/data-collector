@@ -277,6 +277,19 @@ class SessionWriter:
                 yield record.to_bytes()
         yield from self.active.encoded_records(allow_unsealed=True)
 
+    def raw_records(self, *, allow_unsealed=False):
+        """Stream typed records without re-encoding already decoded segments.
+
+        Segment verification and active WAL frame checks run on every call.
+        The same serialized-owner restriction as encoded_records applies.
+        """
+        self._ready()
+        if not allow_unsealed:
+            raise JournalDamaged('active rotating session is not sealed')
+        for path in self.committed:
+            yield from iter_segment_records(path, limits=self.segment_limits)
+        yield from self.active.raw_records(allow_unsealed=True)
+
     def finish(self):
         self._ready()
         try:

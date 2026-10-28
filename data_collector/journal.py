@@ -230,6 +230,11 @@ class Journal:
         if self._file.read(1):
             raise JournalDamaged("sealed journal has an unexpected suffix")
 
+    def raw_records(self, *, allow_unsealed=False):
+        """Typed view of the same verified frames; retain no state between reads."""
+        for encoded in self.encoded_records(allow_unsealed=allow_unsealed):
+            yield RawRecord.from_bytes(encoded)
+
     def append(self, record: RawRecord):
         self._ready()
         if not isinstance(record, RawRecord) or (record.venue, record.environment) != self.identity:

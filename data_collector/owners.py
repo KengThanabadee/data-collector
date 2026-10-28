@@ -67,7 +67,11 @@ class OwnerPlans:
 
     def _records(self):
         yield from self.prior_records()
-        for encoded in self.writer.encoded_records(allow_unsealed=True):yield RawRecord.from_bytes(encoded)
+        typed = getattr(self.writer, 'raw_records', None)
+        if typed is not None:
+            yield from typed(allow_unsealed=True)
+        else:
+            for encoded in self.writer.encoded_records(allow_unsealed=True):yield RawRecord.from_bytes(encoded)
 
     def _scan_records(self):
         count=size=0

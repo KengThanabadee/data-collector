@@ -1,0 +1,65 @@
+{
+  "schema": "dc.typed-raw-comparison/1",
+  "method": "Same unchanged probe and Python environment; baseline9ff6e7d source exported to /tmp, then current typed-reader implementation. Sequential processes after full-suite completion, three warm unchanged pins each plus one separately profiled pin. No capture or network.",
+  "scope": "synthetic single-instrument warm local immutable segment; unchanged managed ledger pins only",
+  "limitations": "Synthetic one-instrument two-level healthy book, one owner declaration; no gaps, corrections or cutoffs in timed history. Setup/fsync excluded. Sequential run is not a randomized performance trial. Call-count reduction is structural; observed seconds are local and not a throughput or universal speedup claim. Full-prefix verification, parsing and native replay remain.",
+  "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "arm64",
+  "baseline": {
+    "run_utc": "2026-10-28T03:51:37.698257+00:00",
+    "source_sha256": {
+      "data_collector/books.py": "d9aaf64357e3d7900c005f3e1bc964dc2d979efe1c94eaa666dcfae412233f5c",
+      "data_collector/contracts.py": "62107c54af98242399d0b2707f4e76a5370bee5285c74430f9d09f981160f6a8",
+      "data_collector/decoders.py": "0c1a66a81c24986045bdc31d981947131ab9a7e7788c3f1c72134a1125153b35",
+      "data_collector/discoveries.py": "9968773adb162087de5ea7997679d258d4866c242a3830b664db740ef1d615f6",
+      "data_collector/journal.py": "41a5c3d9cc64016ccdef3f75dafa4c9cba45cf301593a3da23f289c8c50e5194",
+      "data_collector/ledger.py": "eb3d31a2c111e7d863a92de4fcb87155ea6d4de5375890928a20d6503c913ea1",
+      "data_collector/owners.py": "0c6844585a250a169aedb07340dce5a666c18729ace2fcbd610e93039cbbb775",
+      "data_collector/replay.py": "4075209d21ab2300728cad84ca6c155c23dbbcb14608474dd0509b5719771a24",
+      "data_collector/segments.py": "8af16d5660dc92fbff03274284d8ad4b0531530c932e8d0db0b6a2ae67cf7f82",
+      "data_collector/writer.py": "c2e1c89f01468b42a7ef7437b316fda4ede8c478bfe97e6c28073f0e7e174ce1",
+      "experiments/ledger_refresh_probe.py": "791ef741a22229a5c670bd4a5b116caeecba09f805fd4dfe48e3feb41913a526"
+    },
+    "native_events": 10000,
+    "physical_records": 10003,
+    "pin_unchanged": true,
+    "profiled_native_dispatches": 10000,
+    "raw_encoded_bytes": 13559921,
+    "unchanged_pin_median_seconds": 3.1721660001203418,
+    "unchanged_pin_seconds": [
+      3.1672426657751203,
+      3.1721660001203418,
+      3.1939734159968793
+    ],
+    "profiled_from_bytes_calls": 100036
+  },
+  "typed": {
+    "run_utc": "2026-10-28T03:52:01.463875+00:00",
+    "source_sha256": {
+      "data_collector/books.py": "d9aaf64357e3d7900c005f3e1bc964dc2d979efe1c94eaa666dcfae412233f5c",
+      "data_collector/contracts.py": "62107c54af98242399d0b2707f4e76a5370bee5285c74430f9d09f981160f6a8",
+      "data_collector/decoders.py": "0c1a66a81c24986045bdc31d981947131ab9a7e7788c3f1c72134a1125153b35",
+      "data_collector/discoveries.py": "9968773adb162087de5ea7997679d258d4866c242a3830b664db740ef1d615f6",
+      "data_collector/journal.py": "b12b87baa0758e3fb19bd1b437bec05379e723d28f2bc909b930a88c3ddf6b03",
+      "data_collector/ledger.py": "f7f7142267adb9ce6e2022328498dae4198b4d13d12bce2d4e1bc83f725d9745",
+      "data_collector/owners.py": "5079651a54a19489c56e52142cc49178a004d934f4ff56918ec3ad6d50fc2f14",
+      "data_collector/replay.py": "4075209d21ab2300728cad84ca6c155c23dbbcb14608474dd0509b5719771a24",
+      "data_collector/segments.py": "8af16d5660dc92fbff03274284d8ad4b0531530c932e8d0db0b6a2ae67cf7f82",
+      "data_collector/writer.py": "41516c6273d94a4df71827660c26ab70354233157457dc6cea723cf3e98d18ee",
+      "experiments/ledger_refresh_probe.py": "791ef741a22229a5c670bd4a5b116caeecba09f805fd4dfe48e3feb41913a526"
+    },
+    "native_events": 10000,
+    "physical_records": 10003,
+    "pin_unchanged": true,
+    "profiled_native_dispatches": 10000,
+    "raw_encoded_bytes": 13559921,
+    "unchanged_pin_median_seconds": 2.3396398751065135,
+    "unchanged_pin_seconds": [
+      2.3449347498826683,
+      2.3317899578250945,
+      2.3396398751065135
+    ],
+    "profiled_from_bytes_calls": 70024
+  }
+}

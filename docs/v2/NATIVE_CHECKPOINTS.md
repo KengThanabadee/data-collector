@@ -122,3 +122,32 @@ cache state. Preserve all existing verification gates and scan limits. This is
 an ordering decision, not proof of a safe reuse design, predicted speedup or a
 waiver of continuous-capture capacity requirements. Measure full-universe load
 and actual host acceptance separately.
+
+
+## Remove an unnecessary serialization round trip
+
+Chunk5ai takes a smaller step than caching: `Journal.raw_records()` and
+`SessionWriter.raw_records()` stream typed records, and ledger/owner scans use
+that view when available. Already decoded segment rows are no longer encoded
+and parsed again just to cross this internal boundary. Encoded-only sources
+still work. No records or trust decisions persist between operations. All
+whole-segment verification, active-WAL checks, prefix scans, pending-negative
+rules and configured bounds remain unchanged.
+
+The unchanged probe was run against baseline commit `9ff6e7d`, exported to a
+temporary source directory, then against the typed implementation using the
+same interpreter after the full test suite completed. At 10,000 native events,
+three warm unchanged pins had medians **3.172 s before / 2.340 s after**.
+Profiled `RawRecord.from_bytes` calls fell from **100,036 to 70,024**, while
+native dispatches remained **10,000**, physical records **10,003**, and encoded
+raw bytes **13,559,921**. Pins remained unchanged within every run; independent
+review also checked exact typed/encoded pin and evidence equivalence.
+
+[Saved comparison](experiments/ledger_typed_comparison.json) includes exact
+source hashes, samples and machine details. This sequential local comparison is
+not randomized and uses one healthy two-level book without concurrent capture,
+gap/correction/cutoff history or network. Setup/fsync are outside timing.
+Profiling is separate and instrumented. The smaller parse count demonstrates
+removed work; the observed timing does not establish general speedup, full
+universe throughput or deployment readiness. Scans still grow with history;
+checkpoint/control integration and original production acceptance remain open.
