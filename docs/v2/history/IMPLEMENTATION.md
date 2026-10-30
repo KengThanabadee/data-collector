@@ -71,7 +71,7 @@ The90s sample evidence was independently audited by `dc_chunk7c_duration_review`
 
 ## Cryptofeed reuse assessment
 
-CF01 offline evaluation is approved; see [assessment and decision](CRYPTOFEED_EVALUATION.md), [review](implementation/chunk-CF01.json), and [independent synthetic evidence](implementation/cryptofeed-offline.json). On24October the user retained our collector as the production core. CF02 live qualification is deferred; no production dependency or module replacement is introduced. Full v2 scope stays unchanged.
+CF01 offline evaluation is approved; see [assessment and decision](../CRYPTOFEED_EVALUATION.md), [review](implementation/chunk-CF01.json), and [independent synthetic evidence](implementation/cryptofeed-offline.json). On24October the user retained our collector as the production core. CF02 live qualification is deferred; no production dependency or module replacement is introduced. Full v2 scope stays unchanged.
 
 Chunk5i separates the stable observer process/monotonic integrity epoch from a
 raw receipt's measured alignment epoch when measured clocks are enabled. A

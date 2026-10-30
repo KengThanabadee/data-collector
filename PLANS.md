@@ -1,123 +1,35 @@
-# Data Collector (DC) — progress
+# Data Collector (DC) — plan
 
-V1 implementation follows the preserved [SPEC v1](docs/SPEC_V1.md). V2 design follows [SPEC.md](SPEC.md). Source repository: [KengThanabadee/option-collector](https://github.com/KengThanabadee/option-collector) (private). Deployment and recurring collection have not been performed.
+V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
-## Next delivery — usable Deribit capture path
+## Current state — 30 October 2026
 
-The full SPEC.md scope remains the final target. Following independent review
-and the user's direction, prioritize a runnable vertical slice over further
-infrastructure refinement. Approved component counts are not release readiness.
+- V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
+- V2: `config-check`, `discover`, `capture` and `verify-run` work for Deribit option books; see [docs/v2/RUNNING.md](docs/v2/RUNNING.md). A real discovery run captured 2,653 metadata rows and read them back. `capture` is capped at 120 seconds and 64 frames, so it cannot yet collect data continuously.
 
-1. Wire existing discovery, raw metadata, clock, receiver, archive and replay into
-   one documented v2 command with explicit environment, data root and symbols.
-2. Run a declared bounded Deribit capture; stop cleanly, verify committed raw,
-   read/export it independently, and show received data and coverage/gaps.
-3. Ask a fresh high-reasoning agent to review actual usability and unnecessary
-   complexity. Fix blockers before committing; defer speculative edge cases,
-   generic abstractions and optimizations unless a measured failure needs them.
-4. Use capture evidence to address the existing long-run proof horizon, then
-   qualify longer operation, backup/restore and intended-host acceptance.
-   Extend the remaining venue/feed families without claiming this slice is full v2.
+## Next
 
-The first capture is a partial Deribit book workflow, not full-universe or
-multi-venue production acceptance. Keep unsupported/pending scope explicit.
+1. Continuous Deribit option capture. Make duration, frame and byte limits configurable and unbounded by default, reconnect after connection loss, and keep rotating segments. Done when a one-hour capture of selected BTC/ETH option books ends cleanly and `verify-run` passes on it.
+2. Run that capture for 24 hours on the intended Linux host with chrony, and record what failed.
+3. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
 
-## V2 runtime implementation — resumed
+## Notes
 
-The user authorized chunked implementation with a fresh **high-reasoning** agent review after each chunk. Follow [chunk progress and exact review evidence](docs/v2/IMPLEMENTATION.md).
+One line per deferred idea or choice made while working.
 
-- [x] Chunk1 foundational contracts/metadata/v1 compatibility: implemented, tested and approved after review fixes.
-- [x] Chunk2a bounded durable WAL/tail recovery: implemented, tested and approved after review fixes.
-- [x] Chunk2b immutable segment publication/verification and persistent seal: implemented,29scoped tests pass, high-reasoning review approved.
-- [x] Chunks3a–3c: native decimal book projections, bounded bootstrap and depth decoders for reviewed profiles; fresh high-reasoning reviews approved.
-- [x] Chunks4a–4b: pinned correction projection and durable local allocation/closure barriers; fresh high-reasoning reviews approved.
-- [x] Chunk4c: durable correction ledger with exact raw evidence and verified restore; high-reasoning review approved after fixes.
-- [x] Chunk4d: local deterministic book snapshot materialization;121 v2 tests pass; high-reasoning review approved after fixes.
-- [x] Chunk4e: immutable local snapshot publication, pinned dependency reads and process-exit recovery; high-reasoning review approved after fixes.
-- [x] Chunk4f: portable original/assessed exports with pinned ledger replay; high-reasoning review approved.
-- [x] Chunk4g: session-wide WAL rotation/recovery with pre-admission resource bounds; high-reasoning review approved after fixes.
-- [x] Chunk5a: retained-byte venue queues and priority shared REST quotas; high-reasoning review approved after fixes.
-- [x] Chunk5b: serialized per-venue archive worker, durable raw acknowledgements, emergency loss controls and clock-fault regressions; high-reasoning re-review approved.
-- [x] Chunk5c: measured clock-health epochs, freshness and two-sample recovery; shared monotonic regression guards reviewed and approved.
-- [x] Chunk5d: fsynced clock measurement/assessment pairs and pinned deterministic replay; independent high-reasoning review and real fsync-failure probes approved.
-- [x] Chunk5e: measured clock requests share the bounded async raw FIFO and disk owner; independent high-reasoning review approved cancellation, failure, overflow and replay tests.
-- [x] Chunk5f: durable paired clock freshness checks, cumulative-drift protection and legacy log replay fixture; independent high-reasoning re-review approved both repairs.
-- [x] Chunk5g: async paired clock checks through the raw FIFO, shared operation caps and failure pin reporting; independent high-reasoning review approved.
-- [x] Chunk5h: synchronous clock-bound local cutoffs and snapshot clock-dependency verification; independent high-reasoning re-review approved policy/deadline/namespace/bounds fixes.
-- [x] Chunk5i: separate process integrity timing from measured alignment epochs; independent high-reasoning review approved,261 v2 tests pass.
-- [x] Chunk5j: stamp received raw epochs from preceding committed FIFO clock controls; independent high-reasoning review approved.
-- [x] Chunk5k: continue measured-mode raw capture through UTC wall steps with monotonic integrity/deadline guards; independent high-reasoning review approved.
-- [x] Chunk5l: clock-bound cutoff allocation/closure commands share the raw FIFO; independent high-reasoning review approved,315 combined v1/v2 tests pass.
-- [x] Chunk5m: seal and pin immutable snapshot inputs through the raw FIFO while capture stays open; independent high-reasoning review approved,287 v2 tests pass.
-- [x] Chunk5n: bounded separate snapshot publisher and durable deadline/clock/knowledge outcome receipts; persistent UTC-step invalidation repaired, high-reasoning re-review approved,341 combined tests pass.
-- [x] Chunk5o: archive canonical publisher reports through raw FIFO with strict replay and missing-report accounting; fresh high-reasoning review approved,354 combined tests pass.
-- [x] Chunk5p: bounded recurring minute cutoffs with leased publication handoff and durable stop/backlog evidence; fresh high-reasoning review approved,365 combined tests pass.
-- [x] Chunk5q: own timer/seal/publish/raw-report consumer with durable lease acknowledgement and deferred cancellation; fresh high-reasoning review approved,376 combined tests pass.
-- [x] Chunk5r: pinned cross-process cutoff reconciliation, interrupted allocation resolution and durable recovery marker; output-headroom repair independently approved,392 combined tests pass.
-- [x] Chunk5s: explicit pinned startup resume across raw lane, minute timer and snapshot publisher; cross-process close-origin repair independently approved,404 combined tests pass.
-- [x] Chunk5t: owned capture inventory and automatic pinned startup selection, including opened-WAL dependency proofs; missing-WAL repair independently approved,422 combined tests pass.
-- [x] Chunk5u: retain and resume preallocation raw/corrupt-tail history with explicit uncertainty, exact nullable-ledger verification and fresh first-cutoff publication; independent high-reasoning review approved.
-- [x] Chunk5v: adapter-invoked native gap replay and quiet-cutoff range mapping through the raw FIFO, with durable portable audit/correction; multiplexed routing and pending-audit crash findings repaired and independently approved.
-- [x] Chunk5w: automatically finish exact durable native-gap negatives before startup marker/live gate; fresh high-reasoning review approved, crash/marker replay and fresh publication verified.
-- [x] Chunk5x: first publication assesses intrinsic replay validity at its own ledger pin; existing /1 bytes preserved, historical gaps and published-invalid rows remain unchanged; fresh high-reasoning review approved.
-- [x] Chunk5y: replay-select first accepted native recovery closure, retain native and complete cutoff-selection proof dependencies, and resolve through existing FIFO; review boundary/dependency findings repaired and high-reasoning re-review approved.
-- [x] Chunk5z: durable managed owner-plan declarations, FIFO cutover fences, allocation-pinned replay and legacy compatibility; managed buffered routing review finding repaired and high-reasoning re-review approved.
-- [x] Chunk5aa: serialize managed owner declaration/provider switch with minute allocation, retaining allocated-plan health; failure-path review finding repaired and high-reasoning re-review approved.
-- [x] Chunk5ab: bounded durable Deribit shared-socket receiver, quota controls, native book apply and automatic affected-binding gap mapping; channel/proof-headroom review findings repaired and high-reasoning re-review approved.
-- [x] Chunk5ac: raw-derived managed snapshot-book failure gate and exact negative startup/cutoff reconciliation; high-reasoning re-review approved,513 combined tests pass.
-- [x] Chunk5ad: buffered native raw discovery, bounded retained bootstrap state and policy-bound historical snapshot/export replay; compatibility finding repaired, high-reasoning re-review approved.
-- [x] Chunk5ae: managed Deribit connection-end corrections, shielded shutdown and policy-bound non-healing replay; unmanaged/dependency findings repaired and high-reasoning re-review approved.
-- [x] Chunk5af: verified snapshot-book state and immutable native checkpoint prerequisite; high-reasoning review approved,556 tests pass; capture limits unchanged.
-- [x] Chunk5ag: checkpoint-to-cutoff native continuation with exact raw artifact equivalence and policy/admission fallback; high-reasoning re-review approved,567 combined tests pass.
-- [x] Chunk5ah: measured actual unchanged managed ledger pins at100/1,000/10,000 events; defer native-only cache because repeated raw verification dominates this fixture. No runtime changes; focused41 tests pass.
-- [x] Chunk5ai: streaming typed raw reads remove redundant segment encode/reparse in ledger/owner scans; all verification/limits retained, high-reasoning review approved;572 combined tests pass.
-- [x] Chunk5aj: optional bounded Deribit reconnect retains one scheduler/quota and cumulative frame/byte/time budgets; exact end mapping and close precede fresh source/owner;581 combined tests pass.
-- [x] Chunk5ak: read-only local chrony source and recurring bounded clock admission preserve raw results, uncertainty, FIFO order and durable replay;588 combined tests pass. Host chrony qualification and supervisor wiring remain pending.
-- [x] Chunk5al: bounded DeribitCapture owns clock warmup, durable owner-before-timer startup and ordered publication/socket/clock drain; startup-stop/cleanup review findings fixed,598 combined tests pass. Raw lane/HTTP/quota/discovery and CLI ownership remain external.
-- [x] Chunk5am: durable Deribit any-currency discovery and complete BTC/ETH metadata index retain blocked/excluded families and stale prior universe; no-retry HTTP/quota/cooldown review findings fixed;615 combined tests pass. Metadata publication, lifecycle/config/CLI wiring remain pending.
-- [x] Chunk5an: raw-verified metadata batches share the disk FIFO; reserved namespace/proof and aggregate-budget findings repaired; owner/replay/audit dependencies remain verifiable;623 combined tests pass. Bootstrap config/CLI and complete live lifecycle remain pending.
-- [x] Chunk5ao: runnable bounded Deribit config/discover/capture/verify-run path composes existing clock, metadata, receiver and archive; independent replay/raw export and snapshot integration tested. Fresh high-reasoning review approved thin composition after capture-truth fixes. Real Linux/chrony exchange capture remains unverified.
-- [x] Chunk5ap: real Deribit REST discovery exposed response/proof sizing failures; measured8MiB response/16MiB proof profile now passes2653-row metadata capture and independent committed readback. No Linux/chrony WebSocket or production acceptance claim.
-- [ ] Investigate reuse of verified immutable input within one certification operation before adding persistent projection state; preserve mutation/removal/pending-negative gates and remeasure.
-- [ ] Automatic native lifecycle/owner scheduling, clock/feed/process-fault mapping and automatic pending-job/publication/report reconciliation remain pending.
-- User resumed implementation after chunk5v; keep changes bounded and avoid unnecessary abstractions.
-- [x] Chunks7a–7c: reviewed bounded Deribit raw/archive/book replay experiments; first two20s runs kept as failed delta gates;90s sample passed with BTC12/ETH27 advancing deltas and equal raw replay.
-- [ ] Remaining feed models/trades/references/owner transitions, aggregate snapshot integration/checkpoints, continuous capture/CLI, backup/restore and full acceptance remain in the original plan.
+## Research
 
-V2 now has a bounded Deribit CLI path; see docs/v2/RUNNING.md. Final chunk5ao validation is recorded in docs/v2/implementation/chunk-05ao.json. This remains partial v2 code: no deployment, real Linux/chrony CLI capture or unbounded capture is certified.
+Research feasibility now has actual constructed data and fitted models, superseding the earlier API-only consultation. See [measured sufficiency and limits](docs/RESEARCH_DATA_SUFFICIENCY.md), [label-quality evidence](docs/research_label_quality_metrics.json) and the [companion notebook](experiments/research_data_sufficiency.ipynb).
 
-## Cryptofeed reuse evaluation — decision recorded
+- [x] Inspect primary-paper equations and reconcile independent methodology/source/skeptical reviews.
+- [x] Predeclare a 72-date historical sample and chronological partitions; preserve 288 replay responses and causal historical cohorts.
+- [x] Construct 2,513 same-contract one-hour observations and calculate explicit BS/SM plus a training-calibrated HW-style benchmark.
+- [x] Fit a small residual ML model with training-only normalization and chronological validation/evaluation.
+- [x] Investigate surprising labels: 22 wide exit quotes dominate broad-panel error. Construct an entry-OTM subset of 1,335 observations, with scores explicitly exploratory after the broad evaluation was viewed.
+- [x] Download/audit a full free session: ten focal contracts, 16 consecutive hourly states, 150 pairs and ten complete 15-hour gross dynamic ledgers. Reconcile overlapping prices with replay data.
+- [x] Assess effective time blocks, learning-window sensitivity, quote-band uncertainty and source access/size constraints. No ML-superiority or universal sample-sufficiency claim.
+- [ ] Freeze the user's final adjusted-delta equation, horizon, accounting, valuation and research population before formal model comparison.
+- [ ] If broader claims require continuous everyday data, qualify the corresponding source/hedge history and access terms; current free dates are isolated sessions.
+- [ ] Reserve a fresh final holdout after the exploratory design choices; add funding/fees/execution assumptions only with matching evidence.
 
-- [x] CF01: isolate pinned Cryptofeed3.0.2, verify exact offline raw/book replay and abrupt-exit behavior; fresh high-reasoning review approved.
-- [x] Retain our collector as the production v2 core; no Cryptofeed dependency or module replacement. See [decision](docs/v2/CRYPTOFEED_EVALUATION.md).
-- CF02 live qualification is deferred. Preserve the offline experiment as reference; continue the original runtime implementation and full acceptance scope.
-
-## V2 specification and implementation handoff — 23 October 2026
-
-- [x] Adopt the reviewed three-exchange Data Collector/DC scope; keep downstream BSAD/direct-ML research separate.
-- [x] Preserve the exact v1 specification and keep v1 package/CLI/services/archive paths unchanged.
-- [x] Write SPEC v2: raw/identity/point-in-time metadata, feed state, shared-time replay, bounded durability, gaps, backup/restore and migration contracts.
-- [x] Freeze the official-documentation [feed catalogue](docs/v2/FEEDS.md), capability states and per-feed evidence gates. Current Binance options routes/schema identified; live seed/bridge/recovery readiness remains gated.
-- [x] Freeze proposed [resource configuration](docs/v2/pilot-budget.toml) and measurable [acceptance criteria](docs/v2/ACCEPTANCE.md). Values are test targets, not capacity results.
-- [x] Repair the reviewed Bybit full-book sequence/seed rules and define durable cutoff closure plus append-only validity corrections; two independent agents re-reviewed the saved fixes and approved the specification; see [closure evidence](docs/v2/REVIEW.md).
-- [ ] Complete remaining coverage/replay integrations; raw contracts, journal/segments and v1 compatibility foundations are implemented and reviewed.
-- [ ] Complete venue-isolated adapters and quota coordination; bounded journal/segment writer/recovery and local fault harness are implemented and reviewed.
-- [ ] Resolve enabled-feed schema/identity/bootstrap gates with bounded public captures; archive exact source/schema versions and raw fixture evidence. Binance options, CM, Bybit full/RPI/spread profiles require their own evidence.
-- [ ] Measure the complete BTC/ETH target universe; freeze full-release host/storage/network configuration without silently reducing scope.
-- [ ] Complete faults, independent backup/restore and at least 24-hour intended-host soak before production claims.
-
-No v2 runtime, account, trial, purchase, service activation, deployment, repository rename, commit or push was performed in the spec phase. Documentation approval does not certify adapter readiness. The existing v1 and research progress below is retained as historical/current evidence, not streaming-v2 acceptance.
-
-## V1 implementation
-
-- [x] Core: validated configuration, async transport, frozen universe, bounded collection, reader.
-- [x] Durability: journal, verified publication, recovery, lock, slot events and gap accounting; local fault tests.
-- [x] Daily delivery: pagination, clean yield/resume, shared quota and snapshot priority; simulated52-page workload and cursor-loss recovery.
-- [x] Operations prepared: CLI, monitoring, export, systemd units, installer and short operations guide. Linux runtime validation remains pending.
-- [x] Local validation: fixtures, HTTP fault server, crash tests and one full production public-API snapshot capture (BTC884/884,ETH766/766).
-- [x] Fix the six independent implementation review findings; add regression coverage and verify existing archives unchanged. See [fix evidence](docs/IMPLEMENTATION_REVIEW_FIXES.md).
-- [ ] Linux validation and actual VPS: pending a Linux host; no production-readiness claim before the specified 24-hour soak.
-
-Optional candle backfill follows the core snapshot rollout; it does not block starting prospective collection.
-
-See [local validation evidence](docs/LOCAL_VALIDATION.md) for the exact tests, captured archives and remaining acceptance work. The reviewed spec is preserved unchanged; these checkboxes describe implementation progress rather than a production-readiness certificate.
+The investigation supports a scoped BTC small-model study; it does not complete the eventual research dataset or prove adequacy for every ML specification. No account, trial, subscription, publication or deployment was performed. These research steps remain separate from collector production acceptance.

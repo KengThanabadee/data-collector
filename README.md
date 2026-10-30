@@ -4,9 +4,7 @@ GitHub: [KengThanabadee/option-collector](https://github.com/KengThanabadee/opti
 
 เป้าหมาย v2 คือสะสม public market data ของ BTC/ETH จาก Deribit, Binance และ Bybit ผ่าน WebSocket พร้อม REST เสริม ครอบคลุม spot, perpetuals, dated futures, options และ combos/spreads ตาม feed ที่มี เก็บต้นฉบับ เวลา metadata และช่วงข้อมูลขาด เพื่อ replay และสร้างภาพตลาด ณ เวลาอ้างอิงร่วมกัน
 
-สถานะปัจจุบัน: กำลัง implement v2 เป็น chunks พร้อม agent high-reasoning review ทุก chunk ดู [ความคืบหน้าโค้ด](docs/v2/IMPLEMENTATION.md); คำสั่งเก็บข้อมูลที่รันได้ยังเป็น Deribit REST collector v1 ชื่อ package/CLI/repository และ archive paths เดิมยังคงอยู่ การเปลี่ยนชื่อเป็น Data Collector/DC เป็นแผน migration ไม่ได้เปลี่ยนบริการหรือย้ายข้อมูลแล้ว
-
-มีตัวทดลอง v2 แบบจำกัดเวลาที่รับ Deribit จริงและตรวจ raw/archive/book replay แล้ว: รอบ90วินาทีมี BTC12 และ ETH27 delta ที่ใช้ได้ ดู [ผลทดลอง](docs/v2/implementation/deribit-probe-90s.json) ผลนี้ยังไม่ใช่การรับรองตัวเก็บข้อมูลต่อเนื่องหรือความพร้อมสำหรับงานวิจัยย้อนหลัง
+สถานะปัจจุบันและงานถัดไปอยู่ที่ [PLANS.md](PLANS.md) โดยย่อ: v1 คือ Deribit REST collector ที่ใช้งานได้ ส่วน v2 รัน `discover`, `capture` และ `verify-run` สำหรับ Deribit option books ได้แล้ว แต่ `capture` ยังจำกัดที่ 120 วินาที งานถัดไปคือทำให้เก็บต่อเนื่องได้ ดูวิธีรันที่ [docs/v2/RUNNING.md](docs/v2/RUNNING.md) ประวัติการพัฒนาทีละ chunk อยู่ใน [docs/v2/history/](docs/v2/history/IMPLEMENTATION.md)
 
 - [Specification v2: ขอบเขตและ contracts](SPEC.md)
 - [Feed capability/coverage และข้อจำกัดแต่ละตลาด](docs/v2/FEEDS.md)
@@ -17,6 +15,7 @@ GitHub: [KengThanabadee/option-collector](https://github.com/KengThanabadee/opti
 - [ความคืบหน้า implementation](PLANS.md)
 - [เริ่มใช้และดูแล collector](docs/OPERATIONS.md)
 - [ผลทดสอบ implementation บนเครื่อง](docs/LOCAL_VALIDATION.md)
+- [ข้อมูลเพียงพอสำหรับ BSAD/ML หรือไม่: ผลจาก dataset และการฟิตจริง](docs/RESEARCH_DATA_SUFFICIENCY.md)
 - [ผลการทดลองและตาราง TF](docs/EXPERIMENT_REPORT.md)
 - [ตัวเลขจากหลักฐานที่เก็บจริง](docs/experiment_metrics.json)
 - [วิธีรันการทดลองซ้ำ](experiments/README.md)
