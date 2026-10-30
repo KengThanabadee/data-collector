@@ -236,6 +236,16 @@ class Journal:
             yield RawRecord.from_bytes(encoded)
 
     def append(self, record: RawRecord):
+        return self._append(record,sync=True)
+
+    def sync(self):
+        self._ready()
+        try:os.fsync(self._file.fileno())
+        except BaseException:
+            self.poisoned=True
+            raise
+
+    def _append(self, record: RawRecord, *, sync):
         self._ready()
         if not isinstance(record, RawRecord) or (record.venue, record.environment) != self.identity:
             raise ValueError("journal identity mismatch")
@@ -259,11 +269,11 @@ class Journal:
                 raise JournalDamaged("journal length changed outside owned append")
             self._write_all(FRAME.pack(len(encoded), hashlib.sha256(encoded).digest()))
             self._write_all(encoded)
-            os.fsync(self._file.fileno())
+            if sync:os.fsync(self._file.fileno())
         except BaseException:
             self.poisoned = True
             raise
-        # No acknowledgement or position advance before successful fsync.
+        # Deferred writes are private to the serialized group-commit owner.
         self.state.records += 1
         self.state.valid_bytes += frame_bytes
         self.state.positions[stream] = seq

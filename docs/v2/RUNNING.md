@@ -26,15 +26,45 @@ directory, and a second command owning that same root.
 ```
 
 Discovery prints `available_symbols` and an archive `root`. Set `symbols` in the
-TOML to one or two current active option names from that list, then run:
+TOML to current active option names from that list, or set `all_options = true`
+with `symbols = []` to freeze every listed BTC/ETH option in discovery, then run:
 
 ```sh
 .venv/bin/python -m data_collector capture --config config/v2-discovery.toml
 ```
 
+For the full options universe, `config/v2-deribit-options.toml` provides the
+all-options settings; select the environment and a writable data root explicitly.
+
 Capture defaults to raw mode (`capture_mode = "raw"`) on explicit
-`book.<symbol>.agg2` channels. `duration_seconds`, `max_frames`, and `max_bytes`
-default to 0, meaning unbounded. Positive values stop at the first limit; byte
+`book.<symbol>.100ms` channels. With `all_options = true`, raw capture also
+subscribes `ticker.<symbol>.100ms` and `trades.<symbol>.100ms` for every listed
+option, including returned inactive states. The universe is frozen at startup. Full-universe mode defaults to
+`raw_processes = 4` (at most 8), partitioning that one discovery into disjoint
+worker symbol sets. Workers reuse the verified frozen discovery without extra
+REST calls, and share one subscription-per-second reservation across processes.
+Each worker owns one socket, measured clock sampler and durable raw lane. The
+supervisor starts the duration only when every worker is initialized, propagates
+Ctrl-C, and drains workers before reporting completion. A worker also stops if its
+supervisor PID disappears, preventing orphan captures after a controller crash.
+Subscriptions use batches of at most `subscription_batch_size` (default 500)
+channels paced at one request per second. All batches must be acknowledged,
+every book must receive its native snapshot and every ticker an initial value
+within `bootstrap_timeout_seconds` (default 180). Quiet trade streams need an
+ACK, not an artificial initial trade. Raw receive bursts are bounded at 512
+frames, 1 MiB of native payload (plus one message), or 50 ms. FIFO raw write
+groups keep queue charges until fsync, stop at clock/control barriers and sync
+before segment sealing; acknowledgements never precede durability. Raw WAL
+segments target `raw_segment_bytes` (default 8 MiB, configurable from 1 to 64 MiB)
+to shorten synchronous sealing pauses; the 5-second receive-to-durable deadline
+is unchanged. Native close codes/reasons are retained as socket-event controls. The all-options duration starts once the
+whole plan is initialized. Rejections and throttle messages are retained verbatim
+and counted, then fail the run; they are never silently skipped. See
+[Deribit usage policy](https://docs.deribit.com/articles/api-usage-policy) and
+[subscription rate limits](https://docs.deribit.com/articles/rate-limits). `duration_seconds`, `max_frames`, and `max_bytes`
+default to 0, meaning unbounded. Positive values stop at the first limit in single-process mode; positive frame/byte
+budgets require `raw_processes = 1` rather than being silently ignored. Multi-worker
+mode supports the global duration and explicit stop. Byte
 limits count native payload bytes and may overshoot by one message. For a one-hour
 run set `duration_seconds = 3600`, leaving the other limits at 0. Ctrl-C requests
 a stop, closes the socket, drains admitted disk work, and prints the run root.
@@ -49,8 +79,14 @@ before retrying; a healthy socket is never closed for owner rollover.
 The owner uses the existing chrony sampler and waits for measured alignment. Disk free space
 is checked during capture against the existing 5 GiB and 10% stop thresholds.
 
-Raw capture is stored under the discovery run's `continuous/` directory; keep the
-entire parent discovery run when moving it. `verify-run` checks committed segment
+Single-process raw capture is stored under the discovery run's `continuous/`
+directory. Multi-worker runs are under `all-options/`, with immutable worker
+configuration, stdout/stderr, the aggregate `result.json`, and raw data under
+`workers/<n>/continuous/`. Keep the whole parent discovery run when moving data.
+`verify-run ALL_OPTIONS_ROOT` validates every worker and the disjoint, exhaustive
+union against discovery. Export individual worker roots with `--export`; aggregate
+export is intentionally rejected. The mutable subscription-budget file is pacing
+state, not raw evidence. `verify-run` checks committed segment
 integrity, receipt ordering, payload counts and the parent discovery archive.
 It explicitly reports raw verification scope, without claiming derived book
 replay. Snapshot mode remains available with `capture_mode = "snapshots"`, positive

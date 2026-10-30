@@ -13,6 +13,23 @@ class QueueTests(unittest.IsolatedAsyncioTestCase):
     def queue(self, **kwargs):
         return ByteQueue(self.limits, now_ns=lambda:self.clock[0], **kwargs)
 
+    async def test_group_lease_keeps_budget_and_stops_at_control_barrier(self):
+        q=self.queue()
+        for value in (b'a',b'b',b'barrier',b'c'):q.offer(value)
+        first=await q.get();charged=q.budget.used
+        leases=q.expand_lease(first,max_items=512,max_bytes=1024,accept=lambda ordinal:ordinal<2)
+        self.assertEqual([l.payload for l in leases],[b'a',b'b'])
+        self.assertEqual(q.budget.used,charged)
+        self.assertEqual(q.health()['leased'],2)
+        with self.assertRaises(QueueCapacity):q.offer(b'overflow')
+        with self.assertRaises(ValueError):q.ack(first)
+        with self.assertRaises(ValueError):q.ack_batch(tuple(list(leases)))
+        q.ack_batch(leases)
+        self.assertLess(q.budget.used,charged)
+        barrier=await q.get();self.assertEqual(barrier.payload,b'barrier');q.ack(barrier)
+        last=await q.get();self.assertEqual(last.payload,b'c');q.ack(last)
+        self.assertEqual(q.budget.used,0)
+
     async def test_dequeue_keeps_bytes_and_count_reserved_until_durable_ack(self):
         q = ByteQueue(QueueLimits(max_bytes=1024, max_items=1, max_item_bytes=200), now_ns=lambda:self.clock[0])
         q.offer(b'x'*200)

@@ -39,6 +39,20 @@ class WriterTests(unittest.TestCase):
     def records(self, paths):
         return [record for path in paths for record in iter_segment_records(path)]
 
+    def test_group_commit_syncs_once_and_preserves_rotated_raw_prefix(self):
+        writer=self.writer()
+        expected=tuple(raw(seq) for seq in range(6))
+        self.assertEqual(writer.append_batch(expected),tuple(r.record_id for r in expected))
+        self.assertGreater(len(writer.committed),0)
+        self.assertEqual([r.to_bytes() for r in self.records(writer.finish())],[r.to_bytes() for r in expected])
+
+    def test_group_commit_fsync_failure_poisoning_prevents_successful_retry(self):
+        writer=self.writer()
+        with patch.object(writer.active,'sync',side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):writer.append_batch((raw(0),))
+        self.assertTrue(writer.poisoned)
+        with self.assertRaises(JournalDamaged):writer.append(raw(1))
+
     def test_byte_rotation_preserves_every_receipt_and_raw_body(self):
         writer = self.writer()
         expected = [raw(seq) for seq in range(6)]

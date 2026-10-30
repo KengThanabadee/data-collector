@@ -31,7 +31,7 @@ class Session(HTTP):
             request = strict_json(body.encode())
             if request['method']=='public/subscribe':
                 channel = request['params']['channels'][0]
-                symbol = channel.removeprefix('book.').removesuffix('.agg2')
+                symbol = channel.removeprefix('book.').removesuffix('.agg2').removesuffix('.100ms')
                 for snapshot in (True,False):
                     self.socket.put(dict(jsonrpc='2.0',method='subscription',params=dict(channel=channel,data=dict(
                         type='snapshot' if snapshot else 'change',instrument_name=symbol,timestamp=2,

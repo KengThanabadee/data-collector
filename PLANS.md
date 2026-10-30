@@ -2,19 +2,39 @@
 
 V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
-## Current state — 30 October 2026
+## Current state — 31 October 2026
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
-- V2: continuous raw Deribit option capture passed a one-hour run on Ubuntu 24.04 in Lima `dc-acceptance`, using chrony and a separate Python 3.12 venv under `caffeinate -i -s`. BTC-13NOV26-74000-P and ETH-13NOV26-2000-P ran for 3,601.3 seconds with one connection: 2,961 WebSocket messages, 60 immutable segments, and 3,543 verified records. `verify-run` passed; duration, frame and byte limits remain configurable and unbounded by default. Continuous clock sampling now runs until stopped without a sample/assessment count cap, retaining only current sample state and bounded clock epoch history. Bounded snapshot mode remains available; see [running instructions](docs/v2/RUNNING.md).
+- V2: raw Deribit book, ticker and trades at 100ms ran for 3,601.137 seconds after all 4 workers initialized, covering all 2,800 BTC/ETH options in the startup discovery (8,400 channels). The Ubuntu 24.04 Lima `dc-acceptance` run used chrony, its separate Python 3.12 venv and `caffeinate -i -s`; capture completed with 10,993,156 WebSocket messages and 7,149,854,234 native payload bytes. Full `verify-run` passed with 10,995,639 records and exhaustive feed-plan initialization coverage. Continuous limits and bounded snapshot mode are described in [running instructions](docs/v2/RUNNING.md).
+- Capture resource samples every second: peak summed process RSS 492,284 KiB (480.75 MiB), peak CPU 403.44% (100% is one vCPU; VM has 6). Summed RSS was 456,100 KiB near startup and 452,836 KiB before shutdown.
+- Venue/transport results: zero RPC rejections or throttles; 3 server closes with code 4000 (`heartbeat close`), 5 CLOSED events without a code, and 94 DNS-failed connection attempts. All workers recovered and reacquired their feed plans. Recorded DNS gap windows were 218.30–224.55 seconds per worker, plus shorter reconnect gaps; timeout detection can follow actual loss. The run has explicit coverage gaps.
+
+Observed linear projections divide all captured bytes, including initialization and network gaps, by the post-ready elapsed time. Retained worker data includes WAL and archive; it excludes shared discovery/aggregate metadata. These are logical file sizes, not allocated filesystem blocks.
+
+| Byte basis | Bytes per hour | Projected GiB per day |
+|---|---:|---:|
+| Native WebSocket payload | 7,147,595,853 | 159.76 |
+| Compressed immutable archive and manifests | 2,755,437,912 | 61.59 |
+| All retained worker data, including WAL and archive | 24,208,069,497 | 541.09 |
 
 ## Next
 
-1. Wait for a VPS, then run that capture for 24 hours with chrony and record what failed.
-2. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
+1. Deribit perpetuals, dated futures and BTC/ETH index, per FEEDS.md; own brief, review, commit and one-hour measured Lima run.
+2. Then Binance BTC/ETH spot and perpetual/dated futures feeds per FEEDS.md, raw with gaps; Binance options are not enabled (low liquidity). Own brief, review, commit and one-hour measured Lima run.
+3. Then Bybit BTC/ETH feeds per FEEDS.md, raw with gaps; own brief, review, commit and one-hour measured Lima run.
+4. Wait for a VPS before the 24-hour run.
 
 ## Notes
 
 One line per deferred idea or choice made while working.
+
+- Lima dc-acceptance resources: 6 vCPU, 6 GiB RAM and a 100 GiB sparse disk (root filesystem 96 GiB) for measured all-options raw throughput and storage; only this VM is used.
+- Lima dc-acceptance setup: chrony is the sole clock setter; remove CAP_SYS_TIME from lima-guestagent via its chrony-clock-owner.conf systemd drop-in after observed host-agent steps repeatedly prevented alignment; collector clock policy remains unchanged.
+- Full-universe scaling: one-process CPU saturation caused documented Deribit heartbeat/too-slow closes; use four disjoint CLI workers from one verified frozen discovery with a shared one-request-per-second subscription budget, supervisor-death guards and exhaustive aggregate verification.
+- Full-universe probe: per-message fsync and repeated whole-plan set comparisons were throughput bottlenecks; bounded FIFO group commit preserves receipt order, clock barriers and fsync-before-ack, and plan equality is skipped after initialization.
+- Full-universe rotation: the first hour attempt stopped on the 5-second durability deadline during large-segment sealing; raw segments now target a configurable 8 MiB rather than 64 MiB, with the deadline unchanged.
+- All-options plan freezes every listed option in the startup discovery (including returned inactive states); uses book/ticker/trades 100ms, batches at most 500 channels and at most one subscription request per second on one healthy socket; quiet trades require ACK, not a fabricated initial trade.
+- All-options hour evidence: `~/dc-all-options-data/runs/467b3e8616744e1cb69dff8e2f6855b0/all-options` and its parent discovery in dc-acceptance; config, 1-second resources, chrony reports and summary under `~/dc-all-options-evidence/20261030T172150Z/`.
 
 - Continuous clock sampling: remove both sampler and durable-assessment count caps in the raw path; preserve finite library defaults and bounded clock epoch history.
 - Continuous capture: keep healthy sockets open; rebind archive ownership after 64 closed/failed connections, between retries.

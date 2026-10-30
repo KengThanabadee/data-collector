@@ -18,7 +18,7 @@ Every release manifest expands the family rows below into venue/environment/prod
 | Binance spot | `/api/v3/exchangeInfo`, underlying/base BTC/ETH variants, native filters | Diff L2, REST seed5000/side,100ms supported [B1] | Native `@trade`, `@bookTicker`, ticker supported; metadata REST [B1] | Seed does not establish untouched levels beyond5000. |
 | Binance UM perpetual / dated future | `/fapi/v1/exchangeInfo`, native contract type/settlement, verify product classification | Diff L2+seed1000/side;100ms candidate supported [B2,B3] | `@aggTrade`, mark/index/funding + ticker/contract info supported subject to schema fixtures [B3,B4] | UM/CM merged routing does not merge instrument identity or budgets incorrectly. |
 | Binance CM perpetual / dated future | `/dapi/v1/exchangeInfo`; preserve inverse, contract multiplier, `st` and `ps` | Updated integrated routing documented; exact CM seed/bridge gate not_verified until schema/capture evidence [B3] | Shared-host/merged arrays supported; per-stream identity fixture mandatory [B3] | Do not inherit UM depth budget or bridge without checking current CM response/schema. |
-| Binance options | `/eapi/v1/exchangeInfo`, BTC/ETH `optionSymbols`, exact contract filters | Current public diff stream documented; seed1000,100/500ms; supported documentation, gated runtime [B5,B6] | `@optionTrade`, option ticker; market route index/mark/OI/new-symbol supported documentation [B5,B7] | Gate BO below resolves current routes and recovery; legacy `nbstream` is not an approved route. |
+| Binance options | `/eapi/v1/exchangeInfo`, BTC/ETH `optionSymbols`, exact contract filters | not_enabled — low liquidity; documented capability retained [B5,B6] | not_enabled — low liquidity; documented capability retained [B5,B7] | Options capture is scoped to Deribit and Bybit by Keng on 30 October 2026; BO documentation below is reference only. |
 | Binance combos/spreads | No confirmed public listed-combo discovery/book schema in reviewed sources | not_verified, not_enabled | not_verified | Never infer Deribit combo semantics or use private block negotiation as public books. |
 | Bybit spot | `/v5/market/instruments-info?category=spot` [Y1] | Full L2 delta200ms+seed≤10000; standard depth1000/200ms alternative supported [Y2,Y3,Y4] | `publicTrade.<symbol>`, ticker supported [Y5,Y6] | Standard/full excludes RPI; full seed cap still limits untouched depth. |
 | Bybit linear perpetual / dated future | category linear, native `contractType`, settlement and price units [Y1] | Same full or standard profile supported [Y2,Y3,Y4] | Trades, ticker mark/index/OI/funding; REST realized history supported [Y5,Y6] | Prelaunch/auction state has explicit unavailable book semantics. |
@@ -26,7 +26,7 @@ Every release manifest expands the family rows below into venue/environment/prod
 | Bybit options | category option, baseCoin BTC/ETH, expiry/strike/right [Y1] | Standard L2 depth100 at100ms supported; full-depth profile unsupported for options [Y2,Y3] | `publicTrade.BTC/ETH` and per-symbol ticker/IV/Greeks supported [Y5,Y6] | Option ticker is a separate schema, not a derivatives delta ticker. |
 | Bybit listed spreads | Spread instrument/leg discovery must be verified separately | Standard spread L2 depth25/20ms documented supported, route/discovery gate [Y9] | Public spread trade/ticker documented, exact metadata/IDs gate [Y10] | Use spread identity/legs and separate feed coverage, not duplicated outright quantities. |
 
-All target families remain in scope even when a feed is disabled pending evidence. Release reports list blocked and empty-by-discovery families separately. Discovery records a family with zero matching contracts rather than pretending the exchange cannot support it.
+Target families other than Binance options remain in scope even when a feed is disabled pending evidence. Release reports list blocked and empty-by-discovery families separately. Discovery records a family with zero matching contracts rather than pretending the exchange cannot support it.
 
 ## 2. Supplementary families and inclusions
 
@@ -65,7 +65,9 @@ Public depth/trades use `.../public/...`, mark/reference use `.../market/...` on
 
 Merged all-market streams on fstream/dstream contain the same UM+CM universe. Choose one primary route per logical stream; redundancy is opt-in with both raw copies and derived native-ID dedup. `st=1/2` distinguishes UM/CM where provided, `ps` is pair metadata. If `st` is absent, require unambiguous versioned discovery mapping; conflict quarantines the record. Shared fapi/dapi REST pool is2400weight/min [B3], so candidate collector budget1200 shared (not1200 each), weighted by endpoint/depth. No trading quota use. Header usage from other clients reduces available budget.
 
-### BO: Binance options — resolved documentation, gated runtime [B5–B8]
+### BO: Binance options — not_enabled (low liquidity) [B5–B8]
+
+Scope decision, 30 October 2026: not_enabled — low liquidity. The documentation below is retained for reference; it does not enable Binance options capture.
 
 The current official catalogue specifies **fstream `/public`** for contract diff `{symbol}@depth@100ms` (500ms alternative), `U/u/pu`, and `{underlying}@optionTrade` (50ms batch cadence, native `t`, `X=MARKET/BLOCK`, maker flag). Partial book profile is5/10/20levels; it is not the diff stream. REST seed is **eapi `/eapi/v1/depth`**, max1000, `lastUpdateId/T`. Market route documents index, option mark, OI and new symbol. Native timestamps ms. This resolves the earlier uncertainty about which documentation describes the current public stream; legacy examples are not sufficient.
 
@@ -91,7 +93,7 @@ Within the same book epoch, the documented next delta must have `u == local_u + 
 |---|---|---|
 | Binance spot |5incoming control frames/s,1024streams/connection,300connection attempts/5min/IP [B1] |2JSONcontrols/s with token reserve for pong,256streams/socket,4sockets; max1newconnection/5s. 24h rotation candidate23h50; protocol heartbeat tracked separately. |
 | Binance futures |10incoming/s,1024streams,24h lifetime, server ping3min/pong timeout10min [B4] |2JSONcontrols/s,256streams/socket,8sockets total UM/CM; rotate23h50; pong immediately. Split public/market sockets and dedup overlap. |
-| Binance options | Current shared-host catalogue verified, options-specific limits not independently frozen [B5,B7,B8] | Disabled until BO gate resolves effective limit. Proposed2controls/s/128streams/socket are collector caps only, not proof of permission. |
+| Binance options | Current shared-host catalogue verified, options-specific limits not independently frozen [B5,B7,B8] | not_enabled — low liquidity. Historical collector candidates are not activation permission. |
 | Deribit |32connections/IP inclHTTP, authenticated raw, account/IP credit policy [D4,D5] | Bounds in D; public REST initial1request/s + per-method cost limit, shared across live/recovery/backfill. Unknown credit cost disables that job. |
 | Bybit |HTTP600requests/5s/IP;≤500connection creations/5min;≤1000marketdata connections/category [Y11] |HTTP5requests/s total plus endpoint limits,4sockets/category,≤1connect/5s; ping20s/watchdog40s candidate. Args/request and message-size caps must be frozen from current connect schema before activation. |
 

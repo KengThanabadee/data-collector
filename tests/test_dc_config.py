@@ -74,12 +74,33 @@ class DiscoveryConfigTests(unittest.TestCase):
             with self.subTest(chronyc=value), self.assertRaises(ValueError):
                 self.read(self.body + f"chronyc = {value}\n")
 
+    def test_all_option_plan_requires_raw_mode_and_exclusive_selection(self):
+        config=self.read(self.body+'all_options=true\n')
+        self.assertTrue(config.all_options)
+        self.assertEqual(config.symbols,())
+        self.assertEqual(config.subscription_batch_size,500)
+        for extra in ('all_options=1\n','all_options=true\nsymbols=["BTC-X-C"]\n',
+                'all_options=true\ncapture_mode="snapshots"\nduration_seconds=60\nmax_frames=4\n',
+                'subscription_batch_size=501\n','subscription_batch_size=0\n',
+                'bootstrap_timeout_seconds=0\n'):
+            with self.subTest(extra=extra),self.assertRaises(ValueError):self.read(self.body+extra)
+
     def test_byte_bound_and_invalid_encoding(self):
         with self.assertRaisesRegex(ValueError, "byte bound"):
             self.read(self.body + "#" * MAX_CONFIG_BYTES)
         self.path.write_bytes(b"\xff")
         with self.assertRaises(ValueError):
             load(self.path)
+
+    def test_raw_segment_size_is_configurable_and_pinned(self):
+        default=self.read()
+        self.assertEqual(default.raw_segment_bytes,8*1024*1024)
+        custom=self.read(self.body+'raw_segment_bytes=4194304\n')
+        self.assertEqual(custom.raw_segment_bytes,4*1024*1024)
+        self.assertNotEqual(custom.config_sha256,default.config_sha256)
+        for value in ('true','1048575','67108865'):
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                self.read(self.body+f'raw_segment_bytes={value}\n')
 
     def test_resolved_path_alias_and_absolute_root(self):
         archive = self.root / "existing"

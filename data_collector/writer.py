@@ -168,6 +168,25 @@ class SessionWriter:
             raise JournalDamaged('writer closed or poisoned; recover in a fresh process session')
 
     def append(self, record):
+        return self._append(record,sync=True)
+
+    def append_batch(self, records):
+        """One bounded FIFO group; acknowledge only after all rotations and fsync."""
+        if type(records) is not tuple or not 1<=len(records)<=512:
+            raise ValueError('bounded nonempty raw batch required')
+        size=0
+        for record in records:
+            size+=len(record.to_bytes())
+            if size>8*1024*1024:raise ValueError('raw batch byte bound')
+        try:
+            result=tuple(self._append(record,sync=False) for record in records)
+            self.active.sync()
+            return result
+        except BaseException:
+            self.poisoned=True
+            raise
+
+    def _append(self, record, *, sync):
         self._ready()
         if not isinstance(record, RawRecord):
             raise ValueError('typed raw record required')
@@ -197,11 +216,11 @@ class SessionWriter:
             raise ValueError('single record exceeds segment manifest/resource bound')
         try:
             try:
-                result = self.active.append(record)
+                result = self.active.append(record) if sync else self.active._append(record,sync=False)
             except JournalFull:
                 self.rotate()
                 projected = self._projection(record, versions)
-                result = self.active.append(record)
+                result = self.active.append(record) if sync else self.active._append(record,sync=False)
         except JournalFull:
             raise
         except BaseException:
@@ -248,6 +267,7 @@ class SessionWriter:
         if ordinal >= self.descriptor['max_segments'] or (not final and ordinal + 1 >= self.descriptor['max_segments']):
             raise JournalFull('session segment index bound; stop and finish this session')
         self.poisoned = True
+        self.active.sync()
         destination = seal_segment(self.active, self.archive_root, _context(self.descriptor, ordinal),
                                    limits=self.segment_limits, checkpoint=self.checkpoint)
         reference = _reference(destination, ordinal)

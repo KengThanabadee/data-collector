@@ -3,6 +3,7 @@
 One local process and owned journal. Transport callbacks and barrier calls must
 run on the same serialized executor. No cross-host monotonic comparisons.
 """
+from copy import copy
 from dataclasses import asdict, dataclass, replace
 
 from .contracts import RawRecord, Receipt, StreamKey, canonical, digest, integer, sha256, strict_json, text
@@ -72,7 +73,7 @@ class IngressWriter:
                for s in journal.state.positions):
             raise ValueError("new ingress requires a fresh process session")
 
-    def append(self, record):
+    def _prepare(self, record):
         if self.poisoned:
             raise ValueError("ingress requires restart after write/clock failure")
         r = record.receipt
@@ -91,15 +92,36 @@ class IngressWriter:
             raise ValueError("reserved ingress ordinal")
         fields["collector_ingress_ordinal"] = self.ordinal
         stored = replace(record, native_fields_json=canonical(fields))
-        try:
-            self.journal.append(stored)
-        except BaseException:
-            self.poisoned = True
-            raise
+        return stored
+
+    def _advance(self, record):
+        r=record.receipt
         self.positions[r.stream_key] = r.receive_seq
         self.last_mono = r.monotonic_ns
         self.ordinal += 1
+
+    def append(self, record):
+        stored=self._prepare(record)
+        try:self.journal.append(stored)
+        except BaseException:
+            self.poisoned=True
+            raise
+        self._advance(record)
         return stored
+
+    def append_batch(self, records):
+        candidate=copy(self)
+        candidate.positions=dict(self.positions)
+        stored=[]
+        for record in records:
+            stored.append(candidate._prepare(record))
+            candidate._advance(record)
+        try:self.journal.append_batch(tuple(stored))
+        except BaseException:
+            self.poisoned=True
+            raise
+        self.positions,self.ordinal,self.last_mono=candidate.positions,candidate.ordinal,candidate.last_mono
+        return tuple(stored)
 
     def barrier(self, anchor, cutoff_utc_ns, *, now_monotonic_ns, healthy_streams, prior_anchors=()):
         if self.poisoned or anchor.process_session_id != self.session:

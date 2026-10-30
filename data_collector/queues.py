@@ -83,6 +83,8 @@ class ByteQueue:
         self.now_ns = now_ns
         self._pending = deque()
         self._leased = self._entry = None
+        self._batch_extra = ()
+        self._expanded_leases = None
         self._used = self._ordinal = 0
         self._open, self._waiting = True, False
         self._last_now = None
@@ -122,7 +124,7 @@ class ByteQueue:
         if self._oldest_age(now) >= self.limits.max_age_ns:
             raise QueueBacklog('ingress persist backlog reached hard deadline')
         cost = len(payload) + 512 + extra_bytes
-        if self._used + cost > self.limits.max_bytes or len(self._pending) + int(self._leased is not None) >= self.limits.max_items:
+        if self._used + cost > self.limits.max_bytes or len(self._pending) + int(self._leased is not None) + len(self._batch_extra) >= self.limits.max_items:
             raise QueueCapacity('venue ingress queue cap')
         entry = _Entry(payload, self._ordinal, now, cost)
         self.budget.reserve(cost)
@@ -167,9 +169,38 @@ class ByteQueue:
         if lease is not self._leased or lease is None:
             raise ValueError('foreign, expired or already acknowledged queue lease')
 
+    def expand_lease(self, lease, *, max_items, max_bytes, accept):
+        """Lease an already queued FIFO prefix without releasing byte charges."""
+        self._check_lease(lease)
+        if self._expanded_leases is not None:raise ValueError('lease already expanded')
+        integer(max_items,'batch items',1);integer(max_bytes,'batch bytes',1)
+        if max_items>512:raise ValueError('batch item bound')
+        extras=[];size=len(lease.payload)
+        while self._pending and len(extras)+1<max_items:
+            entry=self._pending[0]
+            if size+len(entry.payload)>max_bytes or not accept(entry.ordinal):break
+            extras.append(self._pending.popleft());size+=len(entry.payload)
+        self._batch_extra=tuple(extras)
+        try:now=self._now() if not self._clock_failed else None
+        except Exception:now=None
+        self._expanded_leases=(lease,)+tuple(QueueLease(e.payload,e.ordinal,e.enqueued_ns,
+            now is None or now-e.enqueued_ns>=self.limits.max_age_ns,not self._clock_failed) for e in extras)
+        return self._expanded_leases
+
+    def ack_batch(self, leases):
+        if leases is not self._expanded_leases:raise ValueError('foreign batch lease')
+        self._check_lease(leases[0])
+        entries=(self._entry,)+self._batch_extra
+        if tuple(l.ordinal for l in leases)!=tuple(e.ordinal for e in entries):
+            raise ValueError('foreign batch lease')
+        charge=sum(e.charge for e in entries)
+        self.budget.release(charge);self._used-=charge
+        self._entry=self._leased=None;self._batch_extra=();self._expanded_leases=None
+
     def ack(self, lease):
         """Call only after the corresponding durable writer acknowledgement."""
         self._check_lease(lease)
+        if self._expanded_leases is not None:raise ValueError('expanded lease needs batch acknowledgement')
         self.budget.release(self._entry.charge)
         self._used -= self._entry.charge
         self._entry = self._leased = None
@@ -177,6 +208,7 @@ class ByteQueue:
     def nack(self, lease):
         """Retry the original FIFO item; no accounting or receipt identity changes."""
         self._check_lease(lease)
+        if self._expanded_leases is not None:raise ValueError('expanded lease cannot be individually retried')
         self._pending.appendleft(self._entry)
         self._entry = self._leased = None
         self._event.set()
@@ -187,7 +219,7 @@ class ByteQueue:
 
     def health(self):
         age = None if self._clock_failed else self._oldest_age(self._now())
-        return dict(bytes=self._used, queued=len(self._pending), leased=int(self._leased is not None),
+        return dict(bytes=self._used, queued=len(self._pending), leased=int(self._leased is not None)+len(self._batch_extra),
                     oldest_age_ns=age, clock_valid=not self._clock_failed, accepting=self._open,
                     warning=self._clock_failed or self._used * 4 >= self.limits.max_bytes * 3 or age >= self.limits.max_age_ns,
                     resubscribe_allowed=self._open and not self._clock_failed and self._used * 4 <= self.limits.max_bytes and age < self.limits.max_age_ns)

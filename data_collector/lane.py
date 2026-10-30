@@ -180,7 +180,7 @@ class ArchiveLane:
     A process supervisor must enforce the hard stop for a permanently hung disk.
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
-                 clock_tolerance_ns=100_000_000, clock_policy=None, clock_max_assessments=10000,
+                 clock_tolerance_ns=100_000_000, clock_policy=None, clock_max_assessments=10000, raw_batch_size=1,
                  cutoff_scope=None, cutoff_ledger_id=None,snapshot_limits=ReplayLimits(),recovery=None,
                  max_recovery_ns=300_000_000_000):
         if not isinstance(queue, ByteQueue):
@@ -189,6 +189,9 @@ class ArchiveLane:
         if status['bytes'] or not status['accepting'] or not status['clock_valid']:
             raise ValueError('fresh empty byte queue required')
         integer(max_connections, 'connection count bound', 1)
+        integer(raw_batch_size,'raw batch size',1)
+        if raw_batch_size>512:raise ValueError('raw batch size bound')
+        self.raw_batch_size=raw_batch_size
         integer(clock_tolerance_ns, 'wall/monotonic clock tolerance', 1)
         if not isinstance(snapshot_limits,ReplayLimits):raise ValueError('typed snapshot replay limits required')
         integer(max_recovery_ns,'startup recovery time bound',1)
@@ -1193,6 +1196,33 @@ class ArchiveLane:
                         self.queue.ack(lease)
                         self._pending.pop(lease.ordinal)
                         if not pending.future.done():pending.future.set_result(result)
+                        continue
+                    if pending.stamp_clock and self.raw_batch_size>1:
+                        leases=self.queue.expand_lease(lease,max_items=self.raw_batch_size,max_bytes=4*1024*1024,
+                            accept=lambda ordinal:self._pending[ordinal].stamp_clock)
+                        if any(l.late or not l.clock_valid for l in leases):
+                            self._failure('persist_backlog_or_clock_invalid',global_scope=True)
+                        assessment=self._clock.assessment
+                        if assessment is None:raise DurabilityUnknown('clock assessment not committed')
+                        records=tuple(replace(RawRecord.from_bytes(l.payload),receipt=replace(
+                            self._pending[l.ordinal].receipt,clock_epoch=assessment.anchor.clock_epoch)) for l in leases)
+                        stored_batch=await self._disk(self.ingress.append_batch,records)
+                        acknowledgements=[]
+                        for item,stored in zip(leases,stored_batch):
+                            request=self._pending[item.ordinal]
+                            latency,timely=self._timing(item,stored.receipt,epoch=request.timing_epoch)
+                            fields=strict_json(stored.native_fields_json);raw_hash=digest(stored.to_bytes())
+                            self._durable[stored.receipt.stream_key]=dict(stream=asdict(stored.receipt.stream_key),
+                                receive_seq=stored.receipt.receive_seq,record_id=stored.record_id,raw_sha256=raw_hash,
+                                monotonic_ns=stored.receipt.monotonic_ns,receive_utc_ns=stored.receipt.receive_utc_ns,
+                                clock_epoch=stored.receipt.clock_epoch)
+                            acknowledgements.append((request,DurableAck(stored.record_id,raw_hash,
+                                fields['collector_ingress_ordinal'],latency,timely,stored.receipt.clock_epoch)))
+                        self.queue.ack_batch(leases)
+                        self._durable_count+=len(leases)
+                        for item,(request,ack) in zip(leases,acknowledgements):
+                            self._pending.pop(item.ordinal)
+                            if not request.future.done():request.future.set_result(ack)
                         continue
                     if pending.stamp_clock:
                         assessment = self._clock.assessment
