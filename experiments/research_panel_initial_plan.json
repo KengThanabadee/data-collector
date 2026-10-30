@@ -1,0 +1,22 @@
+{
+  "purpose": "Predeclared three-era input/label construction audit before a larger monthly panel. Whole ticker channel, no present-day or future-activity universe selection. Decisions at minute end; one-hour pairs 08-to09 and16-to17 UTC.",
+  "output": "experiments/results/2026-10-22-research-panel-initial",
+  "minutes": [
+    "2025-10-01T07:59:00.000Z",
+    "2020-10-01T07:59:00.000Z",
+    "2020-10-01T08:59:00.000Z",
+    "2020-10-01T15:59:00.000Z",
+    "2020-10-01T16:59:00.000Z",
+    "2023-10-01T07:59:00.000Z",
+    "2023-10-01T08:59:00.000Z",
+    "2023-10-01T15:59:00.000Z",
+    "2023-10-01T16:59:00.000Z",
+    "2025-10-01T08:59:00.000Z",
+    "2025-10-01T15:59:00.000Z",
+    "2025-10-01T16:59:00.000Z"
+  ],
+  "max_requests": 12,
+  "max_response_wire_bytes": 16777216,
+  "max_response_decoded_bytes": 134217728,
+  "max_total_wire_bytes": 134217728
+}

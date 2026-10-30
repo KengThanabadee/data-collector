@@ -1,0 +1,9 @@
+{
+  "purpose": "Measure one all-instrument historical ticker minute before sizing a causal BSAD/ML sufficiency panel; not selected from current instruments",
+  "output": "experiments/results/2026-10-22-research-panel-size",
+  "minutes": ["2025-10-01T07:59:00.000Z"],
+  "max_requests": 1,
+  "max_response_wire_bytes": 16777216,
+  "max_response_decoded_bytes": 134217728,
+  "max_total_wire_bytes": 16777216
+}

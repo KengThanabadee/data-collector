@@ -1,0 +1,385 @@
+{
+  "executed_utc": "2026-10-22T05:55:17.504141+00:00",
+  "requests": 3,
+  "messages": 9748,
+  "rows": [
+    {
+      "from": "2025-10-01T12:00:00.000Z",
+      "symbols": 18,
+      "option_messages": 772,
+      "hedge_messages": 3477,
+      "invalid_or_missing_bbo_messages": 0,
+      "option_messages_missing_positive_iv_or_underlying": 0,
+      "negative_receipt_lag_messages": 0,
+      "disconnect_markers": 0,
+      "last_tickers_two_sided": 18,
+      "max_last_ticker_age_seconds_at_minute_end": 2.563,
+      "last_tickers": [
+        {
+          "symbol": "BTC-17OCT25-125000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.563
+        },
+        {
+          "symbol": "BTC-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.022
+        },
+        {
+          "symbol": "ETH-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.005
+        },
+        {
+          "symbol": "ETH-17OCT25-4400-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.411
+        },
+        {
+          "symbol": "ETH-3OCT25-4300-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.583
+        },
+        {
+          "symbol": "ETH-17OCT25-4250-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.502
+        },
+        {
+          "symbol": "BTC-31OCT25-100000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.767
+        },
+        {
+          "symbol": "ETH-17OCT25-4350-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.325
+        },
+        {
+          "symbol": "ETH-17OCT25-4100-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.407
+        },
+        {
+          "symbol": "BTC-2OCT25-117000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.333
+        },
+        {
+          "symbol": "ETH-17OCT25-4200-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.506
+        },
+        {
+          "symbol": "BTC-3OCT25-118000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.086
+        },
+        {
+          "symbol": "BTC-17OCT25-109000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.467
+        },
+        {
+          "symbol": "BTC-31OCT25-106000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.115
+        },
+        {
+          "symbol": "BTC-3OCT25-116000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.406
+        },
+        {
+          "symbol": "BTC-3OCT25-110000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.0
+        },
+        {
+          "symbol": "BTC-17OCT25-130000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.453
+        },
+        {
+          "symbol": "BTC-17OCT25-102000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.793
+        }
+      ],
+      "wire_bytes": 148613,
+      "sha256_checked": true
+    },
+    {
+      "from": "2025-10-01T13:00:00.000Z",
+      "symbols": 18,
+      "option_messages": 705,
+      "hedge_messages": 1950,
+      "invalid_or_missing_bbo_messages": 0,
+      "option_messages_missing_positive_iv_or_underlying": 0,
+      "negative_receipt_lag_messages": 0,
+      "disconnect_markers": 0,
+      "last_tickers_two_sided": 18,
+      "max_last_ticker_age_seconds_at_minute_end": 3.957,
+      "last_tickers": [
+        {
+          "symbol": "BTC-31OCT25-106000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 3.882
+        },
+        {
+          "symbol": "BTC-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.067
+        },
+        {
+          "symbol": "ETH-17OCT25-4250-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.192
+        },
+        {
+          "symbol": "ETH-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.292
+        },
+        {
+          "symbol": "ETH-17OCT25-4400-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.696
+        },
+        {
+          "symbol": "BTC-3OCT25-116000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.021
+        },
+        {
+          "symbol": "ETH-3OCT25-4300-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.051
+        },
+        {
+          "symbol": "BTC-17OCT25-102000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.046
+        },
+        {
+          "symbol": "BTC-17OCT25-109000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 3.708
+        },
+        {
+          "symbol": "BTC-2OCT25-117000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.916
+        },
+        {
+          "symbol": "BTC-3OCT25-118000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.923
+        },
+        {
+          "symbol": "BTC-17OCT25-125000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.529
+        },
+        {
+          "symbol": "ETH-17OCT25-4200-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.494
+        },
+        {
+          "symbol": "ETH-17OCT25-4350-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.234
+        },
+        {
+          "symbol": "ETH-17OCT25-4100-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.363
+        },
+        {
+          "symbol": "BTC-17OCT25-130000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.529
+        },
+        {
+          "symbol": "BTC-31OCT25-100000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 3.957
+        },
+        {
+          "symbol": "BTC-3OCT25-110000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 3.925
+        }
+      ],
+      "wire_bytes": 102376,
+      "sha256_checked": true
+    },
+    {
+      "from": "2025-10-01T23:00:00.000Z",
+      "symbols": 18,
+      "hedge_messages": 2362,
+      "option_messages": 482,
+      "invalid_or_missing_bbo_messages": 0,
+      "option_messages_missing_positive_iv_or_underlying": 0,
+      "negative_receipt_lag_messages": 0,
+      "disconnect_markers": 0,
+      "last_tickers_two_sided": 18,
+      "max_last_ticker_age_seconds_at_minute_end": 4.628,
+      "last_tickers": [
+        {
+          "symbol": "ETH-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.218
+        },
+        {
+          "symbol": "BTC-PERPETUAL",
+          "option": false,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.019
+        },
+        {
+          "symbol": "ETH-17OCT25-4250-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.168
+        },
+        {
+          "symbol": "ETH-3OCT25-4300-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.834
+        },
+        {
+          "symbol": "ETH-17OCT25-4200-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.578
+        },
+        {
+          "symbol": "BTC-3OCT25-118000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.526
+        },
+        {
+          "symbol": "ETH-17OCT25-4100-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.132
+        },
+        {
+          "symbol": "BTC-17OCT25-109000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.082
+        },
+        {
+          "symbol": "BTC-17OCT25-102000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 4.625
+        },
+        {
+          "symbol": "BTC-17OCT25-125000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.455
+        },
+        {
+          "symbol": "BTC-31OCT25-106000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.547
+        },
+        {
+          "symbol": "BTC-3OCT25-116000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 4.509
+        },
+        {
+          "symbol": "BTC-2OCT25-117000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.099
+        },
+        {
+          "symbol": "BTC-31OCT25-100000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 0.6
+        },
+        {
+          "symbol": "BTC-17OCT25-130000-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.386
+        },
+        {
+          "symbol": "ETH-17OCT25-4400-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 2.194
+        },
+        {
+          "symbol": "BTC-3OCT25-110000-P",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 4.628
+        },
+        {
+          "symbol": "ETH-17OCT25-4350-C",
+          "option": true,
+          "two_sided": true,
+          "ticker_age_seconds_at_minute_end": 1.167
+        }
+      ],
+      "wire_bytes": 95573,
+      "sha256_checked": true
+    }
+  ],
+  "caveats": [
+    "Three disjoint one-minute samples on one free day, not continuous annual coverage or statistical adequacy.",
+    "Sixteen options were selected from saved within-hour trades for availability checks; this is forward-looking for decisions inside that hour. Later research use requires an explicit prior-period liquidity filter and limited target population.",
+    "Ticker timestamps measure observation age, not time since the last BBO change or a guaranteed executable fill.",
+    "Event and capture times both matter; the raw minute is selected by provider capture time."
+  ]
+}

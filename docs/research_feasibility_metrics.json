@@ -1,0 +1,1193 @@
+{
+  "chain_hour_profiles": [
+    {
+      "currency": "BTC",
+      "start_utc": "2025-10-01T12:00:00+00:00",
+      "end_utc": "2025-10-01T12:59:59.999000+00:00",
+      "trades": 923,
+      "instruments": 220,
+      "expiries": 12,
+      "has_more": false,
+      "missing_iv": 0,
+      "missing_mark": 0,
+      "missing_index": 0,
+      "last_trade_older_than_5min": 197,
+      "max_last_trade_age_minutes": 59.872483333333335,
+      "duplicate_trade_keys": 0
+    },
+    {
+      "currency": "ETH",
+      "start_utc": "2025-10-01T12:00:00+00:00",
+      "end_utc": "2025-10-01T12:59:59.999000+00:00",
+      "trades": 528,
+      "instruments": 152,
+      "expiries": 11,
+      "has_more": false,
+      "missing_iv": 0,
+      "missing_mark": 0,
+      "missing_index": 0,
+      "last_trade_older_than_5min": 143,
+      "max_last_trade_age_minutes": 59.9121,
+      "duplicate_trade_keys": 0
+    },
+    {
+      "currency": "BTC",
+      "start_utc": "2026-04-17T12:00:00+00:00",
+      "end_utc": "2026-04-17T12:59:59.999000+00:00",
+      "trades": 733,
+      "instruments": 220,
+      "expiries": 12,
+      "has_more": false,
+      "missing_iv": 0,
+      "missing_mark": 0,
+      "missing_index": 0,
+      "last_trade_older_than_5min": 182,
+      "max_last_trade_age_minutes": 59.92101666666667,
+      "duplicate_trade_keys": 0
+    },
+    {
+      "currency": "ETH",
+      "start_utc": "2026-04-17T12:00:00+00:00",
+      "end_utc": "2026-04-17T12:59:59.999000+00:00",
+      "trades": 334,
+      "instruments": 122,
+      "expiries": 11,
+      "has_more": false,
+      "missing_iv": 0,
+      "missing_mark": 0,
+      "missing_index": 0,
+      "last_trade_older_than_5min": 82,
+      "max_last_trade_age_minutes": 59.8287,
+      "duplicate_trade_keys": 0
+    }
+  ],
+  "pagination_checked_sequences": [
+    1,
+    200
+  ],
+  "pagination_response_sequence_sorted": false,
+  "executed_utc": "2026-10-22T05:14:37.859195+00:00",
+  "assumptions": {
+    "currencies": [
+      "BTC",
+      "ETH"
+    ],
+    "rebalance_hours": 1,
+    "holding_hours": 24,
+    "desired_history_months": 12,
+    "assumptions_are_not_final_research_requirements": true
+  },
+  "old_raw_records": 137,
+  "old_raw_archive_sha256": "cdc1e2c32ec64bf385e48086dc5ec9afb0036080f53193d52b25d99ad4baf853",
+  "hourly_profiles": [
+    {
+      "instrument": "BTC-PERPETUAL",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00",
+      "zero_volume": 2,
+      "zero_volume_fraction": 0.0003999200159968006,
+      "flat_zero": 2,
+      "longest_zero_volume_hours": 1,
+      "duplicate_timestamps": 0,
+      "overlap_value_conflicts": 0
+    },
+    {
+      "instrument": "BTC-30OCT26-95000-C",
+      "bars": 1909,
+      "first_utc": "2026-07-30T11:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00",
+      "zero_volume": 1338,
+      "zero_volume_fraction": 0.7008905185961236,
+      "flat_zero": 1338,
+      "longest_zero_volume_hours": 40,
+      "duplicate_timestamps": 0,
+      "overlap_value_conflicts": 0,
+      "perpetual_timestamp_matches": 1909,
+      "holding_24h_candidates": 1885,
+      "holding_24h_positive_volume_endpoints": 272,
+      "holding_24h_all_25_bars_positive_volume": 7
+    },
+    {
+      "instrument": "ETH-PERPETUAL",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00",
+      "zero_volume": 2,
+      "zero_volume_fraction": 0.0003999200159968006,
+      "flat_zero": 2,
+      "longest_zero_volume_hours": 1,
+      "duplicate_timestamps": 0,
+      "overlap_value_conflicts": 0
+    },
+    {
+      "instrument": "ETH-25DEC26-3200-C",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00",
+      "zero_volume": 4754,
+      "zero_volume_fraction": 0.9506098780243951,
+      "flat_zero": 4754,
+      "longest_zero_volume_hours": 259,
+      "duplicate_timestamps": 0,
+      "overlap_value_conflicts": 0,
+      "perpetual_timestamp_matches": 5001,
+      "holding_24h_candidates": 4977,
+      "holding_24h_positive_volume_endpoints": 24,
+      "holding_24h_all_25_bars_positive_volume": 0
+    }
+  ],
+  "hourly_requests": [
+    {
+      "record_id": 21,
+      "instrument": "BTC-PERPETUAL",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00"
+    },
+    {
+      "record_id": 22,
+      "instrument": "BTC-PERPETUAL",
+      "bars": 1000,
+      "first_utc": "2026-02-09T23:00:00+00:00",
+      "last_utc": "2026-03-23T14:00:00+00:00"
+    },
+    {
+      "record_id": 23,
+      "instrument": "BTC-PERPETUAL",
+      "bars": 1000,
+      "first_utc": "2018-08-14T10:00:00+00:00",
+      "last_utc": "2018-09-25T01:00:00+00:00"
+    },
+    {
+      "record_id": 56,
+      "instrument": "BTC-30OCT26-95000-C",
+      "bars": 1909,
+      "first_utc": "2026-07-30T11:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00"
+    },
+    {
+      "record_id": 57,
+      "instrument": "BTC-30OCT26-95000-C",
+      "bars": 0,
+      "first_utc": null,
+      "last_utc": null
+    },
+    {
+      "record_id": 58,
+      "instrument": "BTC-30OCT26-95000-C",
+      "bars": 997,
+      "first_utc": "2026-07-30T11:00:00+00:00",
+      "last_utc": "2026-09-09T23:00:00+00:00"
+    },
+    {
+      "record_id": 87,
+      "instrument": "ETH-PERPETUAL",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00"
+    },
+    {
+      "record_id": 88,
+      "instrument": "ETH-PERPETUAL",
+      "bars": 1000,
+      "first_utc": "2026-02-09T23:00:00+00:00",
+      "last_utc": "2026-03-23T14:00:00+00:00"
+    },
+    {
+      "record_id": 89,
+      "instrument": "ETH-PERPETUAL",
+      "bars": 1000,
+      "first_utc": "2019-03-14T13:00:00+00:00",
+      "last_utc": "2019-04-25T04:00:00+00:00"
+    },
+    {
+      "record_id": 122,
+      "instrument": "ETH-25DEC26-3200-C",
+      "bars": 5001,
+      "first_utc": "2026-03-23T15:00:00+00:00",
+      "last_utc": "2026-10-17T23:00:00+00:00"
+    },
+    {
+      "record_id": 123,
+      "instrument": "ETH-25DEC26-3200-C",
+      "bars": 1000,
+      "first_utc": "2026-02-09T23:00:00+00:00",
+      "last_utc": "2026-03-23T14:00:00+00:00"
+    },
+    {
+      "record_id": 124,
+      "instrument": "ETH-25DEC26-3200-C",
+      "bars": 998,
+      "first_utc": "2025-12-25T10:00:00+00:00",
+      "last_utc": "2026-02-04T23:00:00+00:00"
+    }
+  ],
+  "live_probes": {
+    "2026-10-22-research-feasibility": {
+      "requests": 16,
+      "rows": [
+        {
+          "id": 1,
+          "label": "BTC-recent-expired-list",
+          "method": "public/get_instruments",
+          "params": {
+            "currency": "BTC",
+            "kind": "option",
+            "expired": true,
+            "extended": true
+          },
+          "request_started_utc": "2026-10-22T05:10:04.728744+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:05.478241+00:00",
+          "body_sha256": "fefa253500f2878b68e516fff90e39da54bda1c03cd108eb7a61dbe7724954dc",
+          "body_bytes": 47506,
+          "instruments": 54,
+          "first_expiry_utc": "2026-10-21T08:00:00+00:00",
+          "last_expiry_utc": "2026-10-21T08:00:00+00:00",
+          "states": [
+            "delivered"
+          ]
+        },
+        {
+          "id": 2,
+          "label": "BTC-20OCT26-80000-P-expired-hourly",
+          "method": "public/get_tradingview_chart_data",
+          "params": {
+            "instrument_name": "BTC-20OCT26-80000-P",
+            "resolution": "60",
+            "start_timestamp": 1791878400000,
+            "end_timestamp": 1792483199999
+          },
+          "request_started_utc": "2026-10-22T05:10:05.729746+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:05.955082+00:00",
+          "body_sha256": "5bbca248614bdbf2105a74874ee90b980c2f288acffe2b6881b99ab402d0e52b",
+          "body_bytes": 4796,
+          "status": "ok",
+          "bars": 94,
+          "first_utc": "2026-10-16T10:00:00+00:00",
+          "last_utc": "2026-10-20T07:00:00+00:00",
+          "zero_volume": 51,
+          "gap_hours": 0
+        },
+        {
+          "id": 3,
+          "label": "BTC-20OCT26-80000-P-expired-trades",
+          "method": "public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "BTC-20OCT26-80000-P",
+            "start_timestamp": 1792396800000,
+            "end_timestamp": 1792483199999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:10:06.730891+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:06.965080+00:00",
+          "body_sha256": "d66e5d3707a156a35ff9100606e2481b0fff6091e71dd379638680158745c142",
+          "body_bytes": 135,
+          "trades": 0,
+          "has_more": false,
+          "trade_fields": [],
+          "first_utc": null,
+          "last_utc": null
+        },
+        {
+          "id": 4,
+          "label": "BTC-year-old-funding",
+          "method": "public/get_funding_rate_history",
+          "params": {
+            "instrument_name": "BTC-PERPETUAL",
+            "start_timestamp": 1759276800000,
+            "end_timestamp": 1759363199999
+          },
+          "request_started_utc": "2026-10-22T05:10:07.731983+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:08.015902+00:00",
+          "body_sha256": "8082fd3dfde62b18781a53e9b1afff6aa864e221eab7a8672ec98b8ca6b82167",
+          "body_bytes": 3602,
+          "points": 23,
+          "fields": [
+            "index_price",
+            "interest_1h",
+            "interest_8h",
+            "prev_index_price",
+            "timestamp"
+          ],
+          "first_utc": "2025-10-01T01:00:00+00:00",
+          "last_utc": "2025-10-01T23:00:00+00:00"
+        },
+        {
+          "id": 5,
+          "label": "ETH-recent-expired-list",
+          "method": "public/get_instruments",
+          "params": {
+            "currency": "ETH",
+            "kind": "option",
+            "expired": true,
+            "extended": true
+          },
+          "request_started_utc": "2026-10-22T05:10:08.733101+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:08.962053+00:00",
+          "body_sha256": "d34db7e1a033dcf01ccf7de57419df610385b3fb28d5033d0fed0360ac553d9e",
+          "body_bytes": 52741,
+          "instruments": 60,
+          "first_expiry_utc": "2026-10-21T08:00:00+00:00",
+          "last_expiry_utc": "2026-10-21T08:00:00+00:00",
+          "states": [
+            "delivered"
+          ]
+        },
+        {
+          "id": 6,
+          "label": "ETH-20OCT26-2480-C-expired-hourly",
+          "method": "public/get_tradingview_chart_data",
+          "params": {
+            "instrument_name": "ETH-20OCT26-2480-C",
+            "resolution": "60",
+            "start_timestamp": 1791878400000,
+            "end_timestamp": 1792483199999
+          },
+          "request_started_utc": "2026-10-22T05:10:09.734294+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:09.941660+00:00",
+          "body_sha256": "4c2918c4fab301aea87a69a1b719c86fcc9c4e725fb441a120ce201f7d9123f9",
+          "body_bytes": 4727,
+          "status": "ok",
+          "bars": 96,
+          "first_utc": "2026-10-16T08:00:00+00:00",
+          "last_utc": "2026-10-20T07:00:00+00:00",
+          "zero_volume": 71,
+          "gap_hours": 0
+        },
+        {
+          "id": 7,
+          "label": "ETH-20OCT26-2480-C-expired-trades",
+          "method": "public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "ETH-20OCT26-2480-C",
+            "start_timestamp": 1792396800000,
+            "end_timestamp": 1792483199999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:10:10.735497+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:10.948575+00:00",
+          "body_sha256": "34e531116c7d27555ec3ab2f204a7bbc9d79bdd9402c9bb984e6f6bc302a01b6",
+          "body_bytes": 135,
+          "trades": 0,
+          "has_more": false,
+          "trade_fields": [],
+          "first_utc": null,
+          "last_utc": null
+        },
+        {
+          "id": 8,
+          "label": "ETH-year-old-funding",
+          "method": "public/get_funding_rate_history",
+          "params": {
+            "instrument_name": "ETH-PERPETUAL",
+            "start_timestamp": 1759276800000,
+            "end_timestamp": 1759363199999
+          },
+          "request_started_utc": "2026-10-22T05:10:11.736682+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:11.965750+00:00",
+          "body_sha256": "d53900525488119727ec58f666a019816de55ed7113a95f40bb9d3c63df50cd6",
+          "body_bytes": 3467,
+          "points": 23,
+          "fields": [
+            "index_price",
+            "interest_1h",
+            "interest_8h",
+            "prev_index_price",
+            "timestamp"
+          ],
+          "first_utc": "2025-10-01T01:00:00+00:00",
+          "last_utc": "2025-10-01T23:00:00+00:00"
+        },
+        {
+          "id": 9,
+          "label": "BTC-24APR26-72000-C-old-metadata",
+          "method": "public/get_instrument",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C"
+          },
+          "request_started_utc": "2026-10-22T05:10:12.737846+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:12.955589+00:00",
+          "body_sha256": "9c5052dcfa169e3a4b6d5cd46ee48c6149c07cfeedd55a6f09e00f133bb6a6a1",
+          "body_bytes": 972,
+          "instrument_name": "BTC-24APR26-72000-C",
+          "expiry_utc": "2026-04-24T08:00:00+00:00",
+          "state": "archivized",
+          "units": {
+            "base_currency": "BTC",
+            "quote_currency": "BTC",
+            "counter_currency": "USD",
+            "settlement_currency": "BTC",
+            "contract_size": 1.0,
+            "instrument_type": "reversed"
+          }
+        },
+        {
+          "id": 10,
+          "label": "BTC-24APR26-72000-C-old-hourly",
+          "method": "public/get_tradingview_chart_data",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "resolution": "60",
+            "start_timestamp": 1776412800000,
+            "end_timestamp": 1777017599999
+          },
+          "request_started_utc": "2026-10-22T05:10:13.739043+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:14.001826+00:00",
+          "body_sha256": "f9ed80f4491162cacdf8df50f463e7786abb016ae77bcbbcb0b9891e7e69f804",
+          "body_bytes": 7994,
+          "status": "ok",
+          "bars": 168,
+          "first_utc": "2026-04-17T08:00:00+00:00",
+          "last_utc": "2026-04-24T07:00:00+00:00",
+          "zero_volume": 120,
+          "gap_hours": 0
+        },
+        {
+          "id": 11,
+          "label": "BTC-24APR26-72000-C-old-trades",
+          "method": "public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_timestamp": 1776931200000,
+            "end_timestamp": 1777017599999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:10:14.740209+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:14.966420+00:00",
+          "body_sha256": "5079333d4ca67219d2f4aa85f35de56e2ccf63dfbfb17e498e504098661f9df3",
+          "body_bytes": 135,
+          "trades": 0,
+          "has_more": false,
+          "trade_fields": [],
+          "first_utc": null,
+          "last_utc": null
+        },
+        {
+          "id": 12,
+          "label": "BTC-24APR26-72000-C-old-mark",
+          "method": "public/get_mark_price_history",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_timestamp": 1776412800000,
+            "end_timestamp": 1777017599999
+          },
+          "request_started_utc": "2026-10-22T05:10:15.741164+00:00",
+          "http_status": 400,
+          "api_error": {
+            "code": -32602,
+            "data": {
+              "reason": "instrument is not active",
+              "param": "instrument_name"
+            },
+            "message": "Invalid params"
+          },
+          "ok": false,
+          "response_received_utc": "2026-10-22T05:10:15.949002+00:00",
+          "body_sha256": "d64476a8eaa14d13ba992949e6adb1ca5b9295edb97f610109e4b4d5e233c884",
+          "body_bytes": 216
+        },
+        {
+          "id": 13,
+          "label": "ETH-26JUN26-3000-C-old-metadata",
+          "method": "public/get_instrument",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C"
+          },
+          "request_started_utc": "2026-10-22T05:10:16.742373+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:16.945190+00:00",
+          "body_sha256": "ebb4f9c82fa9ceb338383856f7f11301cd3ddb1fcd77a29310a453585cab17f1",
+          "body_bytes": 970,
+          "instrument_name": "ETH-26JUN26-3000-C",
+          "expiry_utc": "2026-06-26T08:00:00+00:00",
+          "state": "archivized",
+          "units": {
+            "base_currency": "ETH",
+            "quote_currency": "ETH",
+            "counter_currency": "USD",
+            "settlement_currency": "ETH",
+            "contract_size": 1.0,
+            "instrument_type": "reversed"
+          }
+        },
+        {
+          "id": 14,
+          "label": "ETH-26JUN26-3000-C-old-hourly",
+          "method": "public/get_tradingview_chart_data",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C",
+            "resolution": "60",
+            "start_timestamp": 1781856000000,
+            "end_timestamp": 1782460799999
+          },
+          "request_started_utc": "2026-10-22T05:10:17.743247+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:17.977384+00:00",
+          "body_sha256": "eae8e6e3b971f82844fd43740e07bd1cd68d07d6fcbf80752261503c3a465071",
+          "body_bytes": 7922,
+          "status": "ok",
+          "bars": 168,
+          "first_utc": "2026-06-19T08:00:00+00:00",
+          "last_utc": "2026-06-26T07:00:00+00:00",
+          "zero_volume": 167,
+          "gap_hours": 0
+        },
+        {
+          "id": 15,
+          "label": "ETH-26JUN26-3000-C-old-trades",
+          "method": "public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C",
+            "start_timestamp": 1782374400000,
+            "end_timestamp": 1782460799999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:10:18.744396+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:10:18.949665+00:00",
+          "body_sha256": "3589019805ca14f036e7ba78391a6441c25589bae3abbcbdeab358b9c8df649b",
+          "body_bytes": 135,
+          "trades": 0,
+          "has_more": false,
+          "trade_fields": [],
+          "first_utc": null,
+          "last_utc": null
+        },
+        {
+          "id": 16,
+          "label": "ETH-26JUN26-3000-C-old-mark",
+          "method": "public/get_mark_price_history",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C",
+            "start_timestamp": 1781856000000,
+            "end_timestamp": 1782460799999
+          },
+          "request_started_utc": "2026-10-22T05:10:19.745703+00:00",
+          "http_status": 400,
+          "api_error": {
+            "code": -32602,
+            "data": {
+              "reason": "instrument is not active",
+              "param": "instrument_name"
+            },
+            "message": "Invalid params"
+          },
+          "ok": false,
+          "response_received_utc": "2026-10-22T05:10:19.956019+00:00",
+          "body_sha256": "8d590687e6204ef638b454fb3fd6ef10ac603380aeaa6f16bdfc60643e9c6d7e",
+          "body_bytes": 217
+        }
+      ]
+    },
+    "2026-10-22-research-history-host": {
+      "requests": 9,
+      "rows": [
+        {
+          "id": 1,
+          "label": "BTC-20OCT26-80000-P-expired-trades",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "BTC-20OCT26-80000-P",
+            "start_timestamp": 1792396800000,
+            "end_timestamp": 1792483199999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:00.735701+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:02.319025+00:00",
+          "body_sha256": "4aa81d41bda164e1a045326f71cbf14bf36e42043e38cfe4a97ef01aa6fd7006",
+          "body_bytes": 20698,
+          "trades": 83,
+          "has_more": false,
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-10-19T08:10:44.587000+00:00",
+          "last_utc": "2026-10-20T03:10:35.738000+00:00",
+          "first_seq": 202,
+          "last_seq": 284
+        },
+        {
+          "id": 2,
+          "label": "ETH-20OCT26-2480-C-expired-trades",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "ETH-20OCT26-2480-C",
+            "start_timestamp": 1792396800000,
+            "end_timestamp": 1792483199999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:02.320709+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:02.714822+00:00",
+          "body_sha256": "08e8170eb89caa149f799f3debdf08a5a6ac3874488880e80a8bc4d14e623295",
+          "body_bytes": 24337,
+          "trades": 98,
+          "has_more": false,
+          "fields": [
+            "amount",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-10-19T08:12:33.041000+00:00",
+          "last_utc": "2026-10-20T00:57:43.308000+00:00",
+          "first_seq": 50,
+          "last_seq": 147
+        },
+        {
+          "id": 3,
+          "label": "BTC-24APR26-72000-C-old-trades",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_timestamp": 1776931200000,
+            "end_timestamp": 1777017599999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:03.321903+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:03.753716+00:00",
+          "body_sha256": "433b173c883d555c135e972c3413b2002b5b793549fbc74c1d71af7feeda2df1",
+          "body_bytes": 18180,
+          "trades": 67,
+          "has_more": false,
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "combo_trade_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-04-23T12:59:17.409000+00:00",
+          "last_utc": "2026-04-24T05:58:23.292000+00:00",
+          "first_seq": 4308,
+          "last_seq": 4374
+        },
+        {
+          "id": 4,
+          "label": "ETH-26JUN26-3000-C-old-trades",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument_and_time",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C",
+            "start_timestamp": 1782374400000,
+            "end_timestamp": 1782460799999,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:04.323060+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:04.619634+00:00",
+          "body_sha256": "002aa7589335bd6b2c2bec9f30122c6d33c8130bacbb709eac784d1bfc999a0b",
+          "body_bytes": 378,
+          "trades": 1,
+          "has_more": false,
+          "fields": [
+            "amount",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-06-25T08:19:24.014000+00:00",
+          "last_utc": "2026-06-25T08:19:24.014000+00:00",
+          "first_seq": 1291,
+          "last_seq": 1291
+        },
+        {
+          "id": 5,
+          "label": "BTC-24APR26-72000-C-first-sequences",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_seq": 1,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:05.324250+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:05.992631+00:00",
+          "body_sha256": "060c33e3fb202bd81086a07a67fb1ef50789fb28b17ab0ca33776108354eb061",
+          "body_bytes": 24622,
+          "trades": 100,
+          "has_more": true,
+          "fields": [
+            "amount",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-02-02T02:56:45.900000+00:00",
+          "last_utc": "2026-02-05T07:48:39.782000+00:00",
+          "first_seq": 1,
+          "last_seq": 100
+        },
+        {
+          "id": 6,
+          "label": "ETH-26JUN26-3000-C-first-sequences",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument",
+          "params": {
+            "instrument_name": "ETH-26JUN26-3000-C",
+            "start_seq": 1,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:06.325412+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:07.084642+00:00",
+          "body_sha256": "d76d761c6ab30fb773725486cf28b74ba37f8c3bd3149452164de45bd56fc313",
+          "body_bytes": 26243,
+          "trades": 100,
+          "has_more": true,
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "combo_trade_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2025-06-28T07:25:56.399000+00:00",
+          "last_utc": "2026-01-11T08:35:07.626000+00:00",
+          "first_seq": 1,
+          "last_seq": 100
+        },
+        {
+          "id": 7,
+          "label": "old-mark",
+          "url": "https://history.deribit.com/api/v2/public/get_mark_price_history",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_timestamp": 1776412800000,
+            "end_timestamp": 1777017599999
+          },
+          "request_started_utc": "2026-10-22T05:12:07.326621+00:00",
+          "http_status": 400,
+          "ok": false,
+          "error": "JSONDecodeError",
+          "response_received_utc": "2026-10-22T05:12:07.590873+00:00",
+          "body_sha256": "917ef22f94f460141928531e1945453e29d89dcd58e3383c2b3ba0e2e19eb0d7",
+          "body_bytes": 11
+        },
+        {
+          "id": 8,
+          "label": "old-book",
+          "url": "https://history.deribit.com/api/v2/public/get_order_book",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "depth": 1
+          },
+          "request_started_utc": "2026-10-22T05:12:08.327812+00:00",
+          "http_status": 400,
+          "ok": false,
+          "error": "JSONDecodeError",
+          "response_received_utc": "2026-10-22T05:12:08.601593+00:00",
+          "body_sha256": "917ef22f94f460141928531e1945453e29d89dcd58e3383c2b3ba0e2e19eb0d7",
+          "body_bytes": 11
+        },
+        {
+          "id": 9,
+          "label": "BTC-24APR26-72000-C-first-sequences-next-page",
+          "url": "https://history.deribit.com/api/v2/public/get_last_trades_by_instrument",
+          "params": {
+            "instrument_name": "BTC-24APR26-72000-C",
+            "start_seq": 101,
+            "count": 100,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:12:09.329018+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "response_received_utc": "2026-10-22T05:12:10.008796+00:00",
+          "body_sha256": "fcf56b0dd3971e010aefbd864c86ac151b1397ecab24ab0251feb4f1d54422ed",
+          "body_bytes": 24805,
+          "trades": 100,
+          "has_more": true,
+          "fields": [
+            "amount",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_utc": "2026-02-05T07:50:32.106000+00:00",
+          "last_utc": "2026-02-05T15:52:30.812000+00:00",
+          "first_seq": 101,
+          "last_seq": 200
+        }
+      ]
+    },
+    "2026-10-22-research-trade-chain": {
+      "requests": 4,
+      "rows": [
+        {
+          "id": 1,
+          "method": "public/get_last_trades_by_currency_and_time",
+          "params": {
+            "currency": "BTC",
+            "kind": "option",
+            "start_timestamp": 1759320000000,
+            "end_timestamp": 1759323599999,
+            "count": 1000,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:13:28.917891+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "trades": 923,
+          "has_more": false,
+          "instruments": 220,
+          "expiries": 12,
+          "distinct_strikes_per_expiry": {
+            "3OCT25": 19,
+            "5OCT25": 7,
+            "2OCT25": 15,
+            "31OCT25": 31,
+            "17OCT25": 24,
+            "10OCT25": 18,
+            "4OCT25": 10,
+            "28NOV25": 18,
+            "26DEC25": 23,
+            "26JUN26": 3,
+            "27MAR26": 10,
+            "25SEP26": 5
+          },
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "combo_trade_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_trade_utc": "2025-10-01T12:00:04.231000+00:00",
+          "last_trade_utc": "2025-10-01T12:59:20.466000+00:00",
+          "response_received_utc": "2026-10-22T05:13:30.838766+00:00",
+          "body_bytes": 235284,
+          "body_sha256": "a7a15cfbfb46777a4c2752a82440a144943b0ccbae6594de1567a6f34e436e62"
+        },
+        {
+          "id": 2,
+          "method": "public/get_last_trades_by_currency_and_time",
+          "params": {
+            "currency": "ETH",
+            "kind": "option",
+            "start_timestamp": 1759320000000,
+            "end_timestamp": 1759323599999,
+            "count": 1000,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:13:30.842534+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "trades": 528,
+          "has_more": false,
+          "instruments": 152,
+          "expiries": 11,
+          "distinct_strikes_per_expiry": {
+            "5OCT25": 8,
+            "3OCT25": 19,
+            "27MAR26": 10,
+            "10OCT25": 13,
+            "26JUN26": 8,
+            "2OCT25": 14,
+            "17OCT25": 14,
+            "26DEC25": 14,
+            "28NOV25": 6,
+            "31OCT25": 18,
+            "4OCT25": 9
+          },
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "liquidation",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_trade_utc": "2025-10-01T12:00:05.274000+00:00",
+          "last_trade_utc": "2025-10-01T12:59:04.845000+00:00",
+          "response_received_utc": "2026-10-22T05:13:31.326478+00:00",
+          "body_bytes": 130652,
+          "body_sha256": "2eecb223a9bbf9fcc7159ec687695609f724fc7ceebf74e4e0b607f5ae83de0e"
+        },
+        {
+          "id": 3,
+          "method": "public/get_last_trades_by_currency_and_time",
+          "params": {
+            "currency": "BTC",
+            "kind": "option",
+            "start_timestamp": 1776427200000,
+            "end_timestamp": 1776430799999,
+            "count": 1000,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:13:31.843640+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "trades": 733,
+          "has_more": false,
+          "instruments": 220,
+          "expiries": 12,
+          "distinct_strikes_per_expiry": {
+            "20APR26": 18,
+            "24APR26": 24,
+            "8MAY26": 12,
+            "18APR26": 18,
+            "29MAY26": 26,
+            "25SEP26": 14,
+            "21APR26": 18,
+            "1MAY26": 15,
+            "19APR26": 15,
+            "26JUN26": 19,
+            "25DEC26": 11,
+            "26MAR27": 3
+          },
+          "fields": [
+            "amount",
+            "block_rfq_id",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "combo_trade_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_trade_utc": "2026-04-17T12:00:04.646000+00:00",
+          "last_trade_utc": "2026-04-17T12:59:55.491000+00:00",
+          "response_received_utc": "2026-10-22T05:13:32.410202+00:00",
+          "body_bytes": 183050,
+          "body_sha256": "42f10836dc92e0aeaef9c6602795df5de0027ca72b5f34715d6a2e37b9e8bf75"
+        },
+        {
+          "id": 4,
+          "method": "public/get_last_trades_by_currency_and_time",
+          "params": {
+            "currency": "ETH",
+            "kind": "option",
+            "start_timestamp": 1776427200000,
+            "end_timestamp": 1776430799999,
+            "count": 1000,
+            "sorting": "asc"
+          },
+          "request_started_utc": "2026-10-22T05:13:32.844202+00:00",
+          "http_status": 200,
+          "api_error": null,
+          "ok": true,
+          "trades": 334,
+          "has_more": false,
+          "instruments": 122,
+          "expiries": 11,
+          "distinct_strikes_per_expiry": {
+            "18APR26": 17,
+            "20APR26": 11,
+            "21APR26": 13,
+            "25SEP26": 6,
+            "1MAY26": 12,
+            "24APR26": 18,
+            "29MAY26": 10,
+            "19APR26": 9,
+            "26JUN26": 3,
+            "8MAY26": 6,
+            "25DEC26": 1
+          },
+          "fields": [
+            "amount",
+            "block_trade_id",
+            "block_trade_leg_count",
+            "combo_id",
+            "combo_trade_id",
+            "contracts",
+            "direction",
+            "index_price",
+            "instrument_name",
+            "iv",
+            "mark_price",
+            "price",
+            "tick_direction",
+            "timestamp",
+            "trade_id",
+            "trade_seq"
+          ],
+          "first_trade_utc": "2026-04-17T12:00:10.275000+00:00",
+          "last_trade_utc": "2026-04-17T12:59:57.956000+00:00",
+          "response_received_utc": "2026-10-22T05:13:33.277150+00:00",
+          "body_bytes": 83452,
+          "body_sha256": "635304a3dc6d5fd6cf53407c83dc92028ce1351a32b91f7dc9c0a8c24dbbc9ba"
+        }
+      ]
+    }
+  },
+  "caveats": [
+    "Samples are purposive, not a representative universe.",
+    "Perpetual timestamp matches are candle-grid matches, not synchronized fresh quotes.",
+    "A positive-volume hour does not establish a quote at the rebalance time.",
+    "24-hour candidate starts overlap and are not independent observations.",
+    "Recent-wide samples contain only one option per currency and cannot estimate a smile.",
+    "No research model has been trained or evaluated."
+  ]
+}

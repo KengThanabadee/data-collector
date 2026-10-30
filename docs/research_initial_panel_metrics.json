@@ -1,0 +1,125 @@
+{
+  "executed_utc": "2026-10-22T06:12:46.583174+00:00",
+  "rows": 101,
+  "dates": 3,
+  "market_intervals": 6,
+  "filters": {
+    "max_ticker_age_seconds": 60,
+    "max_relative_spread": 0.5,
+    "maturity_days": [
+      7,
+      45
+    ],
+    "focal_moneyness": [
+      0.9,
+      1.1
+    ],
+    "smile": "five OTM distinct strikes, two strictly each side; local quadratic; bid/ask-IV sensitivity"
+  },
+  "counts": {
+    "selected_options": 212,
+    "entry_missing_or_nonpositive_bbo": 19,
+    "focal_entry_candidates": 165,
+    "smile_support_failure": 61,
+    "fitted_entry_smiles": 104,
+    "exit_wide_spread": 3,
+    "usable_pairs": 101,
+    "slope_band_contains_zero": 36,
+    "outside_focal_moneyness": 16,
+    "iv_model_bound_failure": 7,
+    "entry_wide_spread": 5
+  },
+  "interval_audits": [
+    {
+      "date": "2020-10-01",
+      "entry_utc": "2020-10-01T08:00:00+00:00",
+      "selected_options": 34,
+      "entry_missing_or_nonpositive_bbo": 2,
+      "focal_entry_candidates": 23,
+      "smile_support_failure": 7,
+      "fitted_entry_smiles": 16,
+      "exit_wide_spread": 3,
+      "usable_pairs": 13,
+      "slope_band_contains_zero": 3,
+      "outside_focal_moneyness": 9
+    },
+    {
+      "date": "2020-10-01",
+      "entry_utc": "2020-10-01T16:00:00+00:00",
+      "selected_options": 34,
+      "iv_model_bound_failure": 6,
+      "focal_entry_candidates": 21,
+      "smile_support_failure": 6,
+      "fitted_entry_smiles": 15,
+      "usable_pairs": 15,
+      "slope_band_contains_zero": 8,
+      "outside_focal_moneyness": 7
+    },
+    {
+      "date": "2023-10-01",
+      "entry_utc": "2023-10-01T08:00:00+00:00",
+      "selected_options": 36,
+      "entry_missing_or_nonpositive_bbo": 10,
+      "entry_wide_spread": 2,
+      "focal_entry_candidates": 24,
+      "smile_support_failure": 9,
+      "fitted_entry_smiles": 15,
+      "usable_pairs": 15,
+      "slope_band_contains_zero": 1
+    },
+    {
+      "date": "2023-10-01",
+      "entry_utc": "2023-10-01T16:00:00+00:00",
+      "selected_options": 36,
+      "entry_missing_or_nonpositive_bbo": 7,
+      "entry_wide_spread": 2,
+      "focal_entry_candidates": 26,
+      "smile_support_failure": 8,
+      "fitted_entry_smiles": 18,
+      "usable_pairs": 18,
+      "slope_band_contains_zero": 2,
+      "iv_model_bound_failure": 1
+    },
+    {
+      "date": "2025-10-01",
+      "entry_utc": "2025-10-01T08:00:00+00:00",
+      "selected_options": 36,
+      "entry_wide_spread": 1,
+      "focal_entry_candidates": 35,
+      "smile_support_failure": 15,
+      "fitted_entry_smiles": 20,
+      "usable_pairs": 20,
+      "slope_band_contains_zero": 16
+    },
+    {
+      "date": "2025-10-01",
+      "entry_utc": "2025-10-01T16:00:00+00:00",
+      "selected_options": 36,
+      "focal_entry_candidates": 36,
+      "smile_support_failure": 16,
+      "fitted_entry_smiles": 20,
+      "usable_pairs": 20,
+      "slope_band_contains_zero": 6
+    }
+  ],
+  "model_assessment": {
+    "status": "insufficient_calendar_partitions",
+    "partitions": {
+      "train": {
+        "rows": 61,
+        "dates": 2,
+        "market_intervals": 4
+      },
+      "validation": {
+        "rows": 0,
+        "dates": 0,
+        "market_intervals": 0
+      },
+      "test": {
+        "rows": 40,
+        "dates": 1,
+        "market_intervals": 2
+      }
+    }
+  }
+}

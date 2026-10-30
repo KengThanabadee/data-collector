@@ -1,0 +1,860 @@
+{
+  "audit_date_utc": "2026-10-22",
+  "scope": "Public historical source access, schema prefixes, file sizes and documented commercial access; not a complete dataset quality certification.",
+  "method": {
+    "metadata": "Read full public Deribit exchange metadata using gzip: 5264810 bytes compressed, 223966408 bytes expanded; retained compact summary only. Initial uncompressed attempt stopped at 12000001-byte cap.",
+    "dataset_probes": "GET requests read at most 32768 compressed bytes per file, then close. File sizes are response Content-Length and x-dataset-size; prefixes decompressed with output cap. No complete market-data file acquired in this source audit.",
+    "head_correction": "Tardis explicitly returns404 for HEAD and403 for Range; earlier HEAD404s do not establish missing data.",
+    "prohibited_actions_not_taken": [
+      "no account creation",
+      "no trial activation",
+      "no cart additions",
+      "no purchase",
+      "no contact to vendor"
+    ]
+  },
+  "tardis": {
+    "metadata_url": "https://api.tardis.dev/v1/exchanges/deribit",
+    "metadata_summary": {
+      "response_sha256": "bc01c6352493235a13c43f4606f32d6e7650ca4f15e2bf2411a0f85e11800bfc",
+      "raw_bytes": 223966408,
+      "scalar": {
+        "id": "deribit",
+        "name": "Deribit",
+        "enabled": true,
+        "availableSince": "2019-03-30T00:00:00.000Z",
+        "apiDocsUrl": "https://docs.deribit.com"
+      },
+      "availableChannels_count": 14,
+      "availableSymbols_count": 558780,
+      "channelDetails_count": 14,
+      "incidentReports_count": 14,
+      "channelDetails": [
+        {
+          "name": "trades",
+          "description": "Trade executions stream",
+          "additionalInfo": "Collected with .raw subscriptions, which Deribit aggregates on a 1 millisecond basis.",
+          "frequency": "1ms",
+          "frequencySource": "exchange-docs",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/trades/tradesinstrument_nameinterval",
+          "apiVersion": "v2",
+          "sourceFor": [
+            "trade"
+          ],
+          "changes": [
+            {
+              "until": "2023-10-03T00:00:00.000Z",
+              "frequency": "real-time",
+              "sourceFor": [
+                "trade",
+                "liquidation"
+              ],
+              "additionalInfo": "Included real-time liquidation info until Deribit removed the liquidation field from public trade subscriptions to avoid sharing price-sensitive data."
+            },
+            {
+              "until": "2026-08-11T00:00:00.000Z",
+              "frequency": "real-time",
+              "additionalInfo": "Collected with raw interval (no aggregation)."
+            }
+          ],
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "book",
+          "description": "Order book incremental updates stream with sequence number validation",
+          "additionalInfo": "Collected with .raw subscriptions, which Deribit aggregates on a 1 millisecond basis.",
+          "frequency": "1ms",
+          "frequencySource": "exchange-docs",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/orderbook/bookinstrument_nameinterval",
+          "apiVersion": "v2",
+          "sourceFor": [
+            "book_change"
+          ],
+          "changes": [
+            {
+              "until": "2026-08-11T00:00:00.000Z",
+              "frequency": "real-time",
+              "additionalInfo": "Collected with raw interval (no aggregation)."
+            }
+          ],
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "ticker",
+          "description": "Instrument ticker updates stream including price, volume, open interest, funding rate and Greeks for options",
+          "additionalInfo": "Collected with .raw subscriptions, which Deribit aggregates on a 1 millisecond basis.",
+          "frequency": "1ms",
+          "frequencySource": "exchange-docs",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/tickerinstrument_nameinterval",
+          "apiVersion": "v2",
+          "availableSince": "2019-10-01T00:00:00.000Z",
+          "sourceFor": [
+            "derivative_ticker",
+            "option_summary",
+            "book_ticker"
+          ],
+          "changes": [
+            {
+              "until": "2026-08-11T00:00:00.000Z",
+              "frequency": "real-time",
+              "additionalInfo": "Collected with raw interval (no aggregation)."
+            }
+          ]
+        },
+        {
+          "name": "deribit_price_index",
+          "description": "Real-time index price updates stream used across pricing, margining and settlement",
+          "frequency": "real-time",
+          "frequencySource": "exchange-docs",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/deribit_price_indexindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "deribit_price_ranking",
+          "description": "Price ranking updates for the component exchanges used to calculate the Deribit index",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/deribit_price_rankingindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "deribit_price_statistics",
+          "description": "Index price statistics updates stream with 24h high, low and change",
+          "frequency": "5s",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/deribit_price_statisticsindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2022-01-13T00:00:00.000Z"
+        },
+        {
+          "name": "deribit_volatility_index",
+          "description": "Volatility index (DVOL) updates stream",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/deribit_volatility_indexindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2021-04-01T00:00:00.000Z"
+        },
+        {
+          "name": "estimated_expiration_price",
+          "description": "Estimated expiration (delivery) price updates stream",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/estimated_expiration_priceindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "markprice.options",
+          "description": "Options mark price and implied volatility updates stream for all options under a given index",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/markpriceoptionsindex_name",
+          "apiVersion": "v2",
+          "availableSince": "2019-10-01T00:00:00.000Z"
+        },
+        {
+          "name": "perpetual",
+          "description": "Perpetual instrument interest rate and index price updates stream",
+          "additionalInfo": "Collected with .raw subscriptions, which Deribit aggregates on a 1 millisecond basis.",
+          "frequency": "1ms",
+          "frequencySource": "exchange-docs",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/perpetualinstrument_nameinterval",
+          "apiVersion": "v2",
+          "availableSince": "2019-10-01T00:00:00.000Z",
+          "changes": [
+            {
+              "until": "2026-08-11T00:00:00.000Z",
+              "frequency": "real-time",
+              "additionalInfo": "Collected with raw interval (no aggregation)."
+            }
+          ]
+        },
+        {
+          "name": "quote",
+          "description": "Best bid and ask price and size updates stream",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/quoteinstrument_name",
+          "apiVersion": "v2",
+          "availableSince": "2019-10-01T00:00:00.000Z"
+        },
+        {
+          "name": "platform_state",
+          "description": "Platform state, maintenance and price index lock notifications stream",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/platform/platform_state",
+          "apiVersion": "v2",
+          "availableSince": "2019-12-31T00:00:00.000Z"
+        },
+        {
+          "name": "instrument.state.any",
+          "description": "Instrument lifecycle state updates stream (new listings, expirations, settlements)",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/market-data/instrumentstatekindcurrency",
+          "apiVersion": "v2",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "name": "block_rfq.trades",
+          "description": "Completed Block RFQ trades stream with legs, prices and mark price",
+          "frequency": "real-time",
+          "frequencySource": "inferred",
+          "exchangeDocsUrl": "https://docs.deribit.com/subscriptions/block-rfq/block_rfqtradescurrency",
+          "apiVersion": "v2",
+          "availableSince": "2025-10-08T00:00:00.000Z"
+        }
+      ],
+      "symbol_type_counts": {
+        "perpetual": 149,
+        "future": 2456,
+        "spot": 58,
+        "option": 479235,
+        "combo": 76882
+      },
+      "perps": [
+        {
+          "id": "BTC-PERPETUAL",
+          "type": "perpetual",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        },
+        {
+          "id": "ETH-PERPETUAL",
+          "type": "perpetual",
+          "availableSince": "2019-03-30T00:00:00.000Z"
+        }
+      ],
+      "datasets_scalars": {
+        "exportedFrom": "2019-03-30T00:00:00.000Z",
+        "exportedUntil": "2026-10-22T00:00:00.000Z"
+      },
+      "datasets_symbols_count": 558785,
+      "dataset_selected": [
+        {
+          "id": "OPTIONS",
+          "type": "option",
+          "dataTypes": [
+            "trades",
+            "incremental_book_L2",
+            "quotes",
+            "book_snapshot_5",
+            "book_snapshot_25",
+            "options_chain",
+            "liquidations",
+            "book_ticker"
+          ],
+          "availableSince": "2019-03-30T00:00:00.000Z",
+          "availableTo": "2026-10-22T00:00:00.000Z"
+        },
+        {
+          "id": "BTC-PERPETUAL",
+          "type": "perpetual",
+          "dataTypes": [
+            "trades",
+            "incremental_book_L2",
+            "quotes",
+            "book_snapshot_5",
+            "book_snapshot_25",
+            "derivative_ticker",
+            "liquidations",
+            "book_ticker"
+          ],
+          "availableSince": "2019-03-30T00:00:00.000Z",
+          "availableTo": "2026-10-22T00:00:00.000Z"
+        },
+        {
+          "id": "ETH-PERPETUAL",
+          "type": "perpetual",
+          "dataTypes": [
+            "trades",
+            "incremental_book_L2",
+            "quotes",
+            "book_snapshot_5",
+            "book_snapshot_25",
+            "derivative_ticker",
+            "liquidations",
+            "book_ticker"
+          ],
+          "availableSince": "2019-03-30T00:00:00.000Z",
+          "availableTo": "2026-10-22T00:00:00.000Z"
+        }
+      ],
+      "incidentReports": [
+        {
+          "from": "2026-09-01T18:51:00.000Z",
+          "to": "2026-09-01T21:39:00.000Z",
+          "status": "resolved",
+          "details": "Partial data loss caused by an internal recorder recovery issue after Deribit reported all derivative instruments as halted. Derivatives data was missing while spot data remained available. Normal recording resumed after the feed restarted."
+        },
+        {
+          "from": "2026-06-23T19:32:00.000Z",
+          "to": "2026-06-23T19:37:00.000Z",
+          "status": "resolved",
+          "details": "Missing data in exchange-specific minute slices caused by a transient London recorder infrastructure/network connectivity disruption affecting selected upstream WebSocket/API connections. Some affected slices are empty or contain only reconnect markers. Normal recording resumed around 2026-06-23T19:37:00 UTC."
+        },
+        {
+          "from": "2024-03-09T07:00:00.000Z",
+          "to": "2024-03-09T12:29:00.000Z",
+          "status": "resolved",
+          "details": "Missing data due to hitting deribit WS API error (\"message\":\"too_many_requests\",\"code\":10028), fix was implemented and deployed."
+        },
+        {
+          "from": "2024-03-05T00:00:00.000Z",
+          "to": "2024-03-05T07:22:00.000Z",
+          "status": "resolved",
+          "details": "Missing feed data due to hitting deribit WS API error (request entity too large\",\"code\":-32600\"), fix was implemented and deployed."
+        },
+        {
+          "from": "2023-12-14T00:00:00.000Z",
+          "to": "2023-12-14T08:19:00.000Z",
+          "status": "resolved",
+          "details": "Missing feed data due to hitting deribit WS API rate limit, fix was implemented and deployed."
+        },
+        {
+          "from": "2023-11-17T00:00:00.000Z",
+          "to": "2023-11-17T06:53:00.000Z",
+          "status": "resolved",
+          "details": "Missing feed data due to data collection service bug that was not handling Deribit API \"request entity too large\" error properly, fix was implemented and deployed."
+        },
+        {
+          "from": "2023-03-30T08:00:00.000Z",
+          "to": "2023-03-30T08:22:00.000Z",
+          "status": "resolved",
+          "details": "Missing feed data due to getting \"request entity too large\" error from Deribit API, workaround has been deployed to handle it."
+        },
+        {
+          "from": "2022-08-27T00:00:00.000Z",
+          "to": "2022-08-27T05:20:00.000Z",
+          "status": "resolved",
+          "details": "Hitting Deribit API rate limits caused connection drops and missing data (options specifically). App logic was updated to use less connections."
+        },
+        {
+          "from": "2020-11-16T12:00:00.000Z",
+          "to": "2020-11-16T12:12:00.000Z",
+          "status": "resolved",
+          "details": "Hitting Deribit API rate limits caused connection drops and missing data - we're in contact with Deribit team how to prevent that in the future."
+        },
+        {
+          "from": "2020-11-11T00:00:00.000Z",
+          "to": "2020-11-11T08:00:00.000Z",
+          "status": "resolved",
+          "details": "WS connection restart logic was incorrectly detecting subscriptions validations failures (false positives) due to a bug in our code which caused increased connection restarts which in turn caused IP ban from Deribit's side that caused missing data in that period, fix has been implemented and deployed."
+        },
+        {
+          "from": "2020-08-18T10:06:00.000Z",
+          "to": "2020-08-18T11:00:00.000Z",
+          "status": "resolved",
+          "details": "After Deribit's scheduled maintenance period, our connection restart logic due to a bug prevented successfully establishing connection back and caused missing data in that period, fix has been implemented and deployed."
+        },
+        {
+          "from": "2020-08-03T06:45:00.000Z",
+          "to": "2020-08-03T07:11:00.000Z",
+          "status": "resolved",
+          "details": "After Deribit's maintenance our services started receiving \"Connection Refused\" errors which were not expected and appeared to be some kind of new rate limiting, we have applied and deployed the workaround."
+        },
+        {
+          "from": "2019-07-26T21:10:00.000Z",
+          "to": "2019-07-26T21:26:00.000Z",
+          "status": "resolved",
+          "details": "K8S node where recording containers are running became unresponsive (network issue, no access to or from node) and has been automatically replaced with healthy node by auto-repair logic. Unfortunately that caused missing data feed for approximately 15 minutes."
+        },
+        {
+          "from": "2019-06-18T12:00:00.000Z",
+          "to": "2019-06-19T10:25:00.000Z",
+          "status": "resolved",
+          "details": "After Deribit deployment there was a bug introduced on exchange side that caused order book update messages to be delivered out of order from time to time that caused in first stage (first few hours) frequent reconnections. After it was diagnosed that its Deribit issue condition of reconnecting has been relaxed and such out of order messages have been recorded. Deribit team has been notified and fixed that issue."
+        }
+      ]
+    },
+    "dataset_get_probes": [
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2019/10/01/OPTIONS.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:33 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "359769643",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2019-10-01_OPTIONS.csv.gz\"; filename*=UTF-8''deribit_options_chain_2019-10-01_OPTIONS.csv.gz",
+          "server-timing": "auth;dur=53, origin;dur=1654;desc=\"primary\", total;dur=2083",
+          "x-dataset-size": "359769643",
+          "x-md5": "\"eec9cd54021d06f8be8bb449b85d4382\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649b4ff4c8949-BKK"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,ETH-4OCT19-280-P,1569887999057000,1569888000236118,put,280,1570176000000000,0,,,,,,,,0.545175,184.37,SYN.ETH-4OCT19,181.27,-0.99134,0.00074,0.00407,-0.11257,-0.02544\nderibit,ETH-4OCT19-280-C,1569887998050000,1569888000236159,call,280,1570176000000000,20,0.007,,,,0.005,400,260.47,0.00006,149.93,SYN.ETH-4OCT19,181.22,0.00151,0.00019,0.00085,-0.0108,0.00002\nderibit,ETH-4OCT19-270-P,1569887997043000,1569888000236167,put,270,1570176000000000,0,,,,,,,,0.490645,166.71,SYN.ETH-4OCT19,181.18,-0.99234,0.00073,0.00365,-0.09139,-0.02454\nderibit,ETH-4OCT19-270-C,1569887996036000,1569888000236174,call,270,1570176000000000,8,0.001,,,,0.004,400,233.68,0.00014,149.98,S"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2025/10/01/OPTIONS.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:35 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "6783021902",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2025-10-01_OPTIONS.csv.gz\"; filename*=UTF-8''deribit_options_chain_2025-10-01_OPTIONS.csv.gz",
+          "server-timing": "auth;dur=44, origin;dur=267;desc=\"primary\", total;dur=366",
+          "x-dataset-size": "6783021902",
+          "x-md5": "\"171272bd337b1f065899d1650956136c-65\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649c969bc9fe0-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,XRP_USDC-3OCT25-4D8-C,1759276798644000,1759276800639900,call,4.8,1759478400000000,1000,0.0075,,,,0.0015,45000,260.41,0,129.82,index_price,2.8477,0,0.00001,0,0,0\nderibit,XRP_USDC-3OCT25-3D5-C,1759276798644000,1759276800639904,call,3.5,1759478400000000,36000,0.012,,,,0.0025,45000,127,0.0003,97.48,index_price,2.8477,0.00456,0.06004,0.00003,-0.00031,0\nderibit,XRP_USDC-3OCT25-3D05-C,1759276798644000,1759276800639910,call,3.05,1759478400000000,42000,0.0235,0.0095,10000,71.63,0.0115,10000,75.82,0.0105,73.79,index_price,2.8477,0.12845,1.24869,0.00048,-0.00755,0.00002\nderibit,XRP_USDC-3OCT25-2D6-C,1759276798644000,1759276800639940,call,2.6,1759478400000000,1000"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2026/09/01/OPTIONS.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:36 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "11720765202",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2026-09-01_OPTIONS.csv.gz\"; filename*=UTF-8''deribit_options_chain_2026-09-01_OPTIONS.csv.gz",
+          "server-timing": "auth;dur=49, origin;dur=354;desc=\"primary\", total;dur=412",
+          "x-dataset-size": "11720765202",
+          "x-md5": "\"578a144313a72c8d658fabe381a09abd-112\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649d23c675df9-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,BTC-4SEP26-80000-P,1788220800796000,1788220801885976,put,80000,1788508800000000,288.8,0.0325,0.024,8.5,34.09,0.0265,6.1,39.99,0.0255,38.48,BTC-4SEP26,78588.67,-0.67925,0.00012,26.88358,-155.18178,-5.05791\nderibit,BTC-4SEP26-73000-P,1788220800253000,1788220801885976,put,73000,1788508800000000,814,0.0005,0.0006,0.1,43.37,0.0008,84.6,45.81,0.0007,44.24,BTC-4SEP26,78588.67,-0.03868,0.00003,6.29805,-41.78976,-0.28242\nderibit,BTC-4SEP26-62000-P,1788220800253000,1788220801885977,put,62000,1788508800000000,554.1,0.0001,,,,0.0001,30,93.72,0,81.31,BTC-4SEP26,78588.67,-0.001,0,0.25283,-1.72523,-0.00733\nderibit,BTC-3SEP26-83000-P,1788220800250000,1788220801885993,"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/quotes/2025/10/01/BTC-PERPETUAL.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:37 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "21044804",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_quotes_2025-10-01_BTC-PERPETUAL.csv.gz\"; filename*=UTF-8''deribit_quotes_2025-10-01_BTC-PERPETUAL.csv.gz",
+          "server-timing": "auth;dur=43, origin;dur=279;desc=\"primary\", total;dur=330",
+          "x-dataset-size": "21044804",
+          "x-md5": "\"bb13ba4462290428ed897a68be12d963\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649d9ec9e08b4-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,ask_amount,ask_price,bid_price,bid_amount\nderibit,BTC-PERPETUAL,1759276800439000,1759276800447580,60220,114061,114060.5,983820\nderibit,BTC-PERPETUAL,1759276800486000,1759276800494890,60220,114061,114060.5,981110\nderibit,BTC-PERPETUAL,1759276800553000,1759276800560923,60220,114061,114060.5,980250\nderibit,BTC-PERPETUAL,1759276800557000,1759276800560943,60220,114061,114060.5,981110\nderibit,BTC-PERPETUAL,1759276800582000,1759276800586716,220,114061,114060.5,981110\nderibit,BTC-PERPETUAL,1759276800618000,1759276800622777,240,114061,114060.5,981110\nderibit,BTC-PERPETUAL,1759276800673000,1759276800679756,29140,114061,114060.5,981110\nderibit,BTC-PERPETUAL,1759276800674000,1759276800679771,29140,114061,114060.5,981090\nderibit,BTC-PERPETUAL,1759276800700000,1759276800703524,240,114061,114060.5,981090\nderibit,BTC-PERPETUAL,1759276800712000,1759276800717727,2"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/quotes/2025/10/01/ETH-PERPETUAL.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:39 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "20443337",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_quotes_2025-10-01_ETH-PERPETUAL.csv.gz\"; filename*=UTF-8''deribit_quotes_2025-10-01_ETH-PERPETUAL.csv.gz",
+          "server-timing": "auth;dur=45, origin;dur=265;desc=\"primary\", total;dur=322",
+          "x-dataset-size": "20443337",
+          "x-md5": "\"47fceaff27a1b3984c91dd394eb7203e\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649e15de01091-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,ask_amount,ask_price,bid_price,bid_amount\nderibit,ETH-PERPETUAL,1759276800422000,1759276800441976,32533,4146.95,4146.9,4005\nderibit,ETH-PERPETUAL,1759276800667000,1759276800674922,28744,4146.95,4146.9,4005\nderibit,ETH-PERPETUAL,1759276800715000,1759276800722992,28744,4146.95,4146.9,9043\nderibit,ETH-PERPETUAL,1759276800737000,1759276800745852,32533,4146.95,4146.9,9043\nderibit,ETH-PERPETUAL,1759276800936000,1759276800938084,28744,4146.95,4146.9,9043\nderibit,ETH-PERPETUAL,1759276800962000,1759276800970702,28744,4146.95,4146.9,9141\nderibit,ETH-PERPETUAL,1759276800988000,1759276801002687,15607,4146.95,4146.9,9141\nderibit,ETH-PERPETUAL,1759276801017000,1759276801034032,15098,4146.95,4146.9,9141\nderibit,ETH-PERPETUAL,1759276801036000,1759276801044715,15098,4146.95,4146.9,5140\nderibit,ETH-PERPETUAL,1759276801054000,1759276801074816,15098,4146.95,4146.9,9"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/derivative_ticker/2025/10/01/BTC-PERPETUAL.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:40 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "3383061",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_derivative_ticker_2025-10-01_BTC-PERPETUAL.csv.gz\"; filename*=UTF-8''deribit_derivative_ticker_2025-10-01_BTC-PERPETUAL.csv.gz",
+          "server-timing": "auth;dur=110, origin;dur=342;desc=\"primary\", total;dur=523",
+          "x-dataset-size": "3383061",
+          "x-md5": "\"495c68371f331bd5af7be1adab6c8321\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649e798d08ad1-BKK"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,funding_timestamp,funding_rate,predicted_funding_rate,open_interest,last_price,index_price,mark_price\nderibit,BTC-PERPETUAL,1759276800430000,1759276800437609,,0,,1276615680,114060.5,114046.72,114065.39\nderibit,BTC-PERPETUAL,1759276800905000,1759276800907782,,0,,1276615680,114060.5,114046.72,114065.31\nderibit,BTC-PERPETUAL,1759276800990000,1759276801003959,,0,,1276615680,114061,114046.72,114065.31\nderibit,BTC-PERPETUAL,1759276801049000,1759276801092464,,0,,1276617080,114067.5,114046.72,114065.31\nderibit,BTC-PERPETUAL,1759276801280000,1759276801289752,,0,,1276617080,114067.5,114050.16,114068.75\nderibit,BTC-PERPETUAL,1759276801714000,1759276801718636,,0,,1276617080,114067.5,114050.16,114068.99\nderibit,BTC-PERPETUAL,1759276802006000,1759276802016272,,0,,1276617080,114075,114050.16,114068.99\nderibit,BTC-PERPETUAL,1759276802184000,1759276802192820,,0,,"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2025/10/01/BTC-24APR26-72000-C.csv.gz",
+        "status": 400,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:01:41 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "863",
+          "Connection": "close",
+          "server-timing": "auth;dur=44, total;dur=107",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e649f16c3e90d1-HKG"
+        },
+        "error_body": "{\n  \"code\": 140,\n  \"message\": \"Requested dataset is not available for '2025-10-01'. Data for 'BTC-24APR26-72000-C' is available since '2026-02-01'. Use 'https://api.tardis.dev/v1/exchanges/deribit' API call to get availability dates for all 'deribit' symbols ('datasets.symbols[].availableSince' field).\",\n  \"providedParams\": {\n    \"exchange\": \"deribit\",\n    \"dataType\": \"options_chain\",\n    \"year\": \"2025\",\n    \"month\": \"10\",\n    \"day\": \"01\",\n    \"symbol\": \"BTC-24APR26-72000-C\"\n  },\n  \"datasetInfo\": {\n    \"id\": \"BTC-24APR26-72000-C\",\n    \"type\": \"option\",\n    \"dataTypes\": [\n      \"trades\",\n      \"incremental_book_L2\",\n      \"quotes\",\n      \"book_snapshot_5\",\n      \"book_snapshot_25\",\n      \"options_chain\",\n      \"liquidations\",\n      \"book_ticker\"\n    ],\n    \"availableSince\": \"2026-02-01T00:00:00.000Z\",\n    \"availableTo\": \"2026-04-25T00:00:00.000Z\"\n  }\n}"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2026/03/01/BTC-24APR26-72000-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:02:33 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "1288539",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2026-03-01_BTC-24APR26-72000-C.csv.gz\"; filename*=UTF-8''deribit_options_chain_2026-03-01_BTC-24APR26-72000-C.csv.gz",
+          "server-timing": "auth;dur=43, origin;dur=255;desc=\"primary\", total;dur=313",
+          "x-dataset-size": "1288539",
+          "x-md5": "\"150ec9c8d59047bfb83373b1cc9cddb2\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64b337ce206e4-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,BTC-24APR26-72000-C,1772323201211000,1772323202183587,call,72000,1777017600000000,1631.6,0.0445,0.044,46.4,46.74,0.045,3.3,47.42,0.0454,47.64,BTC-24APR26,67186.99,0.38799,0.00003,99.31157,-43.53483,34.27244\nderibit,BTC-24APR26-72000-C,1772323201760000,1772323202185585,call,72000,1777017600000000,1631.6,0.0445,0.044,46.4,46.74,0.045,3,47.42,0.0454,47.64,BTC-24APR26,67186.99,0.38799,0.00003,99.31157,-43.53483,34.27244\nderibit,BTC-24APR26-72000-C,1772323203136000,1772323203140618,call,72000,1777017600000000,1631.6,0.0445,0.044,46.4,46.7,0.045,1,47.38,0.0453,47.63,BTC-24APR26,67198.87,0.38835,0.00003,99.35508,-43.54995,34.30832\nderibit,BTC-24APR26-72000-C,"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2025/10/01/ETH-26JUN26-3000-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:02:35 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "682170",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2025-10-01_ETH-26JUN26-3000-C.csv.gz\"; filename*=UTF-8''deribit_options_chain_2025-10-01_ETH-26JUN26-3000-C.csv.gz",
+          "server-timing": "auth;dur=60, origin;dur=1244;desc=\"primary\", total;dur=1422",
+          "x-dataset-size": "682170",
+          "x-md5": "\"bb7e9d2b308176241709cb87dc01451f\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64b3c18ca2112-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,ETH-26JUN26-3000-C,1759276800743000,1759276802265231,call,3000,1782460800000000,121,0.407,0.373,42,63.35,0.3775,42,65.4,0.3758,64.61,ETH-26JUN26,4328.95,0.82612,0.00011,9.52886,-1.14721,14.33273\nderibit,ETH-26JUN26-3000-C,1759276803770000,1759276804714358,call,3000,1782460800000000,121,0.407,0.373,42,63.38,0.3775,42,65.43,0.3758,64.61,ETH-26JUN26,4328.4,0.82606,0.00011,9.52971,-1.14731,14.33085\nderibit,ETH-26JUN26-3000-C,1759276805781000,1759276806417260,call,3000,1782460800000000,121,0.407,0.373,42,63.34,0.3775,42,65.39,0.3757,64.61,ETH-26JUN26,4329.25,0.82615,0.00011,9.5284,-1.14715,14.33375\nderibit,ETH-26JUN26-3000-C,1759276807452000,175927680748429"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/quotes/2026/03/01/BTC-24APR26-72000-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:02:37 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "427205",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_quotes_2026-03-01_BTC-24APR26-72000-C.csv.gz\"; filename*=UTF-8''deribit_quotes_2026-03-01_BTC-24APR26-72000-C.csv.gz",
+          "server-timing": "auth;dur=6, origin;dur=295;desc=\"primary\", total;dur=705",
+          "x-dataset-size": "427205",
+          "x-md5": "\"49c2e154ddcf65c290cd896ebe68a5e3\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64b4b4b71cdec-SIN"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,ask_amount,ask_price,bid_price,bid_amount\nderibit,BTC-24APR26-72000-C,1772323201127000,1772323202180454,3.3,0.045,0.044,45.4\nderibit,BTC-24APR26-72000-C,1772323201440000,1772323202182198,3.3,0.045,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323201760000,1772323202185629,3,0.045,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323203134000,1772323203140607,2,0.045,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323203136000,1772323203140625,1,0.045,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323203140000,1772323203150901,29.4,0.0455,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323206163000,1772323206172893,28.4,0.0455,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323209114000,1772323209119713,28.2,0.0455,0.044,46.4\nderibit,BTC-24APR26-72000-C,1772323213277000,1772323213284220,28.2,0.0455,0.044,54.4\nderibit,BTC-24APR26-72000-C,1772323216248000,1772323216255446,27.2,"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2025/10/01/BTC-31OCT25-115000-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:02:38 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "1110392",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2025-10-01_BTC-31OCT25-115000-C.csv.gz\"; filename*=UTF-8''deribit_options_chain_2025-10-01_BTC-31OCT25-115000-C.csv.gz",
+          "server-timing": "auth;dur=41, origin;dur=332;desc=\"primary\", total;dur=449",
+          "x-dataset-size": "1110392",
+          "x-md5": "\"c969140c40333a24cd39d5318217f98e\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64b556c9ca0b0-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,BTC-31OCT25-115000-C,1759276799264000,1759276800647704,call,115000,1761897600000000,1346.6,0.04,0.038,16.6,34.12,0.039,99.1,34.99,0.0384,34.46,BTC-31OCT25,114704.82,0.50949,0.00003,131.88104,-74.91357,44.9079\nderibit,BTC-31OCT25-115000-C,1759276800969000,1759276800987066,call,115000,1761897600000000,1346.6,0.04,0.038,16.6,34.12,0.039,88.7,34.99,0.0384,34.46,BTC-31OCT25,114704.82,0.50949,0.00003,131.88104,-74.91357,44.9079\nderibit,BTC-31OCT25-115000-C,1759276800995000,1759276801019284,call,115000,1761897600000000,1346.6,0.04,0.038,16.6,34.12,0.039,73.8,34.99,0.0384,34.46,BTC-31OCT25,114704.82,0.50949,0.00003,131.88104,-74.91357,44.9079\nderibit,BTC-31OCT"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/quotes/2019/10/01/ETH-PERPETUAL.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:02:40 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "3674382",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_quotes_2019-10-01_ETH-PERPETUAL.csv.gz\"; filename*=UTF-8''deribit_quotes_2019-10-01_ETH-PERPETUAL.csv.gz",
+          "server-timing": "auth;dur=72, origin;dur=270;desc=\"primary\", total;dur=438",
+          "x-dataset-size": "3674382",
+          "x-md5": "\"34b723635f24468c8fc7abe966f2b4fa\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64b5daecd1109-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,ask_amount,ask_price,bid_price,bid_amount\nderibit,ETH-PERPETUAL,1569888000153000,1569888000278307,9,181.3,181.25,5263\nderibit,ETH-PERPETUAL,1569888000277000,1569888000292601,9,181.3,181.25,5288\nderibit,ETH-PERPETUAL,1569888000292000,1569888000301041,9,181.3,181.25,8698\nderibit,ETH-PERPETUAL,1569888000456000,1569888000464697,9,181.3,181.25,9197\nderibit,ETH-PERPETUAL,1569888000463000,1569888000471873,29,181.3,181.25,9197\nderibit,ETH-PERPETUAL,1569888000624000,1569888000641687,529,181.3,181.25,9197\nderibit,ETH-PERPETUAL,1569888000656000,1569888000670326,529,181.3,181.25,9172\nderibit,ETH-PERPETUAL,1569888000662000,1569888000680097,529,181.3,181.25,5762\nderibit,ETH-PERPETUAL,1569888000787000,1569888000796410,529,181.3,181.25,6762\nderibit,ETH-PERPETUAL,1569888000834000,1569888000843485,529,181.3,181.25,5762\nderibit,ETH-PERPETUAL,1569888000875000,156988"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2019/04/01/OPTIONS.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:03:26 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "274614889",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2019-04-01_OPTIONS.csv.gz\"; filename*=UTF-8''deribit_options_chain_2019-04-01_OPTIONS.csv.gz",
+          "server-timing": "auth;dur=10, origin;dur=375;desc=\"primary\", total;dur=429",
+          "x-dataset-size": "274614889",
+          "x-md5": "\"d62e4f4743a56c3d10a877029ff36530\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64c7d7c519c2f-SIN"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,ETH-5APR19-180-P,1554076794218000,1554076800231928,put,180,1554451200000000,0,,,,,0.35,1,373.9,0.27185,0,index_price,141.15,-1,0,0,0.0984,-0.02132\nderibit,ETH-5APR19-180-C,1554076800112000,1554076800231936,call,180,1554451200000000,0,,,,,0.001,100,108.1,0.000086,80.11,index_price,141.15,0.00332,0.00081,0.00154,-0.01215,0.00005\nderibit,ETH-5APR19-170-P,1554076799877000,1554076800231960,put,170,1554451200000000,0,,0.002,5,,0.275,1,318.41,0.204453,61.49,index_price,141.15,-0.99695,0.00098,0.00143,-0.01013,-0.02013\nderibit,ETH-5APR19-170-C,1554076796772000,1554076800231968,call,170,1554451200000000,0,,,,,0.001,350,87.33,0.000487,78.37,index_price,141.15,0."
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2019/08/01/OPTIONS.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:03:27 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "317100588",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2019-08-01_OPTIONS.csv.gz\"; filename*=UTF-8''deribit_options_chain_2019-08-01_OPTIONS.csv.gz",
+          "server-timing": "auth;dur=6, origin;dur=307;desc=\"primary\", total;dur=320",
+          "x-dataset-size": "317100588",
+          "x-md5": "\"0d878745f0f179d463c554076d79fd03\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64c851ef1a146-SIN"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,ETH-9AUG19-300-P,1564617594314000,1564617600324271,put,300,1565337600000000,0,,,,,,,,0.372477,109.63,SYN.ETH-9AUG19,218.92,-0.96556,0.0021,0.02522,-0.16591,-0.06688\nderibit,ETH-9AUG19-300-C,1564617600154000,1564617600324417,call,300,1565337600000000,8,0.002,0.001,300,97.5,0.003,6,116.44,0.002187,110.15,SYN.ETH-9AUG19,218.92,0.03516,0.00213,0.02566,-0.16958,0.00165\nderibit,ETH-9AUG19-290-P,1564617599413000,1564617600324427,put,290,1565337600000000,0,,,,,,,,0.327981,108.44,SYN.ETH-9AUG19,218.92,-0.94887,0.00293,0.03473,-0.22596,-0.06382\nderibit,ETH-9AUG19-290-C,1564617599323000,1564617600324436,call,290,1565337600000000,12,0.003,0.002,300,98.98,0.004,4,1"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2026/09/01/BTC-25SEP26-78000-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:03:28 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "2710635",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2026-09-01_BTC-25SEP26-78000-C.csv.gz\"; filename*=UTF-8''deribit_options_chain_2026-09-01_BTC-25SEP26-78000-C.csv.gz",
+          "server-timing": "auth;dur=79, origin;dur=389;desc=\"primary\", total;dur=646",
+          "x-dataset-size": "2710635",
+          "x-md5": "\"b3b8bbfe902b9b0a959c5bb92a5a6640\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64c8d1de020de-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,BTC-25SEP26-78000-C,1788220801110000,1788220802380989,call,78000,1790323200000000,5647.8,0.0445,0.0405,2.7,34.67,0.0415,15.1,35.66,0.0411,35.3,BTC-25SEP26,78750.11,0.55985,0.00005,80.20322,-58.17243,27.23239\nderibit,BTC-25SEP26-78000-C,1788220801517000,1788220802382924,call,78000,1790323200000000,5647.8,0.0445,0.0405,2.7,34.69,0.0415,15.1,35.67,0.0411,35.3,BTC-25SEP26,78748.03,0.55973,0.00005,80.20459,-58.17299,27.22642\nderibit,BTC-25SEP26-78000-C,1788220802283000,1788220802979315,call,78000,1790323200000000,5647.8,0.0445,0.0405,2.7,34.7,0.0415,15.1,35.69,0.0411,35.3,BTC-25SEP26,78745.53,0.5596,0.00005,80.20624,-58.17419,27.2192\nderibit,BTC-25SEP26-780"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/options_chain/2026/09/01/ETH-25SEP26-2500-C.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:03:31 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "2256851",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_options_chain_2026-09-01_ETH-25SEP26-2500-C.csv.gz\"; filename*=UTF-8''deribit_options_chain_2026-09-01_ETH-25SEP26-2500-C.csv.gz",
+          "server-timing": "auth;dur=513, origin;dur=309;desc=\"primary\", total;dur=1096",
+          "x-dataset-size": "2256851",
+          "x-md5": "\"da3da94a001a000dae77b86ecbc43723\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64c984d3c85be-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,type,strike_price,expiration,open_interest,last_price,bid_price,bid_amount,bid_iv,ask_price,ask_amount,ask_iv,mark_price,mark_iv,underlying_index,underlying_price,delta,gamma,vega,theta,rho\nderibit,ETH-25SEP26-2500-C,1788220801948000,1788220803786245,call,2500,1790323200000000,23965,0.049,0.0455,466,48.81,0.0465,862,49.79,0.0461,49.28,ETH-25SEP26,2474.38,0.49308,0.00127,2.54839,-2.58036,0.73754\nderibit,ETH-25SEP26-2500-C,1788220802946000,1788220803787481,call,2500,1790323200000000,23965,0.049,0.0455,466,48.84,0.0465,862,49.81,0.0461,49.28,ETH-25SEP26,2474.24,0.4929,0.00127,2.54822,-2.58019,0.73724\nderibit,ETH-25SEP26-2500-C,1788220803944000,1788220803950121,call,2500,1790323200000000,23965,0.049,0.0455,466,48.84,0.0465,888,49.81,0.0461,49.28,ETH-25SEP26,2474.24,0.4929,0.00127,2.54822,-2.58019,0.73724\nderibit,ETH-25SEP26-2500-C,1788220804027000,17"
+      },
+      {
+        "url": "https://datasets.tardis.dev/v1/deribit/derivative_ticker/2019/10/01/ETH-PERPETUAL.csv.gz",
+        "status": 200,
+        "headers": {
+          "Date": "Thu, 22 Oct 2026 06:03:32 GMT",
+          "Content-Type": "text/csv",
+          "Content-Length": "667533",
+          "Connection": "close",
+          "Content-Disposition": "attachment; filename=\"deribit_derivative_ticker_2019-10-01_ETH-PERPETUAL.csv.gz\"; filename*=UTF-8''deribit_derivative_ticker_2019-10-01_ETH-PERPETUAL.csv.gz",
+          "server-timing": "auth;dur=76, origin;dur=486;desc=\"primary\", total;dur=622",
+          "x-dataset-size": "667533",
+          "x-md5": "\"6cced133b9b0aefe88399545cd0535b0\"",
+          "x-worker-version-id": "a76b2c26-bfc4-47c6-9aa2-e31c16dd5d7b",
+          "Server": "cloudflare",
+          "CF-RAY": "a4e64ca50d2f1fcd-HKG"
+        },
+        "read_bytes": 32768,
+        "decompressed_prefix": "exchange,symbol,timestamp,local_timestamp,funding_timestamp,funding_rate,predicted_funding_rate,open_interest,last_price,index_price,mark_price\nderibit,ETH-PERPETUAL,1569888000153000,1569888000236107,,0,,11448601,181.3,181.26,181.34\nderibit,ETH-PERPETUAL,1569888000875000,1569888000884543,,0,,11448622,181.3,181.26,181.34\nderibit,ETH-PERPETUAL,1569888001071000,1569888001084345,,0,,11448622,181.3,181.33,181.4\nderibit,ETH-PERPETUAL,1569888002307000,1569888002317521,,0,,11448622,181.25,181.33,181.4\nderibit,ETH-PERPETUAL,1569888002398000,1569888002407337,,0,,11448293,181.3,181.33,181.4\nderibit,ETH-PERPETUAL,1569888003292000,1569888003301271,,0,,11448293,181.3,181.32,181.38\nderibit,ETH-PERPETUAL,1569888004284000,1569888004293405,,0,,11448293,181.3,181.33,181.39\nderibit,ETH-PERPETUAL,1569888005784000,1569888005793593,,0,,11447149,181.35,181.33,181.38\nderibit,ETH-PERPETUAL,1569888005787000,156988"
+      }
+    ],
+    "free_calendar": {
+      "documented_policy": "First UTC day of every month free without API key for CSV and raw replay.",
+      "nominal_slots_april_2019_to_october_2026": 91,
+      "actual_file_prefix_verified_dates": [
+        "2019-04-01",
+        "2019-08-01",
+        "2019-10-01",
+        "2025-10-01",
+        "2026-03-01",
+        "2026-09-01"
+      ],
+      "qualification": "91 is arithmetic possible monthly day slots, not91 downloaded and quality-verified complete days. First-day blocks are separated by unobserved days and do not form continuous24h holding paths.",
+      "known_free_day_incident": {
+        "from": "2026-09-01T18:51:00Z",
+        "to": "2026-09-01T21:39:00Z",
+        "duration_minutes": 168,
+        "description": "Published derivative data loss; spot data remained available."
+      }
+    },
+    "schema_findings": {
+      "actual_options_chain_columns": [
+        "exchange",
+        "symbol",
+        "timestamp",
+        "local_timestamp",
+        "type",
+        "strike_price",
+        "expiration",
+        "open_interest",
+        "last_price",
+        "bid_price",
+        "bid_amount",
+        "bid_iv",
+        "ask_price",
+        "ask_amount",
+        "ask_iv",
+        "mark_price",
+        "mark_iv",
+        "underlying_index",
+        "underlying_price",
+        "delta",
+        "gamma",
+        "vega",
+        "theta",
+        "rho"
+      ],
+      "actual_quotes_columns": [
+        "exchange",
+        "symbol",
+        "timestamp",
+        "local_timestamp",
+        "ask_amount",
+        "ask_price",
+        "bid_price",
+        "bid_amount"
+      ],
+      "individual_option_chain": "Actual HTTP200 with valid option/date confirms individual-symbol options_chain works. This contradicts docs claim that only OPTIONS group is supported; use controlling response evidence.",
+      "funding": "Derivative ticker prefix has funding_rate, funding_timestamp and predicted_funding_rate columns. funding_timestamp and predicted_funding_rate blank in sampled prefixes. These are not verified settled cashflows.",
+      "units": "Whole OPTIONS includes BTC/ETH inverse and other USDC products; select correct contract family and numeraire. A synthetic underlying or index price is not an executable hedge quote."
+    },
+    "size_implications": {
+      "full_chain_2025_10_01_compressed_bytes": 6783021902,
+      "full_chain_2026_09_01_compressed_bytes": 11720765202,
+      "annual_365day_extrapolation_TB_decimal": [
+        2.47580399423,
+        4.27807929873
+      ],
+      "extrapolation_warning": "One-day size extrapolations, not measured annual totals; selected dates may be unrepresentative and Sep2026 sample has known recorder gap.",
+      "two_perp_quotes_2025_10_01_compressed_bytes": 41488141,
+      "trial_total_transfer_GB": 20,
+      "full_chain_trial_warning": "A Sep1-sized chain alone is11.72GB/day; ten days would exceed20GB. Individual-symbol panel is substantially smaller.",
+      "individual_sample_range_bytes": [
+        682170,
+        2710635
+      ],
+      "selected_panel_example": "100 option-symbol days at2.71MB each is approximately271MB/day, or2.71GB over10days, plus hedge files. This is a sizing scenario from few samples, not a certified bound."
+    },
+    "documented_paid_access": {
+      "academic_options_USD_per_month_equivalent": 350,
+      "academic_derivatives_USD_per_month_equivalent": 450,
+      "academic_minimum_billing_months": 3,
+      "nominal_quarterly_options_USD": 1050,
+      "nominal_quarterly_derivatives_USD": 1350,
+      "tax_not_included_in_calculation": true,
+      "quarterly_historical_access_months": 12,
+      "quarterly_bank_transfer_historical_access_months": 15,
+      "yearly_academic_historical_access_years": 4,
+      "academic_format": "CSV only; raw replay and instrument metadata API require Professional/Business.",
+      "hedge_entitlement": "Options plan description covers options; Derivatives plan covers all Deribit instruments including hedge perpetuals. Do not assume Options-only buys hedge quotes.",
+      "transfer_compressed_TB_quarterly_academic": 60,
+      "trial": "One month access to days1-10 of previous calendar month, all exchanges,20GB total; no payment details; account required. No trial activated.",
+      "calendar_warning": "Quarterly12months started2026-10-22 supports trailing year since2025-10-22, not full calendar2025. A fixed earlier year may need yearly access."
+    },
+    "sources": [
+      "https://docs.tardis.dev/downloadable-csv-files/api",
+      "https://docs.tardis.dev/downloadable-csv-files/data-types",
+      "https://docs.tardis.dev/faq/billing-and-subscriptions",
+      "https://docs.tardis.dev/api/rate-limits",
+      "https://docs.tardis.dev/historical-data-details/deribit",
+      "https://tardis.dev/#pricing"
+    ]
+  },
+  "optionsdx": {
+    "product_url": "https://www.optionsdx.com/product/btc-option-chains/",
+    "fields_url": "https://www.optionsdx.com/option-chain-field-definitions-for-deribit-options/",
+    "faq_url": "https://www.optionsdx.com/faq/",
+    "sample_url": "https://www.optionsdx.com/wp-content/uploads/2022/01/btc_sample.csv",
+    "product_periods": "Monthly June2021 through September2024 inclusive (40months listed).",
+    "ui_verified_selected_period": "2022-01",
+    "ui_verified_prices_USD_per_data_month": {
+      "End of Day": 0,
+      "30 Minutes": 5,
+      "15 Minutes": 10,
+      "5 Minutes": 25,
+      "Minutely": 50
+    },
+    "price_evidence": "Read-only product option selections in browser showed corresponding rendered selected-variation prices; no Add to cart, checkout or signup.",
+    "nominal_full_calendar_2022_price_USD_30minute": 60,
+    "annual_price_qualification": "12times January2022 selected30minute price; other11monthly variants not individually verified. Product lists all12monthly periods; no purchase or downloaded annual archive.",
+    "documented_fields": [
+      "QUOTE_UNIXTIME",
+      "QUOTE_READTIME",
+      "QUOTE_DATE",
+      "QUOTE_TIME_HOURS",
+      "INSTRUMENT NAME",
+      "BASE CURRENCY",
+      "CONTRACT_SIZE",
+      "UNDERLYING INDEX",
+      "UNDERLYING PRICE",
+      "EXPIRY_UNIX",
+      "EXPIRY_DATE",
+      "EXPIRY_TIME",
+      "DTE",
+      "RIGHT",
+      "STRIKE",
+      "BID_SIZE",
+      "BID_PRICE",
+      "ASK_PRICE",
+      "ASK_SIZE",
+      "OPEN_INTEREST",
+      "VOLUME",
+      "DELTA",
+      "GAMMA",
+      "VEGA",
+      "THETA",
+      "RHO",
+      "MARK_IV",
+      "STRIKE_DISTANCE_PCT"
+    ],
+    "limitations": [
+      "BTC only established; ETH not established.",
+      "Quote times documented in EDT plus Unix timestamps; convert using Unix and verify timezone/DST behavior.",
+      "Underlying price is synthetic/index value; does not establish tradeable hedge BBO or funding.",
+      "Bid/ask IV absent from documented field list; can recompute under fixed pricing conventions if inputs valid.",
+      "Individual quote-event timestamps and synchronous whole-chain sweep not established.",
+      "Actual sample acquisition blocked: direct bounded HTTP requests return406, web reader rejectsCSV MIME, browser sample download failed. Therefore sample rows, continuity, stale quotes, date gaps and quality not certified.",
+      "Free EOD supports daily rebalancing research only. Intraday30minute access is paid; documentation requires account/checkout and accepting terms, none performed."
+    ],
+    "decision": "Promising cheapest identified continuous BTC intraday option source; approximately60USD/year at30minute resolution if other months match verified price. Requires an actual allowed sample/archive quality audit and a chosen hedge-history route before claiming final BSAD+ML feasibility."
+  },
+  "other_academic": {
+    "source": "https://research-repository.uwa.edu.au/en/datasets/deribits-options-data/",
+    "author_source": "https://sites.google.com/view/lai-hoang/research/data",
+    "finding": "CC BY historical BTC option trade archive, not a historical quote-chain solution. No free full continuous BTC/ETH quote dataset successfully acquired from an academic archive in this audit."
+  },
+  "decision_boundary": "Source availability and size are established for bounded Tardis samples; statistical sufficiency, executable-price coverage, complete funding cashflows and full annual continuity require actual panels and quality measurements. Free monthly samples permit intraday studies but cannot silently stand in for continuous annual24h hedging paths."
+}
