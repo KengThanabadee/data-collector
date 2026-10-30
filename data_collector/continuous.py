@@ -1,4 +1,4 @@
-"""Raw-first continuous Deribit capture; hourly owners bound clock/stream state."""
+"""Raw-first continuous Deribit capture with transport-driven reconnects."""
 import asyncio
 import os
 import shutil
@@ -92,11 +92,10 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                 if result['connections'] == 0:
                     start = time.monotonic()
                 async with session_factory() as session:
-                    # Each hourly owner deliberately reconnects; this bounds
-                    # accumulated connection and clock-epoch state.
-                    epoch_start = time.monotonic()
                     attempts = 0
-                    while not stopped and time.monotonic()-epoch_start < 3600 and attempts < 64:
+                    # Rebind bounded stream state only after real connection loss;
+                    # a healthy socket has no timer or attempt rollover.
+                    while not stopped and attempts < 64:
                         if config.duration_seconds and time.monotonic()-start >= config.duration_seconds:
                             return
                         if clock.done():
@@ -128,7 +127,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                     disk = shutil.disk_usage(root)
                                     if disk.free < 5*1024**3 or disk.free/disk.total < .10:
                                         raise ValueError('disk free below v2 stop threshold')
-                                    if (config.duration_seconds and now-start >= config.duration_seconds) or now-epoch_start >= 3600:
+                                    if (config.duration_seconds and now-start >= config.duration_seconds):
                                         break
                                     if clock.done():
                                         clock.result()

@@ -43,9 +43,10 @@ Raw mode reconnects after transport loss with a one-second delay and a fresh
 connection identity. Gap controls identify connection start/end and acquisition
 of all selected native snapshots plus the subscription ACK. They do not certify
 native sequence continuity between messages. Archive or malformed-message errors
-fail the run and retain the durable prefix. Hourly owner rollover (or 64 connection
-attempts) deliberately reconnects to bound clock and stream state. Each owner
-uses the existing chrony sampler and waits for measured alignment. Disk free space
+fail the run and retain the durable prefix. Connections remain open until a real transport failure or a requested stop.
+After 64 failed/closed connections, a fresh archive owner bounds connection state
+before retrying; a healthy socket is never closed for owner rollover.
+The owner uses the existing chrony sampler and waits for measured alignment. Disk free space
 is checked during capture against the existing 5 GiB and 10% stop thresholds.
 
 Raw capture is stored under the discovery run's `continuous/` directory; keep the
@@ -87,5 +88,9 @@ bundle freezes collector Python only; full vendor-schema release qualification i
 pending. Other feeds/venues, long-running capacity, resource enforcement,
 independent backup/restore and intended-host acceptance remain required by SPEC.
 
-The continuous path has synthetic transport validation. A live one-hour Linux
-capture and successful verification remain the Next 1 acceptance gate.
+Existing archive safety bounds still fail closed: clock sampling ends at 10,000
+assessments per owner (about 83 hours at the current cadence), and writer sessions
+allow 10,000 segments. Configured unbounded limits do not remove these guards.
+
+Observed acceptance runs and their evidence locations are recorded in
+[PLANS.md](../../PLANS.md).

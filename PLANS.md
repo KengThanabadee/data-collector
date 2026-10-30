@@ -5,27 +5,22 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 ## Current state — 30 October 2026
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
-- V2: `config-check`, `discover`, `capture` and `verify-run` work for Deribit option books; see [docs/v2/RUNNING.md](docs/v2/RUNNING.md). A real discovery run captured 2,653 metadata rows and read them back. `capture` now has a raw mode with unbounded default limits, reconnect gaps and hourly owner rollover; bounded snapshot mode remains available. Live one-hour Linux acceptance is still pending.
+- V2: continuous raw Deribit option capture passed a one-hour run on Ubuntu 24.04 in Lima `dc-acceptance`, using chrony and a separate Python 3.12 venv under `caffeinate -i -s`. BTC-13NOV26-74000-P and ETH-13NOV26-2000-P ran for 3,601.3 seconds with one connection: 2,961 WebSocket messages, 60 immutable segments, and 3,543 verified records. `verify-run` passed; duration, frame and byte limits remain configurable and unbounded by default. Bounded snapshot mode remains available; see [running instructions](docs/v2/RUNNING.md).
 
 ## Next
 
-1. Continuous Deribit option capture.
-   ```
-   Goal: Collect Deribit option books continuously.
-   Done when: `capture` runs for one hour on selected BTC/ETH options with duration, frame and byte limits configurable and unbounded by default, reconnects after connection loss, stops cleanly on Ctrl-C, and `verify-run` passes on the result.
-   Out of scope: other venues and feeds, new snapshot or correction features, clock handling beyond what capture already does.
-   When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
-   ```
-2. Run that capture for 24 hours on the intended Linux host with chrony, and record what failed.
-3. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
+1. Run that capture for 24 hours on the intended Linux host with chrony, and record what failed.
+2. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
 
 ## Notes
 
 One line per deferred idea or choice made while working.
 
-- Next 1 implementation: raw capture reuses the measured clock/archive components, reconnects with gap records and rolls owners hourly; synthetic validation and review recorded in the implementation commit.
-- Next 1 remains open until a real one-hour BTC/ETH capture on Linux with local chrony finishes and `verify-run` passes; this macOS workspace has no chrony or Docker.
-- Raw verification covers immutable segment integrity, receipt ordering and payload counts; derived replay stays in bounded snapshot mode.
+- Continuous capture: keep healthy sockets open; rebind archive ownership after 64 closed/failed connections, between retries.
+- One-hour acceptance on 30 October 2026: first/last WebSocket receipt 18:18:56–19:18:55 Bangkok time; 1,338 BTC and 946 ETH book messages. Collector RSS sampled every 30 seconds stayed at 118,276–118,292 KiB after startup (16 KiB increase); startup peak was 172,540 KiB.
+- Evidence stays inside `dc-acceptance`: `~/dc-data/runs/a46be2c3649e4d7d910b13e94b1abb59/continuous`; retain its parent discovery run. Config, chrony reports, memory samples and verification are under `~/dc-acceptance-evidence/20261030T111739Z/`; the local non-raw summary is `experiments/results/lima-acceptance-20261030/summary.json`.
+- Timing evidence: 123 archived clock assessments included 91 aligned and 32 unaligned (warmup, wall steps or reference uncertainty). These labels are retained in raw capture; the one-hour result does not certify continuous UTC alignment.
+- Separate shutdown probes: SIGINT during warmup stopped cleanly with a failed/incomplete result and a verified raw prefix; a later startup timed out at 180 seconds after measured wall steps and uncertainty above 100 ms. Clock policy was preserved; live SIGINT after book acquisition was not observed, while cancellation/reconnect fixtures passed.
 
 ## Research
 
