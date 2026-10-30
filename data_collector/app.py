@@ -86,6 +86,9 @@ def verify_run(root, *, export=None):
     """Read committed raw afresh, rebuild final books, and optionally export raw."""
     root = Path(root).resolve()
     report = strict_json((root/'result.json').read_bytes())
+    if report.get('schema')=='dc.public-discovery/1' and report.get('venue')=='binance':
+        from .binance import verify
+        return verify(root,report,export=export)
     if report.get('schema') == 'dc.raw-sharded-result/1':
         from .sharded import verify
         return verify(root,report,export=export)
@@ -159,6 +162,10 @@ async def _capture_for(capture, session, seconds):
 async def run(config, *, discover_only=False, session_factory=discovery_session,
               observer=observe, clock_read=None, clock_wait=None, schedule_wait=None):
     """Own one declared pilot. Internal clock/transport seams are for fixtures."""
+    if isinstance(config,DiscoveryConfig) and config.venue=='binance':
+        from .binance import run as binance_run
+        return await binance_run(config,discover_only=discover_only,session_factory=session_factory,
+            observer=observer,clock_read=clock_read,clock_wait=clock_wait)
     if not discover_only and not config.symbols and not (config.all_options or config.all_futures):
         raise ValueError('set explicit current option symbols before capture')
     if not discover_only and config.capture_mode == 'raw':

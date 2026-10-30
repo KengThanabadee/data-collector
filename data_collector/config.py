@@ -41,10 +41,13 @@ class DiscoveryConfig:
     bootstrap_timeout_seconds: int = 180
 
     def __post_init__(self):
-        if self.schema != SCHEMA or self.venue != "deribit":
-            raise ValueError("supported v2 Deribit discovery schema/venue required")
+        if self.schema != SCHEMA or self.venue not in ("deribit","binance"):
+            raise ValueError("supported v2 discovery schema/venue required")
         if self.environment not in ("production", "testnet"):
             raise ValueError("explicit production or testnet environment required")
+        if self.venue=='binance' and (self.environment!='production' or self.capture_mode!='raw'
+                or self.all_options or self.all_futures or self.symbols):
+            raise ValueError('Binance public profile requires production raw mode and whole-universe selection')
         if not isinstance(self.data_root, Path) or not self.data_root.is_absolute():
             raise ValueError("absolute data_root required")
         for name, maximum in (("max_response_bytes", 16 * 1024 * 1024),

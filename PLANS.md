@@ -26,7 +26,17 @@ Observed linear projections divide all captured bytes, including initialization 
 | Compressed immutable archive and manifests | 220,160,167 | 4.92 |
 | All retained capture data, including WAL and archive | 1,771,514,629 | 39.60 |
 
+- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. Its continuous capture path remains in development; the one-hour Binance gate is not complete.
+
 ## Next
+
+Binance raw capture:
+```
+Goal: Capture BTC/ETH Binance spot and perpetual/dated futures feeds per FEEDS.md as raw with explicit gaps, including discovered coin/linear and quote-currency variants; Binance options are not enabled because of low liquidity.
+Done when: A one-hour dc-acceptance Lima run under caffeinate -i -s passes verify-run, and this plan records bytes per hour, projected GiB per day, peak RSS and CPU, and rejected/throttled subscriptions.
+Out of scope: Binance options, other venues, snapshots, replay, VPS setup.
+When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
+```
 
 1. Binance BTC/ETH spot and perpetual/dated futures feeds per FEEDS.md, raw with gaps; Binance options are not enabled (low liquidity). Own brief, review, commit and one-hour measured Lima run.
 2. Then Bybit BTC/ETH feeds per FEEDS.md, raw with gaps; own brief, review, commit and one-hour measured Lima run.
@@ -47,6 +57,8 @@ One line per deferred idea or choice made while working.
 - Futures/index selection: freeze every discovered native future, including perpetual and coin/linear variants, plus each metadata price_index dependency; shared raw envelopes use multiplex product and retain exact native topics/data rather than labelling index messages as futures.
 - Futures/index hour evidence: `~/dc-futures-data/runs/4c65d28370dd43038df8dd800801b234/continuous` and its parent discovery in dc-acceptance; config, chrony reports, resources, summary and successful verification under `~/dc-futures-evidence/20261030T185115Z/`.
 - Reconnect pacing follows FEEDS.md after the observed DNS outage: exponential 1/2/4…60-second backoff with jitter, reset after full initialization; stop and supervisor-death checks continue during the wait.
+- Binance discovery: request showPermissionSets=false after measuring a 17.8 MB spot response; preserve all BTC/ETH rows and native filters, mark non-trading rows explicitly, and leave unavailable spot listing incarnation null rather than infer it.
+- Binance discovery evidence: `~/dc-binance-data/runs/de94c7c122b949bd883599c49fbea549` in dc-acceptance; config, output and successful verification under `~/dc-binance-evidence/20261030T201903Z/`.
 
 - Continuous clock sampling: remove both sampler and durable-assessment count caps in the raw path; preserve finite library defaults and bounded clock epoch history.
 - Continuous capture: keep healthy sockets open; rebind archive ownership after 64 closed/failed connections, between retries.

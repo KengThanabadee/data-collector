@@ -130,6 +130,14 @@ data for downstream processing; it is not an ML feature table.
 
 ## Current boundary
 
+Binance discovery is available with
+`python -m data_collector discover --config config/v2-binance.toml`, using an
+explicit writable Linux data root. It archives spot, UM and CM exchangeInfo,
+requests spot `showPermissionSets=false`, and verifies the BTC/ETH projection
+against those exact responses. Non-trading rows remain visible as disabled.
+Spot listing incarnation is null because exchangeInfo does not supply it.
+Binance continuous capture is not enabled yet.
+
 Failed/cancelled runs retain their durable raw prefix; inspect their error before
 using data. Each command starts a new capture identity, so separate runs do not
 claim uninterrupted coverage. Crashed sessions remain on disk for the existing
