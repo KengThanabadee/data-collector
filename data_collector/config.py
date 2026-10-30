@@ -1,4 +1,4 @@
-"""Strict configuration for the bounded v2 discovery bootstrap.
+"""Strict configuration for v2 discovery and selected option capture.
 
 Loading validates configuration only: it does not bind a data root, start chrony,
 contact an exchange or certify a full production release configuration.
@@ -25,8 +25,10 @@ class DiscoveryConfig:
     warmup_timeout_seconds: int = 180
     chronyc: str = "chronyc"
     symbols: tuple[str, ...] = ()
-    duration_seconds: int = 90
-    max_frames: int = 64
+    duration_seconds: int = 0
+    max_frames: int = 0
+    max_bytes: int = 0
+    capture_mode: str = "raw"
 
     def __post_init__(self):
         if self.schema != SCHEMA or self.venue != "deribit":
@@ -37,12 +39,17 @@ class DiscoveryConfig:
             raise ValueError("absolute data_root required")
         for name, maximum in (("max_response_bytes", 16 * 1024 * 1024),
                               ("max_instruments", 10000), ("timeout_seconds", 60),
-                              ("warmup_timeout_seconds", 600), ("duration_seconds", 120),
-                              ("max_frames", 64)):
+                              ("warmup_timeout_seconds", 600)):
             value = getattr(self, name)
             integer(value, name, 1)
             if value > maximum:
                 raise ValueError("discovery bound exceeded: " + name)
+        for name in ('duration_seconds', 'max_frames', 'max_bytes'):
+            integer(getattr(self, name), name, 0)
+        if self.capture_mode not in ('raw', 'snapshots'):
+            raise ValueError('capture_mode must be raw or snapshots')
+        if self.capture_mode == 'snapshots' and not (1 <= self.duration_seconds <= 120 and 1 <= self.max_frames <= 64):
+            raise ValueError('snapshot mode requires bounded duration and frames')
         text(self.chronyc, "chronyc executable")
         # An executable name/path, never a shell command or argument list.
         if self.chronyc.startswith("-") or "\x7f" in self.chronyc:

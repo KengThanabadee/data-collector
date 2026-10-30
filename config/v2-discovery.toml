@@ -11,5 +11,8 @@ timeout_seconds = 30
 warmup_timeout_seconds = 180
 chronyc = "chronyc"
 symbols = []
-duration_seconds = 90
-max_frames = 64
+capture_mode = "raw"
+# Zero means unbounded. Limits count native frames and native payload bytes.
+duration_seconds = 0
+max_frames = 0
+max_bytes = 0

@@ -54,7 +54,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         self.offset = 0
         self.reads = 0
         self.session = Session()
-        self.config = DiscoveryConfig(self.root,'testnet',symbols=('BTC-TEST-C',),max_frames=4)
+        self.config = DiscoveryConfig(self.root,'testnet',symbols=('BTC-TEST-C',),max_frames=4,duration_seconds=90,capture_mode='snapshots')
 
     def observe(self):
         return time.time_ns()+self.offset,time.monotonic_ns()+self.offset,'test-boot'
@@ -221,7 +221,7 @@ class CommandTests(unittest.TestCase):
         self.addCleanup(fixture.temp.cleanup)
         config = Path(fixture.temp.name)/'config.toml'
         config.write_text('[data_collector]\nschema="dc.config/2"\nenvironment="testnet"\n'
-            f'data_root="{fixture.root}"\nsymbols=["BTC-TEST-C"]\nmax_frames=4\n')
+            f'data_root="{fixture.root}"\nsymbols=["BTC-TEST-C"]\nmax_frames=4\nduration_seconds=90\ncapture_mode="snapshots"\n')
         async def local_run(value,**kwargs):
             return await run(value,session_factory=lambda:fixture.session,observer=fixture.observe,
                 clock_read=fixture.clock_read,clock_wait=fixture.clock_wait,**kwargs)

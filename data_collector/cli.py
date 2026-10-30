@@ -19,7 +19,7 @@ def main(argv=None):
     try:
         if args.command=='verify-run':
             result = verify_run(args.root,export=args.export)
-            code = 0 if result['book_replay_equal'] else 1
+            code = 0 if result.get('book_replay_equal',result['archive_verified']) else 1
         else:
             config = load(args.config)
             if args.command=='config-check':

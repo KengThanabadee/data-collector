@@ -1,4 +1,4 @@
-# Run the bounded Deribit collector
+# Run the Deribit collector
 
 This is the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
@@ -32,13 +32,29 @@ TOML to one or two current active option names from that list, then run:
 .venv/bin/python -m data_collector capture --config config/v2-discovery.toml
 ```
 
-Capture uses explicit `book.<symbol>.agg2` channels. The first shared minute is
-selected after alignment. Stop with Ctrl-C, or let the first duration/frame/byte
-bound end the run. `duration_seconds` is at most 120 and `max_frames` at most 64;
-these preserve the existing proof horizon. A frame limit may stop before any
-minute snapshot is produced. A run receiving only ACKs fails; it must acquire
-native book snapshots for all selected symbols. Inspect `runtime`, `books`,
-`snapshot_ids`, `status` and any `error` in the printed result and `result.json`.
+Capture defaults to raw mode (`capture_mode = "raw"`) on explicit
+`book.<symbol>.agg2` channels. `duration_seconds`, `max_frames`, and `max_bytes`
+default to 0, meaning unbounded. Positive values stop at the first limit; byte
+limits count native payload bytes and may overshoot by one message. For a one-hour
+run set `duration_seconds = 3600`, leaving the other limits at 0. Ctrl-C requests
+a stop, closes the socket, drains admitted disk work, and prints the run root.
+
+Raw mode reconnects after transport loss with a one-second delay and a fresh
+connection identity. Gap controls identify connection start/end and acquisition
+of all selected native snapshots plus the subscription ACK. They do not certify
+native sequence continuity between messages. Archive or malformed-message errors
+fail the run and retain the durable prefix. Hourly owner rollover (or 64 connection
+attempts) deliberately reconnects to bound clock and stream state. Each owner
+uses the existing chrony sampler and waits for measured alignment. Disk free space
+is checked during capture against the existing 5 GiB and 10% stop thresholds.
+
+Raw capture is stored under the discovery run's `continuous/` directory; keep the
+entire parent discovery run when moving it. `verify-run` checks committed segment
+integrity, receipt ordering, payload counts and the parent discovery archive.
+It explicitly reports raw verification scope, without claiming derived book
+replay. Snapshot mode remains available with `capture_mode = "snapshots"`, positive
+`duration_seconds` at most 120 and `max_frames` at most 64; that mode retains its
+minute snapshot publication and final book replay checks.
 
 The default REST response bound is8MiB. This pilot freezes a16MiB metadata-proof
 budget in each run result and uses it consistently for capture and readback.
@@ -55,8 +71,8 @@ Replace `RUN_ROOT` with the printed run directory:
 .venv/bin/python -m data_collector verify-run RUN_ROOT --export raw.jsonl
 ```
 
-Verification rereads committed segments, validates metadata source dependencies,
-replays selected books, compares final states and verifies any published snapshots.
+Snapshot-mode verification rereads committed segments, validates metadata source
+dependencies, replays selected books, compares final states and verifies published snapshots.
 Export creates a new JSONL file of the original versioned raw envelopes, including
 lossless payload encoding. It never overwrites an existing export. This preserves
 data for downstream processing; it is not an ML feature table.
@@ -70,3 +86,6 @@ recovery APIs; automatic CLI restart reconciliation is pending. The initial sour
 bundle freezes collector Python only; full vendor-schema release qualification is
 pending. Other feeds/venues, long-running capacity, resource enforcement,
 independent backup/restore and intended-host acceptance remain required by SPEC.
+
+The continuous path has synthetic transport validation. A live one-hour Linux
+capture and successful verification remain the Next 1 acceptance gate.

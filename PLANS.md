@@ -5,7 +5,7 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 ## Current state — 30 October 2026
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
-- V2: `config-check`, `discover`, `capture` and `verify-run` work for Deribit option books; see [docs/v2/RUNNING.md](docs/v2/RUNNING.md). A real discovery run captured 2,653 metadata rows and read them back. `capture` is capped at 120 seconds and 64 frames, so it cannot yet collect data continuously.
+- V2: `config-check`, `discover`, `capture` and `verify-run` work for Deribit option books; see [docs/v2/RUNNING.md](docs/v2/RUNNING.md). A real discovery run captured 2,653 metadata rows and read them back. `capture` now has a raw mode with unbounded default limits, reconnect gaps and hourly owner rollover; bounded snapshot mode remains available. Live one-hour Linux acceptance is still pending.
 
 ## Next
 
@@ -22,6 +22,10 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 ## Notes
 
 One line per deferred idea or choice made while working.
+
+- Next 1 implementation: raw capture reuses the measured clock/archive components, reconnects with gap records and rolls owners hourly; synthetic validation and review recorded in the implementation commit.
+- Next 1 remains open until a real one-hour BTC/ETH capture on Linux with local chrony finishes and `verify-run` passes; this macOS workspace has no chrony or Docker.
+- Raw verification covers immutable segment integrity, receipt ordering and payload counts; derived replay stays in bounded snapshot mode.
 
 ## Research
 
