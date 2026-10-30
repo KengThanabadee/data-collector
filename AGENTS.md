@@ -39,7 +39,9 @@ Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, tempor
 
 History uses descriptive imperative subjects, such as `Add reviewed rotating WAL session writer`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
 
-Implement bounded chunks, obtain a fresh high-reasoning agent review, fix findings, and obtain re-review before dependent work. Record approval and source hashes in `docs/v2/implementation/`. Commit only approved versions; keep unfinished work separate.
+Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Record approval and source hashes in `docs/v2/implementation/`. Commit only approved versions; keep unfinished work separate.
+
+Handle an edge case only when it is realistic: observed in live capture or logs, documented by the venue as normal behavior, or a common operational failure (disconnect, reconnect, process crash/restart, disk full, rate limit, malformed message). Do not implement hypothetical scenarios that require unlikely combinations of failures; note them in one line in `PLANS.md` instead. A review finding that does not meet this bar is not a blocker and must not start a new chunk. Prefer the simplest design that works for the current scope; add no abstractions for venues or feeds that are not yet captured.
 
 ## Data & Configuration Safety
 
