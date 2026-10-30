@@ -25,7 +25,7 @@ Run these with `.venv/bin/python`:
 - `-m unittest tests.test_dc_snapshots -v`: run a focused suite.
 - `-m option_collector status --json`: inspect local collector status.
 
-The v1 `collect-once` command performs a real public-API capture. V2 `python -m data_collector` exposes `config-check`, `discover`, bounded `capture`, and `verify-run`; see `docs/v2/RUNNING.md`. Continuous production and the remaining spec commands are pending.
+The v1 `collect-once` command performs a real public-API capture. V2 `python -m data_collector` exposes `config-check`, `discover`, `capture`, and `verify-run`; see `docs/v2/RUNNING.md`.
 
 ## Coding Style & Naming Conventions
 
@@ -37,12 +37,20 @@ Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, tempor
 
 ## Commit & Pull Request Guidelines
 
-History uses descriptive imperative subjects, such as `Add reviewed rotating WAL session writer`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
+Write imperative subjects that name the behavior change, such as `Reconnect Deribit book sessions after connection loss`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
 
-Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Record approval and source hashes in `docs/v2/implementation/`. Commit only approved versions; keep unfinished work separate.
+Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Git history is the review record: put the review outcome in the commit message and add one line per chunk to `PLANS.md`. Commit only approved versions; keep unfinished work separate.
 
-Handle an edge case only when it is realistic: observed in live capture or logs, documented by the venue as normal behavior, or a common operational failure (disconnect, reconnect, process crash/restart, disk full, rate limit, malformed message). Do not implement hypothetical scenarios that require unlikely combinations of failures; note them in one line in `PLANS.md` instead. A review finding that does not meet this bar is not a blocker and must not start a new chunk. Prefer the simplest design that works for the current scope; add no abstractions for venues or feeds that are not yet captured.
+Handle an edge case only when it is realistic: observed in live capture or logs, documented by the venue as normal behavior, or a common operational failure (disconnect, reconnect, process crash/restart, disk full, rate limit, malformed message). Record hypothetical scenarios that need unlikely combinations of failures as one line in `PLANS.md` and move on. A review finding below this bar is a note, not a blocker or a new chunk. Choose the simplest design that works for the venues and feeds being captured now.
+
+## Scope & Delivery
+
+- Keep the full SPEC.md venue and product scope as the capture target: the archive is meant for future research ideas. Grow it raw-first: add venues and feeds as raw capture with gap records, starting with Deribit options. Build derived layers (snapshots, validity corrections, replay proofs) when a concrete research use needs them.
+- Make limits configurable, with defaults sized for real use. The collector runs continuously, so duration, frame and byte limits default to unbounded or to values measured from live data.
+- Stop and report to the user when three consecutive chunks have not improved what the user can run, with a short summary and the options for the next step.
+- State each limitation once, in the document where it belongs. Write plain sentences with normal spacing, such as `at most 120 seconds` and `16 MiB`.
+- Count tests as passing only when they finish without errors or warnings, including `ResourceWarning`.
 
 ## Data & Configuration Safety
 
-Never commit credentials, `.env` files, private healthcheck URLs, or raw archives. Keep v1/v2 data roots separate. Never overwrite immutable evidence, delete raw data to satisfy quotas, or substitute marks for missing quotes. Local tests do not establish deployment or production readiness.
+Never commit credentials, `.env` files, private healthcheck URLs, or raw archives. Keep v1/v2 data roots separate. Never overwrite immutable evidence, delete raw data to satisfy quotas, or substitute marks for missing quotes. Describe readiness by what was actually run and observed.
