@@ -5,17 +5,18 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 ## Current state — 30 October 2026
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
-- V2: continuous raw Deribit option capture passed a one-hour run on Ubuntu 24.04 in Lima `dc-acceptance`, using chrony and a separate Python 3.12 venv under `caffeinate -i -s`. BTC-13NOV26-74000-P and ETH-13NOV26-2000-P ran for 3,601.3 seconds with one connection: 2,961 WebSocket messages, 60 immutable segments, and 3,543 verified records. `verify-run` passed; duration, frame and byte limits remain configurable and unbounded by default. Bounded snapshot mode remains available; see [running instructions](docs/v2/RUNNING.md).
+- V2: continuous raw Deribit option capture passed a one-hour run on Ubuntu 24.04 in Lima `dc-acceptance`, using chrony and a separate Python 3.12 venv under `caffeinate -i -s`. BTC-13NOV26-74000-P and ETH-13NOV26-2000-P ran for 3,601.3 seconds with one connection: 2,961 WebSocket messages, 60 immutable segments, and 3,543 verified records. `verify-run` passed; duration, frame and byte limits remain configurable and unbounded by default. Continuous clock sampling now runs until stopped without a sample/assessment count cap, retaining only current sample state and bounded clock epoch history. Bounded snapshot mode remains available; see [running instructions](docs/v2/RUNNING.md).
 
 ## Next
 
-1. Run that capture for 24 hours on the intended Linux host with chrony, and record what failed.
+1. Wait for a VPS, then run that capture for 24 hours with chrony and record what failed.
 2. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
 
 ## Notes
 
 One line per deferred idea or choice made while working.
 
+- Continuous clock sampling: remove both sampler and durable-assessment count caps in the raw path; preserve finite library defaults and bounded clock epoch history.
 - Continuous capture: keep healthy sockets open; rebind archive ownership after 64 closed/failed connections, between retries.
 - One-hour acceptance on 30 October 2026: first/last WebSocket receipt 18:18:56–19:18:55 Bangkok time; 1,338 BTC and 946 ETH book messages. Collector RSS sampled every 30 seconds stayed at 118,276–118,292 KiB after startup (16 KiB increase); startup peak was 172,540 KiB.
 - Evidence stays inside `dc-acceptance`: `~/dc-data/runs/a46be2c3649e4d7d910b13e94b1abb59/continuous`; retain its parent discovery run. Config, chrony reports, memory samples and verification are under `~/dc-acceptance-evidence/20261030T111739Z/`; the local non-raw summary is `experiments/results/lima-acceptance-20261030/summary.json`.

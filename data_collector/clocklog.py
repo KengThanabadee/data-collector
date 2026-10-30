@@ -80,11 +80,14 @@ class DurableClock:
     Failed writes poison the owner: recover bytes offline and start a fresh
     process/session rather than guessing whether either append committed.
     A rejected clock sample also requires a fresh owner; no false recovery.
+    max_assessments=None removes the count cap without retaining sample history;
+    the monitor still bounds clock epoch history by policy.
     """
     def __init__(self, journal, *, capture_id, process_session_id, provenance, policy=None,
                  max_assessments=10000):
         text(capture_id,'capture'); text(process_session_id,'process session')
-        integer(max_assessments,'clock assessment bound',1)
+        if max_assessments is not None:
+            integer(max_assessments,'clock assessment bound',1)
         if not isinstance(provenance,Provenance):
             raise ValueError('typed clock provenance required')
         for connection in (SOURCE,CONTROL):
@@ -124,7 +127,7 @@ class DurableClock:
     def sample(self, sample, source, *, ingress_ordinal):
         if self.poisoned:
             raise ValueError('clock owner poisoned; recover and start fresh session')
-        if self._pin.count >= self.max_assessments:
+        if self.max_assessments is not None and self._pin.count >= self.max_assessments:
             raise ValueError('clock log bound; checkpoint/session rotation required')
         validate_clock_source(source,sample,self.journal.identity,self.capture,self.session,self.provenance,self._sample_count)
         candidate = deepcopy(self._monitor)
@@ -149,7 +152,7 @@ class DurableClock:
 
     def check(self, *, utc_ns, monotonic_ns, boot_id, ingress_ordinal):
         """Commit a paired freshness/step check without refreshing NTP evidence."""
-        if self.poisoned or self._pin.count >= self.max_assessments:
+        if self.poisoned or (self.max_assessments is not None and self._pin.count >= self.max_assessments):
             raise ValueError('clock owner poisoned or log bound; start fresh session')
         observation = dict(utc_ns=utc_ns,monotonic_ns=monotonic_ns,boot_id=boot_id,ingress_ordinal=ingress_ordinal)
         candidate = deepcopy(self._monitor)

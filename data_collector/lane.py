@@ -180,7 +180,7 @@ class ArchiveLane:
     A process supervisor must enforce the hard stop for a permanently hung disk.
     """
     def __init__(self, writer, queue, *, emergency_writer, observe=None, max_connections=128,
-                 clock_tolerance_ns=100_000_000, clock_policy=None,
+                 clock_tolerance_ns=100_000_000, clock_policy=None, clock_max_assessments=10000,
                  cutoff_scope=None, cutoff_ledger_id=None,snapshot_limits=ReplayLimits(),recovery=None,
                  max_recovery_ns=300_000_000_000):
         if not isinstance(queue, ByteQueue):
@@ -245,7 +245,8 @@ class ArchiveLane:
         self.max_connections = max_connections
         self.ingress = IngressWriter(writer, identity['capture_id'], identity['process_session_id'], max_streams=max_connections)
         self._clock = None if clock_policy is None else DurableClock(writer,capture_id=identity['capture_id'],
-            process_session_id=identity['process_session_id'],provenance=self.provenance,policy=clock_policy)
+            process_session_id=identity['process_session_id'],provenance=self.provenance,policy=clock_policy,
+            max_assessments=clock_max_assessments)
         self._clock_submitted = 0
         self._clock_checks_submitted = 0
         self._cutoff_scope,self._cutoff_ledger_id = cutoff_scope,cutoff_ledger_id
@@ -424,7 +425,8 @@ class ArchiveLane:
             raise LaneStopped('venue archive ingress stopped')
         if self._clock is None:
             raise ValueError('explicit clock policy required to enable measured clock writes')
-        if self._clock_submitted+self._clock_checks_submitted+self._cutoff_commands_submitted >= self._clock.max_assessments:
+        if (self._clock.max_assessments is not None and
+                self._clock_submitted+self._clock_checks_submitted+self._cutoff_commands_submitted >= self._clock.max_assessments):
             self._failure('clock_log_bound',global_scope=True)
             raise QueueCapacity('clock operation bound; rotate process session')
 

@@ -88,9 +88,10 @@ bundle freezes collector Python only; full vendor-schema release qualification i
 pending. Other feeds/venues, long-running capacity, resource enforcement,
 independent backup/restore and intended-host acceptance remain required by SPEC.
 
-Existing archive safety bounds still fail closed: clock sampling ends at 10,000
-assessments per owner (about 83 hours at the current cadence), and writer sessions
-allow 10,000 segments. Configured unbounded limits do not remove these guards.
+Continuous clock sampling and its durable log have no sample/assessment cap;
+they run until stopped and retain the latest sample/acknowledgement and counters.
+Clock epoch history remains bounded by the existing clock policy. Writer sessions
+still allow 10,000 segments; configured unbounded limits do not remove that guard.
 
 Observed acceptance runs and their evidence locations are recorded in
 [PLANS.md](../../PLANS.md).

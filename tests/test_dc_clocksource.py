@@ -1,14 +1,22 @@
 import asyncio
 import base64
+import gc
 from decimal import Decimal
 import os
 import sys
 import threading
+import tracemalloc
 import unittest
 from unittest.mock import patch
 
 from data_collector.clocksource import ChronyClockSampler, read_tracking, tracking_error_ns
-from data_collector.clocklog import SOURCE, replay_clock
+from data_collector.clocklog import DEFAULT_POLICY, SOURCE, replay_clock
+from data_collector.contracts import Provenance
+from data_collector.journal import Journal, JournalLimits
+from data_collector.lane import ArchiveLane
+from data_collector.queues import ByteQueue
+from data_collector.segments import SegmentLimits, iter_segment_records
+from data_collector.writer import SessionWriter
 from data_collector.contracts import strict_json
 from tests import test_dc_lane as base
 
@@ -55,6 +63,63 @@ class ClockSourceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(base64.b64decode(evidence['stdout_base64']),tracking(source.receipt.receive_utc_ns))
         self.assertEqual(replay.assessment.anchor.healthy_samples,2)
         with self.assertRaisesRegex(ValueError,'once'):await sampler.run()
+
+    async def test_unbounded_sampling_exceeds_old_cap_with_bounded_memory(self):
+        # Exercise sampler, lane admission and durable clock log past all three
+        # former 10,000-operation caps, with a stable clock and byte rotation.
+        root=self.root/'long-clock'
+        provenance=Provenance('a'*64,'b'*64,'c'*64)
+        writer=SessionWriter(root/'wal',root/'archive',venue='deribit',environment='production',
+            capture_id='capture',process_session_id='process',provenance=provenance,
+            started_utc_ns=self.utc,now_ns=lambda:self.mono[0],rotate_ns=10**18,
+            limits=JournalLimits(max_record_bytes=131072,target_bytes=16*1024*1024),
+            segment_limits=SegmentLimits(max_record_bytes=131072,
+                max_uncompressed_bytes=32*1024*1024,max_compressed_bytes=32*1024*1024))
+        self.addCleanup(writer.abort)
+        emergency=Journal(root/'emergency.wal',venue='deribit',environment='production',create=True)
+        self.addCleanup(emergency.close)
+        lane=ArchiveLane(writer,ByteQueue(),emergency_writer=emergency,observe=self.observe,
+            clock_policy=DEFAULT_POLICY,clock_max_assessments=None,max_connections=4)
+        raw=asyncio.create_task(lane.run())
+        baseline=None
+        owned_trace=not tracemalloc.is_tracing()
+        if owned_trace:tracemalloc.start()
+        async def wait(deadline):
+            nonlocal baseline
+            self.mono[0]=deadline
+            if sampler.samples==100:
+                gc.collect()
+                baseline=tracemalloc.get_traced_memory()[0]
+            if sampler.samples==10002:
+                self.assertFalse(task.done())
+                # Compare live retained allocations, excluding Python free lists
+                # and garbage awaiting a collection, rather than allocator RSS.
+                gc.collect()
+                retained=tracemalloc.get_traced_memory()[0]-baseline
+                self.assertLess(retained,512*1024)
+                sampler.stop()
+        sampler=ChronyClockSampler(lane,max_samples=None,read=self.read,wait_until=wait)
+        task=asyncio.create_task(sampler.run())
+        try:
+            result=await task
+            self.assertEqual(result['samples'],10002)
+            self.assertEqual(lane._clock.pin.count,10002)
+            self.assertEqual(lane._clock.prior_anchors,())
+            self.assertTrue(sampler.last_ack.assessment.aligned)
+            self.assertLessEqual(len(writer.state.positions),4)
+        finally:
+            sampler.stop()
+            await asyncio.gather(task,return_exceptions=True)
+            if owned_trace:tracemalloc.stop()
+            lane.stop()
+            await raw
+            emergency.close();writer.abort()
+        def records():
+            for path in lane.segments:yield from iter_segment_records(path)
+        replay=replay_clock(records(),venue='deribit',environment='production',capture_id='capture',
+            process_session_id='process',provenance=provenance,policy=DEFAULT_POLICY,
+            expected_pin=lane._clock.pin,max_assessments=10002)
+        self.assertEqual(replay.assessment,sampler.last_ack.assessment)
 
     async def test_unavailable_measurement_is_durable_unaligned_then_recovers(self):
         calls=[]

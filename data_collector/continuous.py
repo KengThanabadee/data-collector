@@ -73,9 +73,10 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                     capture_id='capture-'+root.parent.name, process_session_id='process-'+identity,
                     provenance=provenance, started_utc_ns=observer()[0])
                 emergency = Journal(root/(identity+'.emergency.wal'), venue='deribit', environment=config.environment, create=True)
-                lane = ArchiveLane(writer, ByteQueue(), emergency_writer=emergency, observe=observer, max_connections=128, clock_policy=DEFAULT_POLICY)
+                lane = ArchiveLane(writer, ByteQueue(), emergency_writer=emergency, observe=observer, max_connections=128, clock_policy=DEFAULT_POLICY,
+                    clock_max_assessments=None)
                 raw = asyncio.create_task(lane.run())
-                sampler = ChronyClockSampler(lane, executable=config.chronyc, read=clock_read, wait_until=clock_wait, max_samples=10000)
+                sampler = ChronyClockSampler(lane, executable=config.chronyc, read=clock_read, wait_until=clock_wait, max_samples=None)
                 clock = None
                 await sampler.prime()
                 clock = asyncio.create_task(sampler.run())

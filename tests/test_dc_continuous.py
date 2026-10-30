@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from data_collector.app import verify_run
 from data_collector.continuous import capture
+from data_collector.clocksource import ChronyClockSampler
 from tests import test_dc_app as fixtures
 
 
@@ -22,8 +23,11 @@ class ContinuousTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.Event().wait()
     async def test_raw_capture_limits_and_independent_integrity(self):
         self.config = replace(self.config, capture_mode='raw', duration_seconds=0, max_frames=4)
-        result = await asyncio.wait_for(capture(self.config, session_factory=lambda:self.session,
-            observer=self.observe, clock_read=self.clock_read, clock_wait=self.clock_wait), 15)
+        with patch('data_collector.continuous.ChronyClockSampler', wraps=ChronyClockSampler) as sampler:
+            result = await asyncio.wait_for(capture(self.config, session_factory=lambda:self.session,
+                observer=self.observe, clock_read=self.clock_read, clock_wait=self.clock_wait), 15)
+        self.assertIsNone(sampler.call_args.kwargs['max_samples'])
+        self.assertIsNone(sampler.call_args.args[0]._clock.max_assessments)
         self.assertEqual(result['status'], 'raw_capture_complete', result)
         self.assertEqual(result['frames'], 4)
         verified = verify_run(result['root'])

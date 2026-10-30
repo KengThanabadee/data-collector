@@ -1,4 +1,4 @@
-"""Read-only local chrony evidence and bounded recurring clock admission.
+"""Read-only local chrony evidence and recurring clock admission.
 
 No NTP implementation, daemon configuration or clock adjustment. Trust in the
 installed daemon and its external UTC sources is an intended-host release gate.
@@ -96,10 +96,12 @@ async def read_tracking(executable,timeout_seconds,max_output_bytes):
 
 
 class ChronyClockSampler:
-    """One bounded run, one clock-source owner; records failure as unaligned.
+    """One run, one clock-source owner; records failure as unaligned.
 
     Sample timestamps are taken immediately before FIFO admission, after the
     asynchronous command. Command age is included in the uncertainty interval.
+    max_samples=None samples until stopped; finite callers keep their bounds.
+    Only the latest acknowledgement and counters are retained.
     Caller must stop/drain this task before stopping its raw lane.
     """
     def __init__(self,lane,*,max_samples=100,interval_ns=None,timeout_seconds=5,
@@ -107,12 +109,14 @@ class ChronyClockSampler:
                  read=None,wait_until=None):
         if not isinstance(lane,ArchiveLane) or lane._clock is None or not lane.health()['accepting']:
             raise ValueError('accepting measured-clock lane required')
-        for name,value in (('samples',max_samples),('timeout',timeout_seconds),('reference age',max_reference_age_ns)):
+        if max_samples is not None:
+            integer(max_samples,'samples',1)
+        for name,value in (('timeout',timeout_seconds),('reference age',max_reference_age_ns)):
             integer(value,name,1)
         policy=lane._clock.policy
         interval_ns=policy['sample_interval_ns']//2 if interval_ns is None else interval_ns
         integer(interval_ns,'sampling interval',1)
-        if (max_samples>10000 or timeout_seconds>30 or interval_ns>policy['max_sample_age_ns']//2 or
+        if ((max_samples is not None and max_samples>10000) or timeout_seconds>30 or interval_ns>policy['max_sample_age_ns']//2 or
                 max_reference_age_ns>3_600_000_000_000 or policy['max_offset_ns']>=MAX_INTEGER or
                 not isinstance(executable,str) or not executable or len(executable)>4096 or
                 (read is not None and not callable(read)) or (wait_until is not None and not callable(wait_until))):
@@ -184,10 +188,10 @@ class ChronyClockSampler:
         if self._started:raise ValueError('clock sampler can run once')
         self._started=True
         try:
-            while not self._stop.is_set() and self.samples<self.max_samples:
+            while not self._stop.is_set() and (self.max_samples is None or self.samples<self.max_samples):
                 mono=await self._sample_once()
                 if self._cancelled:raise asyncio.CancelledError
-                if self.samples>=self.max_samples:break
+                if self.max_samples is not None and self.samples>=self.max_samples:break
                 timer=asyncio.create_task(self.wait_until(mono+self.interval_ns))
                 stopped=asyncio.create_task(self._stop.wait())
                 try:
