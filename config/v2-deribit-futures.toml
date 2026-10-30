@@ -1,0 +1,16 @@
+[data_collector]
+schema = "dc.config/2"
+environment = "testnet"
+data_root = "../data/v2/deribit-futures-testnet"
+capture_mode = "raw"
+all_futures = true
+symbols = []
+raw_processes = 1
+raw_segment_bytes = 8388608
+subscription_batch_size = 500
+bootstrap_timeout_seconds = 180
+timeout_seconds = 60
+warmup_timeout_seconds = 180
+duration_seconds = 0
+max_frames = 0
+max_bytes = 0

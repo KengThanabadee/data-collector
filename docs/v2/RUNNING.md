@@ -36,10 +36,21 @@ with `symbols = []` to freeze every listed BTC/ETH option in discovery, then run
 For the full options universe, `config/v2-deribit-options.toml` provides the
 all-options settings; select the environment and a writable data root explicitly.
 
+For perpetuals and dated futures with their index dependencies, use
+`config/v2-deribit-futures.toml`. `all_futures = true` selects every native future
+in the frozen BTC/ETH discovery, including coin and linear currency variants,
+and each distinct metadata `price_index`. It is exclusive with `all_options`
+and explicit symbols. One socket captures book/ticker/trades at 100ms plus
+`deribit_price_index.<index_name>` updates at their native cadence. ACKs,
+native book snapshots, initial tickers and initial index values are required
+before the duration starts. Shared future/index raw envelopes use product
+`multiplex`; native topic/data and the pinned discovery retain their identities.
+Verification checks the complete future/index plan and its initialization.
+
 Capture defaults to raw mode (`capture_mode = "raw"`) on explicit
 `book.<symbol>.100ms` channels. With `all_options = true`, raw capture also
 subscribes `ticker.<symbol>.100ms` and `trades.<symbol>.100ms` for every listed
-option, including returned inactive states. The universe is frozen at startup. Full-universe mode defaults to
+option, including returned inactive states. The universe is frozen at startup. All-options mode defaults to
 `raw_processes = 4` (at most 8), partitioning that one discovery into disjoint
 worker symbol sets. Workers reuse the verified frozen discovery without extra
 REST calls, and share one subscription-per-second reservation across processes.
@@ -76,6 +87,9 @@ native sequence continuity between messages. Archive or malformed-message errors
 fail the run and retain the durable prefix. Connections remain open until a real transport failure or a requested stop.
 After 64 failed/closed connections, a fresh archive owner bounds connection state
 before retrying; a healthy socket is never closed for owner rollover.
+Reconnect failures use exponential backoff up to 60 seconds with jitter; a
+fully initialized connection resets it. Stop requests remain responsive during
+the wait.
 The owner uses the existing chrony sampler and waits for measured alignment. Disk free space
 is checked during capture against the existing 5 GiB and 10% stop thresholds.
 

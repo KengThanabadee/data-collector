@@ -17,12 +17,20 @@ Observed linear projections divide all captured bytes, including initialization 
 | Compressed immutable archive and manifests | 2,755,437,912 | 61.59 |
 | All retained worker data, including WAL and archive | 24,208,069,497 | 541.09 |
 
+- V2 futures/index: all 46 discovered BTC/ETH native futures (4 perpetuals and 42 dated contracts) and their 4 metadata index dependencies (142 channels) passed a 3,600.635-second post-initialization run in dc-acceptance under `caffeinate -i -s`; `verify-run` passed 823,276 records, including 822,679 WebSocket messages and 492,094,910 native payload bytes. All book/ticker/trade 100ms channels and native index topics were initialized. Three connections initialized successfully after two code 4000 heartbeat closes; recorded gap windows were 2.604 and 2.560 seconds. RPC rejections and throttles were zero.
+- Futures/index 1-second resource samples: peak summed RSS 150,504 KiB (146.98 MiB), peak CPU 101.15% (100% is one vCPU); RSS was 113,004 KiB after initialization and 113,024 KiB before shutdown. The same observed-rate basis applies; retained capture data excludes the parent discovery.
+
+| Futures/index byte basis | Bytes per hour | Projected GiB per day |
+|---|---:|---:|
+| Native WebSocket payload | 492,008,069 | 11.00 |
+| Compressed immutable archive and manifests | 220,160,167 | 4.92 |
+| All retained capture data, including WAL and archive | 1,771,514,629 | 39.60 |
+
 ## Next
 
-1. Deribit perpetuals, dated futures and BTC/ETH index, per FEEDS.md; own brief, review, commit and one-hour measured Lima run.
-2. Then Binance BTC/ETH spot and perpetual/dated futures feeds per FEEDS.md, raw with gaps; Binance options are not enabled (low liquidity). Own brief, review, commit and one-hour measured Lima run.
-3. Then Bybit BTC/ETH feeds per FEEDS.md, raw with gaps; own brief, review, commit and one-hour measured Lima run.
-4. Wait for a VPS before the 24-hour run.
+1. Binance BTC/ETH spot and perpetual/dated futures feeds per FEEDS.md, raw with gaps; Binance options are not enabled (low liquidity). Own brief, review, commit and one-hour measured Lima run.
+2. Then Bybit BTC/ETH feeds per FEEDS.md, raw with gaps; own brief, review, commit and one-hour measured Lima run.
+3. Wait for a VPS before the 24-hour run.
 
 ## Notes
 
@@ -30,11 +38,15 @@ One line per deferred idea or choice made while working.
 
 - Lima dc-acceptance resources: 6 vCPU, 6 GiB RAM and a 100 GiB sparse disk (root filesystem 96 GiB) for measured all-options raw throughput and storage; only this VM is used.
 - Lima dc-acceptance setup: chrony is the sole clock setter; remove CAP_SYS_TIME from lima-guestagent via its chrony-clock-owner.conf systemd drop-in after observed host-agent steps repeatedly prevented alignment; collector clock policy remains unchanged.
+- Lima chrony reference freshness: cap source maxpoll at 7 (128 seconds), persisted in chrony.conf with its prior version retained, after the adaptive 1,024-second poll interval exceeded the collector's 300-second reference-age limit; no policy relaxation or clock step.
 - Full-universe scaling: one-process CPU saturation caused documented Deribit heartbeat/too-slow closes; use four disjoint CLI workers from one verified frozen discovery with a shared one-request-per-second subscription budget, supervisor-death guards and exhaustive aggregate verification.
 - Full-universe probe: per-message fsync and repeated whole-plan set comparisons were throughput bottlenecks; bounded FIFO group commit preserves receipt order, clock barriers and fsync-before-ack, and plan equality is skipped after initialization.
 - Full-universe rotation: the first hour attempt stopped on the 5-second durability deadline during large-segment sealing; raw segments now target a configurable 8 MiB rather than 64 MiB, with the deadline unchanged.
 - All-options plan freezes every listed option in the startup discovery (including returned inactive states); uses book/ticker/trades 100ms, batches at most 500 channels and at most one subscription request per second on one healthy socket; quiet trades require ACK, not a fabricated initial trade.
 - All-options hour evidence: `~/dc-all-options-data/runs/467b3e8616744e1cb69dff8e2f6855b0/all-options` and its parent discovery in dc-acceptance; config, 1-second resources, chrony reports and summary under `~/dc-all-options-evidence/20261030T172150Z/`.
+- Futures/index selection: freeze every discovered native future, including perpetual and coin/linear variants, plus each metadata price_index dependency; shared raw envelopes use multiplex product and retain exact native topics/data rather than labelling index messages as futures.
+- Futures/index hour evidence: `~/dc-futures-data/runs/4c65d28370dd43038df8dd800801b234/continuous` and its parent discovery in dc-acceptance; config, chrony reports, resources, summary and successful verification under `~/dc-futures-evidence/20261030T185115Z/`.
+- Reconnect pacing follows FEEDS.md after the observed DNS outage: exponential 1/2/4…60-second backoff with jitter, reset after full initialization; stop and supervisor-death checks continue during the wait.
 
 - Continuous clock sampling: remove both sampler and durable-assessment count caps in the raw path; preserve finite library defaults and bounded clock epoch history.
 - Continuous capture: keep healthy sockets open; rebind archive ownership after 64 closed/failed connections, between retries.

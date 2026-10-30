@@ -30,6 +30,7 @@ class DiscoveryConfig:
     max_bytes: int = 0
     capture_mode: str = "raw"
     all_options: bool = False
+    all_futures: bool = False
     raw_processes: int = 4
     raw_segment_bytes: int = 8 * 1024 * 1024
     supervisor_pid: int | None = None
@@ -70,12 +71,15 @@ class DiscoveryConfig:
             value=getattr(self,name)
             if value is not None and (not isinstance(value,Path) or not value.is_absolute() or self.capture_mode!='raw'):
                 raise ValueError('absolute raw capture reference path required')
-        if self.all_options and self.source_discovery_root is not None:
-            raise ValueError('all-options supervisor requires fresh discovery')
+        if (self.all_options or self.all_futures) and self.source_discovery_root is not None:
+            raise ValueError('whole-family capture requires fresh discovery')
         if self.all_options and self.raw_processes>1 and (self.max_frames or self.max_bytes):
             raise ValueError('positive frame/byte budgets require raw_processes=1')
         if type(self.all_options) is not bool or (self.all_options and (self.symbols or self.capture_mode!='raw')):
             raise ValueError('all_options requires raw mode and no explicit symbols')
+        if type(self.all_futures) is not bool or (self.all_futures and (
+                self.symbols or self.all_options or self.capture_mode!='raw')):
+            raise ValueError('all_futures requires exclusive raw selection')
         for name,maximum in (('subscription_batch_size',500),('bootstrap_timeout_seconds',600)):
             integer(getattr(self,name),name,1)
             if getattr(self,name)>maximum:raise ValueError('subscription bound exceeded: '+name)

@@ -102,6 +102,14 @@ class DiscoveryConfigTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError):
                 self.read(self.body+f'raw_segment_bytes={value}\n')
 
+    def test_all_futures_is_an_exclusive_raw_family_selection(self):
+        config=self.read(self.body+'all_futures=true\n')
+        self.assertTrue(config.all_futures)
+        for extra in ('all_futures=1\n','all_futures=true\nall_options=true\n',
+                'all_futures=true\nsymbols=["BTC-PERPETUAL"]\n',
+                'all_futures=true\ncapture_mode="snapshots"\nduration_seconds=60\nmax_frames=4\n'):
+            with self.subTest(extra=extra),self.assertRaises(ValueError):self.read(self.body+extra)
+
     def test_resolved_path_alias_and_absolute_root(self):
         archive = self.root / "existing"
         archive.mkdir()

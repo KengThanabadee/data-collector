@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import random
 import shutil
 from pathlib import Path
 import time
@@ -35,6 +36,20 @@ def _routing_json(body):
     return value
 
 
+def _future_plan(universe):
+    rows=[v for v in universe['selected'] if v['instrument']['native_product']=='future']
+    symbols=tuple(sorted(v['instrument']['native_symbol'] for v in rows))
+    indices=set()
+    for row in rows:
+        name=row['attributes']['native'].get('price_index')
+        if not isinstance(name,str) or not name or len(name)>128 or any(
+                not (c.isascii() and (c.isalnum() or c in '_-')) for c in name):
+            raise ValueError('explicit native future index dependency required')
+        indices.add(name)
+    if not symbols:raise ValueError('no discovered BTC/ETH futures')
+    return symbols,tuple(sorted(indices))
+
+
 async def capture(config, *, session_factory, observer, clock_read=None, clock_wait=None):
     from .app import run, _bind_root, _freeze_source, _drain
     # Preserve discovery validation and measured clock evidence through the
@@ -57,22 +72,28 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
     metadata_root=Path(discovered['root'])
     if discovered['status'] == 'failed':
         return discovered
-    if config.all_options:
-        universe=strict_json((Path(discovered['root'])/'universe.json').read_bytes())
+    universe=strict_json((metadata_root/'universe.json').read_bytes())
+    indices=()
+    if config.all_futures:
+        symbols,indices=_future_plan(universe)
+    elif config.all_options:
         symbols=tuple(sorted(v['instrument']['native_symbol'] for v in universe['selected']
             if v['instrument']['native_product']=='option'))
     else:
         symbols=config.symbols
-    option_universe=strict_json((metadata_root/'universe.json').read_bytes())
-    listed={v['instrument']['native_symbol'] for v in option_universe['selected'] if v['instrument']['native_product']=='option'}
+    listed={v['instrument']['native_symbol'] for v in universe['selected']
+        if v['instrument']['native_product']==('future' if config.all_futures else 'option')}
     if not symbols or not set(symbols)<=listed:
-        raise ValueError('select discovered BTC/ETH option symbols')
-    feeds=('book','ticker','trades') if config.all_options else config.raw_feeds
-    batching=config.all_options or len(symbols)>2 or feeds!=('book',)
-    channels=tuple(f'{feed}.{symbol}.100ms' for symbol in symbols for feed in feeds)
+        raise ValueError('select discovered BTC/ETH symbols in the chosen family')
+    whole_family=config.all_options or config.all_futures
+    feeds=('book','ticker','trades') if whole_family else config.raw_feeds
+    batching=whole_family or len(symbols)>2 or feeds!=('book',)
+    channels=tuple(f'{feed}.{symbol}.100ms' for symbol in symbols for feed in feeds)+tuple(
+        'deribit_price_index.'+name for name in indices)
     channel_set=set(channels)
     books={c for c in channels if c.startswith('book.')}
     tickers={c for c in channels if c.startswith('ticker.')}
+    index_channels={'deribit_price_index.'+name for name in indices}
     batches=[channels[i:i+config.subscription_batch_size] for i in range(0,len(channels),config.subscription_batch_size)]
     owner = _bind_root(config)
     root = config.data_root/'continuous' if config.source_discovery_root is not None else metadata_root/'continuous'
@@ -85,7 +106,8 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
         os.close(owner)
         raise
     result = dict(schema='dc.raw-capture-result/1', status='failed', segments=[],
-        symbols=list(symbols), all_options=config.all_options, metadata_ref=os.path.relpath(metadata_root,root), metadata_sha256=provenance.universe_sha256, channels=list(channels), frames=0, bytes=0, connections=0,
+        symbols=list(symbols), all_options=config.all_options, all_futures=config.all_futures,
+        index_names=list(indices), metadata_ref=os.path.relpath(metadata_root,root), metadata_sha256=provenance.universe_sha256, channels=list(channels), frames=0, bytes=0, connections=0,
         rejected_messages=0, throttled_messages=0, subscribed_channels=0,
         subscribed_channels_peak=0, fully_initialized_connections=0, socket_events=0,
         limitations=['Raw capture with measured clock evidence; no derived snapshot or continuity across gaps'])
@@ -112,7 +134,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                 nonlocal seq
                 utc, mono, _ = observer()
                 record = RawRecord(Receipt('capture-'+metadata_root.name, 'process-'+identity, connection,
-                    seq, utc, mono, PENDING_CLOCK_EPOCH), 'deribit', config.environment, 'option',
+                    seq, utc, mono, PENDING_CLOCK_EPOCH), 'deribit', config.environment, 'multiplex' if config.all_futures else 'option',
                     channel, kind, body, provenance, None, canonical({}))
                 try:future=lane.submit_received(record)
                 except Exception as exc:raise RuntimeError('archive admission failed') from exc
@@ -150,6 +172,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                     start = time.monotonic()
                 async with session_factory() as session:
                     attempts = 0
+                    retry_seconds = 1
                     # Rebind bounded stream state only after real connection loss;
                     # a healthy socket has no timer or attempt rollover.
                     while not stopped and attempts < 64:
@@ -195,6 +218,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                 gap_closed = False
                                 snapshots = set()
                                 ticker_seen=set()
+                                index_seen=set()
                                 last_disk_check=0
                                 connected_at = last_received = time.monotonic()
                                 while not stopped:
@@ -285,15 +309,20 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                                 if not isinstance(data,dict) or data.get('instrument_name')!=channel[7:-6]:
                                                     raise ValueError('ticker identity differs')
                                                 ticker_seen.add(channel)
-                                        if not gap_closed and acked and snapshots==books and ticker_seen==tickers:
+                                            elif channel in index_channels:
+                                                if not isinstance(data,dict) or data.get('index_name')!=channel[len('deribit_price_index.'):]:
+                                                    raise ValueError('index identity differs')
+                                                index_seen.add(channel)
+                                        if not gap_closed and acked and snapshots==books and ticker_seen==tickers and index_seen==index_channels:
                                             await save(canonical(dict(event='gap_end', reason='native_snapshots_acquired')), 'capture_gap', 'control')
                                             gap_closed = True
+                                            retry_seconds = 1
                                             result['fully_initialized_connections']+=1
                                             acquired.update(books)
                                             if 'ready_utc_ns' not in result:
                                                 result['ready_utc_ns']=observer()[0]
                                                 _publish_bytes(root/'ready.json',canonical(dict(schema='dc.raw-ready/1',utc_ns=result['ready_utc_ns'],channels=len(channels))))
-                                                if config.all_options:start=time.monotonic()
+                                                if whole_family:start=time.monotonic()
                                         if value.get('method')=='heartbeat' and params.get('type')=='test_request':
                                             request = canonical(dict(jsonrpc='2.0',id=3,method='public/test',params={}))
                                             await save(request, 'public/test', 'control')
@@ -316,7 +345,15 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                 raise
                             await save(canonical(dict(event='gap_start', reason=type(exc).__name__)), 'capture_gap', 'control')
                         if not stopped:
-                            await asyncio.sleep(1)
+                            # Failed DNS/connect bursts observed in the hour run
+                            # share the venue's bounded reconnect/backoff policy.
+                            retry_until=time.monotonic()+random.uniform(.8,1)*retry_seconds
+                            while not stopped and time.monotonic()<retry_until:
+                                if not supervisor_alive():stopped=True;break
+                                if config.duration_seconds and time.monotonic()-start>=config.duration_seconds:
+                                    stopped=True;break
+                                await asyncio.sleep(min(.25,max(0,retry_until-time.monotonic())))
+                            retry_seconds=min(60,retry_seconds*2)
             finally:
                 if sampler is not None:
                     sampler.stop()
@@ -368,12 +405,20 @@ def verify(root, report, *, export=None):
         expected={f'{feed}.{symbol}.100ms' for symbol in expected_symbols for feed in ('book','ticker','trades')}
         if set(report['symbols'])!=expected_symbols or planned!=expected:
             raise ValueError('all-option plan differs from archived discovery')
+    if report.get('all_futures'):
+        universe=strict_json((metadata_root/'universe.json').read_bytes())
+        symbols,indices=_future_plan(universe)
+        expected={f'{feed}.{symbol}.100ms' for symbol in symbols for feed in ('book','ticker','trades')}
+        expected.update('deribit_price_index.'+name for name in indices)
+        if set(report['symbols'])!=set(symbols) or set(report.get('index_names',()))!=set(indices) or planned!=expected:
+            raise ValueError('all-future/index plan differs from archived discovery')
     check_coverage=bool(planned) and report['status']=='raw_capture_complete'
     expected_books={c for c in planned if c.startswith('book.')}
     expected_tickers={c for c in planned if c.startswith('ticker.')}
+    expected_indices={c for c in planned if c.startswith('deribit_price_index.')}
     active=None
     pending={}
-    acked=set();book_seen=set();ticker_seen=set()
+    acked=set();book_seen=set();ticker_seen=set();index_seen=set()
     coverage_complete=False
     count = frames = size = 0
     positions = {}
@@ -396,13 +441,15 @@ def verify(root, report, *, export=None):
                 positions[key] = record.receipt.receive_seq
                 if check_coverage and record.channel=='public/subscribe':
                     if key!=active:
-                        active=key;pending={};acked=set();book_seen=set();ticker_seen=set()
+                        active=key;pending={};acked=set();book_seen=set();ticker_seen=set();index_seen=set()
                     request=strict_json(record.body)
                     pending[request['id']]=set(request['params']['channels'])
                 count += 1
                 if output is not None:
                     output.write(record.to_bytes()+b'\n')
                 if record.kind=='ws_message':
+                    if report.get('all_futures') and record.native_product!='multiplex':
+                        raise ValueError('mixed future/index socket product differs')
                     frames += 1
                     size += len(record.body)
                     if check_coverage and not coverage_complete and key==active:
@@ -418,7 +465,9 @@ def verify(root, report, *, export=None):
                                 book_seen.add(channel)
                             if channel in expected_tickers and isinstance(data,dict) and data.get('instrument_name')==channel[7:-6]:
                                 ticker_seen.add(channel)
-                        if acked==planned and book_seen==expected_books and ticker_seen==expected_tickers:
+                            if channel in expected_indices and isinstance(data,dict) and data.get('index_name')==channel[len('deribit_price_index.'):]:
+                                index_seen.add(channel)
+                        if acked==planned and book_seen==expected_books and ticker_seen==expected_tickers and index_seen==expected_indices:
                             coverage_complete=True
         if planned and report['status']=='raw_capture_complete' and not coverage_complete:
             raise ValueError('selected feed acknowledgements/initial data incomplete')
