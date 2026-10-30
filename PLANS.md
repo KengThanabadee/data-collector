@@ -9,7 +9,13 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 
 ## Next
 
-1. Continuous Deribit option capture. Make duration, frame and byte limits configurable and unbounded by default, reconnect after connection loss, and keep rotating segments. Done when a one-hour capture of selected BTC/ETH option books ends cleanly and `verify-run` passes on it.
+1. Continuous Deribit option capture.
+   ```
+   Goal: Collect Deribit option books continuously.
+   Done when: `capture` runs for one hour on selected BTC/ETH options with duration, frame and byte limits configurable and unbounded by default, reconnects after connection loss, stops cleanly on Ctrl-C, and `verify-run` passes on the result.
+   Out of scope: other venues and feeds, new snapshot or correction features, clock handling beyond what capture already does.
+   When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
+   ```
 2. Run that capture for 24 hours on the intended Linux host with chrony, and record what failed.
 3. Add the remaining SPEC.md venues and feeds as raw capture with gap records, one feed at a time.
 

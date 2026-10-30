@@ -8,7 +8,7 @@
 - `config/` and `deploy/`: local/VPS configuration and Linux service templates.
 - `experiments/`: bounded probes and research scripts. Generated captures belong in ignored `data/` or `experiments/results/`.
 - `SPEC.md` and `docs/v2/`: authoritative v2 contracts and acceptance gates. Preserve `docs/SPEC_V1.md` and v1 compatibility.
-- `PLANS.md`: current status, next steps and one-line notes. `docs/v2/history/` holds the archived chunk log from October 2026 for looking up past decisions.
+- `PLANS.md`: current status, next steps and one-line notes. `docs/agents/`: task brief format and review prompt. `docs/v2/history/` holds the archived chunk log from October 2026 for looking up past decisions.
 
 ## Build, Test, and Development Commands
 
@@ -40,7 +40,7 @@ Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, tempor
 
 Write imperative subjects that name the behavior change, such as `Reconnect Deribit book sessions after connection loss`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
 
-Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Git history is the review record: put the review outcome in the commit message and add one line per chunk to `PLANS.md`. Commit only approved versions; keep unfinished work separate.
+Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk using the prompt in `docs/agents/REVIEW.md`, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Git history is the review record: put the review outcome in the commit message and add one line per chunk to `PLANS.md`. Commit only approved versions; keep unfinished work separate.
 
 Handle an edge case only when it is realistic: observed in live capture or logs, documented by the venue as normal behavior, or a common operational failure (disconnect, reconnect, process crash/restart, disk full, rate limit, malformed message). Record hypothetical scenarios that need unlikely combinations of failures as one line in `PLANS.md` and move on. A review finding below this bar is a note, not a blocker or a new chunk. Choose the simplest design that works for the venues and feeds being captured now.
 
@@ -48,6 +48,7 @@ Handle an edge case only when it is realistic: observed in live capture or logs,
 
 - Keep the full SPEC.md venue and product scope as the capture target: the archive is meant for future research ideas. Grow it raw-first: add venues and feeds as raw capture with gap records, starting with Deribit options. Build derived layers (snapshots, validity corrections, replay proofs) when a concrete research use needs them.
 - Make limits configurable, with defaults sized for real use. The collector runs continuously, so duration, frame and byte limits default to unbounded or to values measured from live data.
+- Start every goal from a brief in the format of `docs/agents/BRIEF.md`.
 - Work autonomously toward the goal; the user is usually away. When a choice is unclear, pick the simplest option consistent with SPEC.md, record it as one line in `PLANS.md`, and continue.
 - Measure progress by what the user can run. When three consecutive chunks have not improved it, re-plan: take the shortest path to the goal's runnable result and move the remaining ideas to one-line notes in `PLANS.md`.
 - State each limitation once, in the document where it belongs. Write plain sentences with normal spacing, such as `at most 120 seconds` and `16 MiB`.
