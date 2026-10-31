@@ -33,11 +33,11 @@ Observed linear projections divide all captured bytes, including initialization 
 
 ## Next
 
-Deribit full-universe throughput follow-up:
+Deribit full-universe worker capacity:
 ```
-Goal: Reduce measured capture overhead while preserving every current inverse option, raw bytes, receipt timing and durability checks.
-Done when: The profiled identity-text check preserves its accepted/rejected strings with lower CPU cost, then a full-universe Linux development capture and verify-run measure remaining lag and actual connection losses; use workers if the measured single-process bottleneck remains. Final cross-venue acceptance remains below.
-Out of scope: Feed/universe reduction, relaxed durability or clock policy, snapshots, VPS setup and other dropped feeds.
+Goal: Keep up with every current inverse option by partitioning book/ticker capture across workers while preserving live rediscovery, exact raw bytes and timing evidence.
+Done when: Configured workers complete a five-minute Linux development capture under caffeinate -i -s, verify-run checks every worker and its full partition coverage for every universe version, and native-index evidence shows no growing backlog or connection-too-slow close. Final cross-venue acceptance remains below.
+Out of scope: Frozen startup universes, feed/universe reduction, relaxed durability or clock policy, snapshots, VPS setup and other dropped feeds.
 When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
 ```
 
@@ -52,6 +52,9 @@ When unsure: pick the simplest option consistent with SPEC.md, add one line to P
 
 One line per deferred idea or choice made while working.
 
+- Reviewed identity-validation optimization preserves C0 rejection and accepted Unicode; its unprofiled 300.457-second full-universe run passed verify-run for 422,155 WebSocket messages and two versions, but still had one connection-too-slow close and 16.497-second peak index lag (303.716 ms median). Use workers rather than keep tuning the serialized path.
+- Worker capacity choice: start with two stable symbol partitions and a shared REST/subscription pacing file; keep lifecycle, trades and index as independently received raw copies per worker, explicitly report the physical copies, and verify each partition against its full archived discovery rather than freeze a startup list.
+- Optimized development evidence: dc-acceptance `~/dc-top20-data/runs/e681535761c44d96969cbf3e805e46e2`, reports under `~/dc-top20-evidence/20261031T125137Z`; 1,770 initialized inverse options, 304,067,667 native bytes, zero rejected/throttled subscriptions, peak RSS 141,472 KiB and CPU 105.42%; this is not expiry-window acceptance.
 - Bybit network correction: configure REST and WebSocket hosts independently; acceptance must use api.bytick.com and stream.bytick.com because api.bybit.com and stream.bybit.com do not resolve on this network. Binance endpoints work normally. Bybit transport wiring remains step 4.
 - Throughput measurement attempt at `~/dc-top20-evidence/20261031T123931Z` ended at the unchanged 600-second clock-warmup deadline with zero WebSocket frames; its 87-record failed archive verified for raw integrity only. Reset stale chrony source history and requested fresh samples without a clock step, but root-distance uncertainty remains too high for a new capacity claim.
 - Collection decision clarification carried over: option features use Deribit, perp features use Binance even for Deribit option research, and costs use trading-venue quotes subject to the documented Bybit perp proxy; selected live feeds are unchanged.

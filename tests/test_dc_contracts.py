@@ -22,6 +22,15 @@ def raw(seq=0, body=b'{"price":0.123456789012345678901234567890}', **changes):
 
 
 class ContractsTests(unittest.TestCase):
+    def test_identity_text_rejects_c0_controls_and_preserves_unicode(self):
+        for codepoint in range(32):
+            with self.subTest(codepoint=codepoint),self.assertRaises(ValueError):
+                key(native_symbol='BTC-'+chr(codepoint)+'-C')
+        for value in ('BTC-31OCT26-100000-C','สัญญา','BTC-\u00a0-C','BTC-\x7f-C','BTC-\U0001f30f-C'):
+            self.assertEqual(key(native_symbol=value).native_symbol,value)
+        for value in ('',None,123,b'BTC'):
+            with self.subTest(value=value),self.assertRaises(ValueError):key(native_symbol=value)
+
     def test_native_body_exact_decimal_unknown_and_binary(self):
         for body in [b'{"p":0.123456789012345678901234567890,"new_field":42}', b'\x00\xff\xe0', b'']:
             record = raw(body=body)

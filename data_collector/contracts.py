@@ -13,6 +13,7 @@ MAX_BODY_BYTES = 32 * 1024 * 1024
 KINDS = frozenset({"ws_message", "rest_response", "control", "metadata_version",
                    "coverage_event", "checkpoint"})
 VENUES = frozenset({"deribit", "binance", "bybit"})
+_CONTROL_CHARACTER = re.compile(r"[\x00-\x1f]")
 
 
 def canonical(value) -> bytes:
@@ -45,7 +46,7 @@ def strict_json(data: bytes):
 
 
 def text(value, name):
-    if not isinstance(value, str) or not value or any(ord(c) < 32 for c in value):
+    if not isinstance(value, str) or not value or _CONTROL_CHARACTER.search(value) is not None:
         raise ValueError("nonempty text required: " + name)
 
 
