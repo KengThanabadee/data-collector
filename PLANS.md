@@ -35,22 +35,27 @@ Observed linear projections divide all captured bytes, including initialization 
 Option universe rediscovery:
 ```
 Goal: Keep BTC/ETH option subscriptions current during a run, including new listings, Bybit PreLaunch and expiry retirement.
-Done when: Deterministic capture fixtures show archived lifecycle/discovery changes, subscription within 120 seconds, retirement, reconnect recovery and verify-run coverage of changing universe versions; the final cross-venue expiry-window run confirms live timing.
+Done when: Capture fixtures and verify-run validate every append-only universe version, per-instrument observation/request/ACK/retirement times, ACK plus first push for mid-run additions, expiry retirement and reconnect recovery. The final expiry-window run proves Deribit creation-to-subscription within 120 seconds and Bybit next-expiry PreLaunch subscriptions before 08:00 UTC, with no subscription rejection.
 Out of scope: derived snapshots/replay, VPS setup and dropped feeds.
 When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
 ```
 
-1. Implement option rediscovery with Deribit instrument.state plus 300-second REST audit, Bybit 60-second discovery including PreLaunch, and append-only universe/subscription timing evidence; review and commit.
+1. Implement option rediscovery with Deribit instrument.state plus 300-second REST audit and Bybit 60-second discovery including PreLaunch; archive discovery/metadata append-only and each instrument's observation, subscribe request, ACK receipt and retirement. Verify every universe version, with ACK plus first push for additions and exemptions only after retirement; review and commit.
 2. Deribit options top-20 book snapshots, ticker, per-kind trades and BTC/ETH index; drop futures. Write own brief, review and commit.
 3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker, depth20@100ms and aggTrade. Reuse applicable unfinished Binance work; drop spot parts. Write own brief, review and commit.
-4. Bybit BTC/ETH option tickers and publicTrade, one connection per base coin with native args/count limits and settlement fields. Write own brief, review and commit.
-5. Run the selected feeds together in dc-acceptance under caffeinate -i -s for at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC; pass verify-run and record every Acceptance item in COLLECTION_SCOPE.md. Prior runs do not satisfy this gate.
+4. Bybit BTC/ETH option tickers and publicTrade, one connection per base coin with at most 2,000 option args per connection. Split the initial roughly 27k-character subscription across requests of at most 21,000 characters per args array. Retain settlement fields. Write own brief, review and commit.
+5. Run the selected feeds together in dc-acceptance under caffeinate -i -s for at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC, any day including weekends. Fail on verify-run failure (including any universe version), a Deribit option created during the run subscribed later than creation plus 120 seconds or never, a next-expiry Bybit PreLaunch option not subscribed before 08:00, an 08:00 expiry not retired, or any rejected subscription. Record-only: Bybit PreLaunch→Trading within one discovery interval of launchTime, first post-08:00 bid/ask ticker, any added strikes (none acceptable), predictedDeliveryPrice availability, storage rates, RSS/CPU and throttling. Prior runs do not satisfy this gate; a run without a Bybit intraday strike addition does not exercise its mid-run listing path.
 6. Wait for a VPS before the later 24-hour production gate.
 
 ## Notes
 
 One line per deferred idea or choice made while working.
 
+- Reviewed-scope update: settlement-price availability, transition timing, optional intraday strikes, resource sizes and throttling are record-only; rejection and the explicit lifecycle/verification failures determine acceptance.
+- Metadata acquisition remains append-only across Deribit instruments, Binance exchangeInfo and Bybit instruments-info; Bybit funding history is a separate downloadable source with 200 rows per request.
+- Rediscovery implementation in progress: bounded membership/revision and subscription-delay projection has synthetic coverage; runtime lifecycle/REST acquisition and changing-universe verify-run integration remain unfinished.
+- Rediscovery integration constraints: retain Bybit Delivering tickers until deliveryTime; preserve the earliest lifecycle observation through REST lookup; bind ACKs to exact requested channels, connection and listing incarnation.
+- Revised-scope conflict: the unfinished rediscovery policy currently stores observation-to-ACK deadlines and ACK timing only; it must add request/retirement times and enforce Deribit creation-to-subscription within 120 seconds. Runtime and verifier integration are still unfinished, so no acceptance claim is made.
 - Scope documentation chunk: selected feeds, disabled-feed reasons and expiry-window acceptance now agree across SPEC.md, FEEDS.md and this plan; runtime implementation remains pending.
 - Scope alignment: copied the full 31 October decision into docs/v2/COLLECTION_SCOPE.md; historical recipes and measurements remain visible, with dropped feeds disabled rather than erased.
 - Acceptance planning: a non-expiry-window probe is development evidence only; the final run must start by 07:25 UTC and continue past 08:00 UTC across all selected venues.

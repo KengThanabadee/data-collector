@@ -25,41 +25,68 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 |---|---|---|
 | Deribit BTC/ETH options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms` | no free book/ticker history |
 | Deribit | BTC/ETH index | reference for options |
-| Binance USDⓈ-M | `bookTicker`, `depth20@100ms`, `aggTrade` for a configured list (BTCUSDT, ETHUSDT, alts TBD) | bookTicker archive ended 2024-03-30; no depth-20 archive. aggTrade is kept for alignment with the book. |
-| Bybit BTC/ETH options | `tickers`, `publicTrade` | no option history at all, settlement price included |
+| Binance USDⓈ-M | `bookTicker` and `depth20@100ms` on the `/public` route; `aggTrade` on the `/market` route. Symbols come from a configured list (BTCUSDT, ETHUSDT, alts TBD). | bookTicker archive ended 2024-03-30; no depth-20 archive. aggTrade is kept for alignment with the book. |
+| Bybit BTC/ETH options | `tickers.<symbol>`, `publicTrade.<baseCoin>` | no option history at all, settlement price included |
+| All three venues | discovery and instrument metadata (Deribit instruments, Binance `exchangeInfo`, Bybit `instruments-info`), append-only | tick/lot, strikes and expiries are current-only on the venues |
 
 ## Requirements
 
-- **New listings.** The option universe must follow listings during a run. Subscribe new options within 120 s and retire expired ones (SPEC.md discovery rules). Today the collector freezes the startup discovery (PLANS.md Notes).
+- **New listings.** The option universe must follow listings during a run. Subscribe new options within 120 s and retire expired ones (SPEC.md discovery rules). Before this change, the collector froze the startup discovery.
   - Deribit creates new expiries at 08:00 UTC and adds strikes intraday. Use the `instrument.state` stream: the 300 s REST audit alone cannot meet 120 s.
   - Bybit pre-lists the next expiry hours before 08:00 UTC with status `PreLaunch` and zero bid/ask. Subscribe `PreLaunch` instruments when they first appear in discovery.
-- **Deribit trades.** Use the per-kind channel `trades.option.<currency>.100ms`.
-- **Deribit book.** Verify that each depth-20 push is a full top-20 snapshot. FEEDS.md's book recipe assumes diffs.
-- **Bybit settlement price.** It cannot be downloaded: `/v5/market/delivery-price?category=option` returns an empty list. It comes from the recorded ticker (`predictedDeliveryPrice`, `indexPrice`). Verify that `predictedDeliveryPrice` becomes non-zero before an expiry. Fallback: Bybit 1m index-price klines.
-- **Bybit subscription limits.** Use one connection per base coin. Per connection: at most 2,000 option args, and at most 21,000 characters per subscribe args array. On 31 Oct, 1,378 options were listed (730 BTC, 648 ETH), all USDT-settled.
+- **Timing evidence.** For every instrument, archive:
+  - when it was observed (Deribit `creation_timestamp`/`instrument.state` receipt, or the discovery poll time);
+  - the subscribe request time and the subscribe-ACK receipt time;
+  - the retirement time.
+  The 120 s requirement is measured from these records.
+- **Coverage with a changing universe.** verify-run checks each universe version. An option added mid-run must have an ACK and a first push. A retired option is exempt after its retirement time.
+- **Deribit book.** Verify that each depth-20 push on an option is a full top-20 snapshot.
+- **Bybit settlement price.** It cannot be downloaded: `/v5/market/delivery-price?category=option` returns an empty list. It comes from the recorded ticker (`predictedDeliveryPrice`, `indexPrice`). Fallback: Bybit 1m index-price klines.
+- **Bybit subscription limits.**
+  - Use one connection per base coin.
+  - Per connection: at most 2,000 option args.
+  - Per subscribe request: at most 21,000 characters in the args array. About 730 BTC topics come to roughly 27k characters, so the initial subscribe must be split across several requests.
+  - On 31 Oct, 1,378 options were listed (730 BTC, 648 ETH), all USDT-settled.
 - **Dropped feeds.** Each is marked `not_enabled` with its reason, never removed silently (SPEC.md).
 
 ## Not recorded
 
 | Data | Source |
 |---|---|
-| Deribit perp/futures 1m bars, trades, funding | `get_tradingview_chart_data`, history.deribit.com, funding API |
+| Deribit perp/futures 1m bars, trades, funding | `get_tradingview_chart_data`, history.deribit.com, `get_funding_rate_history` |
 | Deribit option settlement, expired instruments | `get_delivery_prices`; history.deribit.com `get_instruments?include_old=true` |
-| Binance klines, aggTrades, funding, mark/index/premium | data.binance.vision |
+| Binance klines, aggTrades, funding, mark/index/premium | data.binance.vision (from 2020-01) |
 | Bybit perp book and trades | quote-saver.bycsi.com (ob200, 100 ms), public.bybit.com |
-| Bybit klines, mark/index/premium, funding | `/v5/market/*`, 1000 rows per request, back to 2020 |
+| Bybit klines, mark/index/premium | `/v5/market/*kline`, 1000 rows per request, back to 2020 |
+| Bybit funding | `/v5/market/funding/history`, 200 rows per request |
 
 **Dropped entirely:** Deribit futures feeds; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI, liquidation, and option depth books; full-depth books on all venues.
 
 ## Acceptance
 
-One Linux run under the collector's acceptance setup passes verify-run. The run is at least one hour long, starts by 07:25 UTC (14:25 Bangkok time) and continues past 08:00 UTC. Option expiry is 08:00 UTC on both venues, and Bybit's settlement averaging runs 07:30–08:00. Record:
-- Deribit: options created at 08:00 UTC subscribed during the run, with the delay from creation to subscription;
-- Bybit: the `PreLaunch`→`Trading` change seen at about `launchTime`, the first ticker with bid/ask after 08:00, and any strike added during the run;
+One Linux run under the collector's acceptance setup. Both venues list and expire options daily at 08:00 UTC, weekends included, so any day works. The run must:
+- be at least one hour long;
+- start by 07:25 UTC (14:25 Bangkok time);
+- continue past 08:00 UTC.
+
+Bybit's settlement averaging runs 07:30–08:00.
+
+**The run fails if any of these is true:**
+- verify-run fails, including coverage of every universe version;
+- a Deribit option created during the run was subscribed more than 120 s after its creation, or was never subscribed;
+- a Bybit `PreLaunch` option for the next expiry was not subscribed before 08:00 UTC;
+- an option that expired at 08:00 UTC was not retired;
+- any subscription was rejected.
+
+**Record only (these do not fail the run):**
+- Bybit: the `PreLaunch`→`Trading` change, seen within one discovery interval of `launchTime`, and the first ticker with bid/ask after 08:00;
+- strikes added during the run on either venue (none is acceptable);
 - whether Bybit `predictedDeliveryPrice` filled before the expiry;
 - bytes per hour and GiB per day (native, archive, and including WAL);
 - peak RSS and CPU;
-- rejected or throttled subscriptions.
+- throttled subscriptions.
+
+Bybit options are pre-listed before 07:25, so this run does not exercise Bybit's mid-run listing path. That path is covered only by an intraday strike addition, if one occurs.
 
 ## Open
 
@@ -71,5 +98,6 @@ One Linux run under the collector's acceptance setup passes verify-run. The run 
 
 - **trading-bot:**
   - `bot.convert` assumes Deribit diff books and needs a snapshot path.
+  - `bot.convert` builds instruments only from the startup `universe.json`. Options listed mid-run need the later metadata versions.
   - PLANS.md says Bybit options are USDC-settled; they are USDT-settled.
 - **VPS sizing:** wait for the acceptance sizes. The earlier full-book Deribit run measured 541 GiB/day including WAL.
