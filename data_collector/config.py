@@ -29,6 +29,7 @@ class DiscoveryConfig:
     max_frames: int = 0
     max_bytes: int = 0
     capture_mode: str = "raw"
+    rediscover_options: bool = False
     all_options: bool = False
     all_futures: bool = False
     raw_processes: int = 4
@@ -76,6 +77,9 @@ class DiscoveryConfig:
                 raise ValueError('absolute raw capture reference path required')
         if (self.all_options or self.all_futures) and self.source_discovery_root is not None:
             raise ValueError('whole-family capture requires fresh discovery')
+        if type(self.rediscover_options) is not bool or (self.rediscover_options and (
+                self.venue!='deribit' or not self.all_options or self.raw_processes!=1 or self.capture_mode!='raw')):
+            raise ValueError('rediscover_options requires single-process Deribit all_options raw capture')
         if self.all_options and self.raw_processes>1 and (self.max_frames or self.max_bytes):
             raise ValueError('positive frame/byte budgets require raw_processes=1')
         if type(self.all_options) is not bool or (self.all_options and (self.symbols or self.capture_mode!='raw')):
@@ -86,6 +90,8 @@ class DiscoveryConfig:
         for name,maximum in (('subscription_batch_size',500),('bootstrap_timeout_seconds',600)):
             integer(getattr(self,name),name,1)
             if getattr(self,name)>maximum:raise ValueError('subscription bound exceeded: '+name)
+        if self.rediscover_options and self.subscription_batch_size<3:
+            raise ValueError('live option batches must fit all three instrument feeds')
         text(self.chronyc, "chronyc executable")
         # An executable name/path, never a shell command or argument list.
         if self.chronyc.startswith("-") or "\x7f" in self.chronyc:

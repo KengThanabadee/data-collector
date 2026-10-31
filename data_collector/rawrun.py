@@ -90,6 +90,9 @@ class RawOwner:
     async def save(self, body, channel, kind, **kwargs):
         record,future=self.admit(body,channel,kind,**kwargs)
         ack=await future
+        return self.confirm(record,ack)
+
+    def confirm(self,record,ack):
         if not isinstance(ack,DurableAck) or not ack.timing_valid:
             raise ValueError('raw durability unconfirmed or late')
         fields=dict(strict_json(record.native_fields_json),collector_ingress_ordinal=ack.ingress_ordinal)

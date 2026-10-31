@@ -86,6 +86,9 @@ def verify_run(root, *, export=None):
     """Read committed raw afresh, rebuild final books, and optionally export raw."""
     root = Path(root).resolve()
     report = strict_json((root/'result.json').read_bytes())
+    if report.get('schema')=='dc.dynamic-options/1':
+        from .dynamic_options import verify
+        return verify(root,report,export=export)
     if report.get('schema')=='dc.public-discovery/1' and report.get('venue')=='binance':
         from .binance import verify
         return verify(root,report,export=export)
@@ -166,6 +169,9 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
         from .binance import run as binance_run
         return await binance_run(config,discover_only=discover_only,session_factory=session_factory,
             observer=observer,clock_read=clock_read,clock_wait=clock_wait)
+    if not discover_only and config.rediscover_options:
+        from .dynamic_options import capture
+        return await capture(config,session_factory=session_factory,observer=observer,clock_read=clock_read,clock_wait=clock_wait)
     if not discover_only and not config.symbols and not (config.all_options or config.all_futures):
         raise ValueError('set explicit current option symbols before capture')
     if not discover_only and config.capture_mode == 'raw':

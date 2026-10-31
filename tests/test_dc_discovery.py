@@ -67,6 +67,14 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
         return [r for r in self.records(lane) if r.native_product=='discovery']
     def advance(self,owner):self.mono[0]+=1_000_000_000;owner.quota.notify()
 
+    async def test_continuous_discovery_has_no_old_request_count_cap(self):
+        lane,owner=await self.discovery(max_requests=None)
+        owner.requests=10000
+        await owner.fetch(HTTP([Response(response_body())]))
+        self.assertEqual(owner.requests,10001)
+        self.assertIsNone(owner.max_requests)
+        await self.finish(lane)
+
     async def test_exact_raw_query_and_decimal_metadata_preserve_linear_inactive_instrument(self):
         lane,owner=await self.discovery()
         native=response_body();http=HTTP([Response(native,headers=[(b'Set-Cookie',b'secret'),(b'Content-Type',b'application/json')])])

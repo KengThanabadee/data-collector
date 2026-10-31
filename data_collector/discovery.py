@@ -101,10 +101,11 @@ class DeribitDiscovery:
                 lane.writer.identity[1] not in {'production','testnet'} or not lane.health()['accepting'] or
                 not lane.health()['running'] or not lane._clock_submitted):
             raise ValueError('Deribit lane and shared quota required')
-        for name,value in (('requests',max_requests),('response bytes',max_response_bytes),
+        if max_requests is not None:integer(max_requests,'requests',1)
+        for name,value in (('response bytes',max_response_bytes),
                            ('instruments',max_instruments),('timeout',timeout_seconds)):
             integer(value,name,1)
-        if (max_requests>10000 or max_response_bytes>16*1024*1024 or max_instruments>100000 or timeout_seconds>60 or
+        if ((max_requests is not None and max_requests>10000) or max_response_bytes>16*1024*1024 or max_instruments>100000 or timeout_seconds>60 or
                 not isinstance(charges,dict) or not charges or len(charges)>32):
             raise ValueError('bounded discovery configuration required')
         for name,cost in charges.items():
@@ -149,7 +150,7 @@ class DeribitDiscovery:
 
     async def fetch(self,session):
         if self.poisoned or self._busy or self._cancelled:raise ValueError('discovery owner requires reopen')
-        if self.requests>=self.max_requests:
+        if self.max_requests is not None and self.requests>=self.max_requests:
             self.last_error='request_bound';raise ValueError('discovery request bound')
         if getattr(session,'_retry_connection',True) is not False:
             self.last_error='unqualified_transport';raise ValueError('discovery requires a qualified no-retry HTTP session')
@@ -188,6 +189,7 @@ class DeribitDiscovery:
                 dict(schema='dc.deribit-discovery/1',direction='inbound',params=PARAMS,endpoint=self.endpoint,
                     request_record_id=request.record_id,request_raw_sha256=digest(request.to_bytes()),
                     request_start=start,status=status,headers=headers,complete=complete,error=error))
+            self.last_response=response
             if self._cancelled:raise asyncio.CancelledError
             if error is not None or not complete or status!=200:raise ValueError('discovery acquisition unsuccessful; raw retained')
             if any(k.lower()=='content-encoding' and v.lower()!='identity' for k,v in headers):

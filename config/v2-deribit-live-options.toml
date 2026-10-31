@@ -1,0 +1,22 @@
+# Inverse-only live option rediscovery development profile; existing per-instrument feeds.
+# Selected top-20/per-kind/index profile is the next implementation step.
+# Choose environment/data_root explicitly for production; use a writable Linux root.
+[data_collector]
+schema = "dc.config/2"
+venue = "deribit"
+environment = "testnet"
+data_root = "../data/v2/testnet-live-options"
+capture_mode = "raw"
+all_options = true
+raw_processes = 1
+rediscover_options = true
+raw_segment_bytes = 8388608
+symbols = []
+subscription_batch_size = 500
+bootstrap_timeout_seconds = 180
+timeout_seconds = 60
+warmup_timeout_seconds = 180
+chronyc = "chronyc"
+duration_seconds = 0
+max_frames = 0
+max_bytes = 0

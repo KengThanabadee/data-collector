@@ -2,8 +2,38 @@
 
 This is the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
-writer, lane, clock sampler, receiver and publication pipeline. The full scope in
-SPEC.md is unchanged. This command is a **partial pilot**, not a production service.
+writer, lane, clock sampler, receiver and publication pipeline. The selected scope is defined in
+COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This command is a **partial pilot**, not a production service.
+
+## Live option rediscovery development path
+
+The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
+
+Use `config/v2-deribit-live-options.toml` with `rediscover_options = true`,
+`all_options = true`, `raw_processes = 1` and a fresh writable Linux data root.
+Choose testnet or production explicitly. Run `capture --config <your-copy.toml>`,
+then `verify-run <printed-root>` with the Linux Python 3.12 venv. Healthy sockets
+stay open while `instrument.state.option.any` triggers immediate complete REST
+reconciliation; the periodic audit is 300 seconds. Raw discovery attempts and
+universe revisions are append-only under `metadata/`. Failed/empty discovery
+retains the preceding membership and records unhealthy state. Known expiry
+retires options independently of a successful new REST response.
+
+Each instrument has archived observation, subscribe request, ACK receipt and
+retirement timing. Verification binds requests to native channel ACKs and the
+current incarnation, checks every universe revision and requires a first native
+push for added options. Recorded listing observations still unresolved at stop
+cannot produce successful coverage. Deribit creation-to-ACK over 120 seconds
+fails verification for options created during the run; both request and ACK
+latencies are retained, with ACK as the conservative subscription-time bound.
+
+This is the step-1 development path: it currently retains per-instrument
+book/ticker/trades at 100ms. Conversion to the selected top-20/per-kind/index
+profile is pending; this path has fixture evidence, not expiry-window acceptance.
+Bybit pagination/PreLaunch policy is shared, while Bybit transport integration
+remains in step 4. The older frozen-universe paths below remain available for
+historical compatibility. No multi-owner raw export is enabled for this path.
+A verified failed prefix is raw integrity evidence, not a passed capture.
 
 ## Requirements
 

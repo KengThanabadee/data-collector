@@ -6,6 +6,7 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 
 The [local collection scope](docs/v2/COLLECTION_SCOPE.md) supersedes the earlier full-product queue. Existing measurements below describe historical profiles, not acceptance of the new profile. New-profile runtime and expiry-window acceptance remain pending.
 
+- New live rediscovery path: config/v2-deribit-live-options.toml selects inverse options by native base/settlement currency, records lifecycle-driven universe versions and observed/request/ACK/retirement evidence, and verifies ACK plus first push for every membership incarnation. Deterministic runtime fixtures cover listing/expiry, failed refresh, disconnect, receive tails, rejected/malformed messages and cleanup after writer failure. It still uses the prior per-instrument feeds; the selected top-20/index profile and live acceptance are pending.
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
 - V2: raw Deribit book, ticker and trades at 100ms ran for 3,601.137 seconds after all 4 workers initialized, covering all 2,800 BTC/ETH options in the startup discovery (8,400 channels). The Ubuntu 24.04 Lima `dc-acceptance` run used chrony, its separate Python 3.12 venv and `caffeinate -i -s`; capture completed with 10,993,156 WebSocket messages and 7,149,854,234 native payload bytes. Full `verify-run` passed with 10,995,639 records and exhaustive feed-plan initialization coverage. Continuous limits and bounded snapshot mode are described in [running instructions](docs/v2/RUNNING.md).
 - Capture resource samples every second: peak summed process RSS 492,284 KiB (480.75 MiB), peak CPU 403.44% (100% is one vCPU; VM has 6). Summed RSS was 456,100 KiB near startup and 452,836 KiB before shutdown.
@@ -32,15 +33,15 @@ Observed linear projections divide all captured bytes, including initialization 
 
 ## Next
 
-Option universe rediscovery:
+Deribit selected inverse-option profile:
 ```
-Goal: Keep BTC/ETH option subscriptions current during a run, including new listings, Bybit PreLaunch and expiry retirement.
-Done when: Capture fixtures and verify-run validate every append-only universe version, per-instrument observation/request/ACK/retirement times, ACK plus first push for mid-run additions, expiry retirement and reconnect recovery. The final expiry-window run proves Deribit creation-to-subscription within 120 seconds and Bybit next-expiry PreLaunch subscriptions before 08:00 UTC, with no subscription rejection.
-Out of scope: derived snapshots/replay, VPS setup and dropped feeds.
+Goal: Capture every current BTC/ETH inverse option with full top-20 pushes, ticker, per-kind trades and BTC/ETH index while rediscovering new options.
+Done when: The configured raw capture uses book.<id>.none.20.100ms, ticker.<id>.100ms, trades.option.BTC/ETH.100ms and btc_usd/eth_usd index only; Linux capture and verify-run confirm first book push after ACK without a type field, and USDC options/indexes and futures are not enabled. Final cross-venue expiry-window acceptance remains below.
+Out of scope: USDC linear options/indexes, futures feeds, derived snapshots/replay, VPS setup and other dropped feeds.
 When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
 ```
 
-1. Implement option rediscovery with Deribit instrument.state plus 300-second REST audit and Bybit 60-second discovery including PreLaunch; archive discovery/metadata append-only and each instrument's observation, subscribe request, ACK receipt and retirement. Verify every universe version, with ACK plus first push for additions and exemptions only after retirement; review and commit.
+1. Rediscovery foundation is implemented: shared bounded option membership/timing policy, Bybit complete-pagination/PreLaunch projection, and the runnable Deribit lifecycle/300-second audit driver with append-only metadata and per-version verification. Bybit transport applies the shared policy in step 4; live cross-venue lifecycle acceptance remains pending.
 2. Deribit BTC/ETH inverse options only: top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Drop futures and USDC linear options/indexes (nearly all liquidity is inverse). Write own brief, review and commit.
 3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker, depth20@100ms and aggTrade. Reuse applicable unfinished Binance work; drop spot parts. Write own brief, review and commit.
 4. Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. Write own brief, review and commit.
@@ -52,15 +53,15 @@ When unsure: pick the simplest option consistent with SPEC.md, add one line to P
 One line per deferred idea or choice made while working.
 
 - Independent-review correction: prior committed docs incorrectly treated Bybit settlement as unavailable and its character cap as per request; new-delivery-price supplies settlement, and the plan now shards connections with headroom rather than splitting requests on one connection.
-- Independent-review correction: old all-options measurements included broader currency variants; they do not certify the selected inverse-only scope. The unfinished dynamic projection is being restricted by native base/settlement metadata, with USDC option/index feeds explicitly disabled.
+- Independent-review correction: old all-options measurements included broader currency variants; they do not certify the selected inverse-only scope. The dynamic projection is restricted by native base/settlement metadata, with USDC option/index feeds explicitly disabled.
 - Depth-20 correction: the selected book push has no type field; step 2 must require its first push after ACK, while the old diff-feed snapshot check remains historical only.
 
 - Reviewed-scope update: transition timing, optional intraday strikes, the Bybit live cap probe, resource sizes and throttling are record-only; rejection and the explicit lifecycle/verification failures determine acceptance.
 - Metadata acquisition remains append-only across Deribit instruments, Binance exchangeInfo and Bybit instruments-info; Bybit funding history is a separate downloadable source with 200 rows per request.
-- Rediscovery chunk in review: config/v2-deribit-live-options.toml runs the changing-universe Deribit path with append-only metadata and per-version verification; Bybit PreLaunch/pagination policy is shared, and its transport wiring remains in step 4. The live path still uses the preceding per-instrument feeds until step 2; no expiry-window acceptance claim.
+- Rediscovery foundation: config/v2-deribit-live-options.toml runs the changing-universe Deribit path with append-only metadata and per-version verification; Bybit PreLaunch/pagination policy is shared, and its transport wiring remains in step 4. The live path still uses the preceding per-instrument feeds until step 2; no expiry-window acceptance claim.
 - Rediscovery recovery choice: preserve the last successful metadata dependency through failed refreshes, fail unresolved listing observations at stop, and drain admitted receive tails and HTTP acquisition before closing their owners.
 - Rediscovery integration constraints: retain Bybit Delivering tickers until deliveryTime; preserve the earliest lifecycle observation through REST lookup; bind ACKs to exact requested channels, connection and listing incarnation.
-- Revised-scope timing conflict addressed in the unfinished live path: archive observation/request/ACK/retirement records and check Deribit creation-to-ACK within 120 seconds as a conservative subscription bound; retain request latency separately. Expiry-window acceptance remains pending.
+- Revised-scope timing conflict addressed in the live rediscovery path: archive observation/request/ACK/retirement records and check Deribit creation-to-ACK within 120 seconds as a conservative subscription bound; retain request latency separately. Expiry-window acceptance remains pending.
 - Scope documentation chunk: selected feeds, disabled-feed reasons and expiry-window acceptance now agree across SPEC.md, FEEDS.md and this plan; runtime implementation remains pending.
 - Scope alignment: copied the full 31 October decision into docs/v2/COLLECTION_SCOPE.md; historical recipes and measurements remain visible, with dropped feeds disabled rather than erased.
 - Acceptance planning: a non-expiry-window probe is development evidence only; the final run must start by 07:25 UTC and continue past 08:00 UTC across all selected venues.
