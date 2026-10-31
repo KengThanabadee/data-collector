@@ -4,6 +4,8 @@ V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-
 
 ## Current state — 31 October 2026
 
+The [local collection scope](docs/v2/COLLECTION_SCOPE.md) supersedes the earlier full-product queue. Existing measurements below describe historical profiles, not acceptance of the new profile. New-profile runtime and expiry-window acceptance remain pending.
+
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
 - V2: raw Deribit book, ticker and trades at 100ms ran for 3,601.137 seconds after all 4 workers initialized, covering all 2,800 BTC/ETH options in the startup discovery (8,400 channels). The Ubuntu 24.04 Lima `dc-acceptance` run used chrony, its separate Python 3.12 venv and `caffeinate -i -s`; capture completed with 10,993,156 WebSocket messages and 7,149,854,234 native payload bytes. Full `verify-run` passed with 10,995,639 records and exhaustive feed-plan initialization coverage. Continuous limits and bounded snapshot mode are described in [running instructions](docs/v2/RUNNING.md).
 - Capture resource samples every second: peak summed process RSS 492,284 KiB (480.75 MiB), peak CPU 403.44% (100% is one vCPU; VM has 6). Summed RSS was 456,100 KiB near startup and 452,836 KiB before shutdown.
@@ -26,25 +28,32 @@ Observed linear projections divide all captured bytes, including initialization 
 | Compressed immutable archive and manifests | 220,160,167 | 4.92 |
 | All retained capture data, including WAL and archive | 1,771,514,629 | 39.60 |
 
-- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. Its continuous capture path remains in development; the one-hour Binance gate is not complete.
+- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. Its broad continuous capture prototype is unfinished and superseded by the configured USDⓈ-M profile; new-profile acceptance is not complete.
 
 ## Next
 
-Binance raw capture:
+Option universe rediscovery:
 ```
-Goal: Capture BTC/ETH Binance spot and perpetual/dated futures feeds per FEEDS.md as raw with explicit gaps, including discovered coin/linear and quote-currency variants; Binance options are not enabled because of low liquidity.
-Done when: A one-hour dc-acceptance Lima run under caffeinate -i -s passes verify-run, and this plan records bytes per hour, projected GiB per day, peak RSS and CPU, and rejected/throttled subscriptions.
-Out of scope: Binance options, other venues, snapshots, replay, VPS setup.
+Goal: Keep BTC/ETH option subscriptions current during a run, including new listings, Bybit PreLaunch and expiry retirement.
+Done when: Deterministic capture fixtures show archived lifecycle/discovery changes, subscription within 120 seconds, retirement, reconnect recovery and verify-run coverage of changing universe versions; the final cross-venue expiry-window run confirms live timing.
+Out of scope: derived snapshots/replay, VPS setup and dropped feeds.
 When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
 ```
 
-1. Binance BTC/ETH spot and perpetual/dated futures feeds per FEEDS.md, raw with gaps; Binance options are not enabled (low liquidity). Own brief, review, commit and one-hour measured Lima run.
-2. Then Bybit BTC/ETH feeds per FEEDS.md, raw with gaps; own brief, review, commit and one-hour measured Lima run.
-3. Wait for a VPS before the 24-hour run.
+1. Implement option rediscovery with Deribit instrument.state plus 300-second REST audit, Bybit 60-second discovery including PreLaunch, and append-only universe/subscription timing evidence; review and commit.
+2. Deribit options top-20 book snapshots, ticker, per-kind trades and BTC/ETH index; drop futures. Write own brief, review and commit.
+3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker, depth20@100ms and aggTrade. Reuse applicable unfinished Binance work; drop spot parts. Write own brief, review and commit.
+4. Bybit BTC/ETH option tickers and publicTrade, one connection per base coin with native args/count limits and settlement fields. Write own brief, review and commit.
+5. Run the selected feeds together in dc-acceptance under caffeinate -i -s for at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC; pass verify-run and record every Acceptance item in COLLECTION_SCOPE.md. Prior runs do not satisfy this gate.
+6. Wait for a VPS before the later 24-hour production gate.
 
 ## Notes
 
 One line per deferred idea or choice made while working.
+
+- Scope documentation chunk: selected feeds, disabled-feed reasons and expiry-window acceptance now agree across SPEC.md, FEEDS.md and this plan; runtime implementation remains pending.
+- Scope alignment: copied the full 31 October decision into docs/v2/COLLECTION_SCOPE.md; historical recipes and measurements remain visible, with dropped feeds disabled rather than erased.
+- Acceptance planning: a non-expiry-window probe is development evidence only; the final run must start by 07:25 UTC and continue past 08:00 UTC across all selected venues.
 
 - Lima dc-acceptance resources: 6 vCPU, 6 GiB RAM and a 100 GiB sparse disk (root filesystem 96 GiB) for measured all-options raw throughput and storage; only this VM is used.
 - Lima dc-acceptance setup: chrony is the sole clock setter; remove CAP_SYS_TIME from lima-guestagent via its chrony-clock-owner.conf systemd drop-in after observed host-agent steps repeatedly prevented alignment; collector clock policy remains unchanged.
@@ -52,9 +61,9 @@ One line per deferred idea or choice made while working.
 - Full-universe scaling: one-process CPU saturation caused documented Deribit heartbeat/too-slow closes; use four disjoint CLI workers from one verified frozen discovery with a shared one-request-per-second subscription budget, supervisor-death guards and exhaustive aggregate verification.
 - Full-universe probe: per-message fsync and repeated whole-plan set comparisons were throughput bottlenecks; bounded FIFO group commit preserves receipt order, clock barriers and fsync-before-ack, and plan equality is skipped after initialization.
 - Full-universe rotation: the first hour attempt stopped on the 5-second durability deadline during large-segment sealing; raw segments now target a configurable 8 MiB rather than 64 MiB, with the deadline unchanged.
-- All-options plan freezes every listed option in the startup discovery (including returned inactive states); uses book/ticker/trades 100ms, batches at most 500 channels and at most one subscription request per second on one healthy socket; quiet trades require ACK, not a fabricated initial trade.
+- Historical all-options plan freezes every listed option in the startup discovery (including returned inactive states); uses book/ticker/trades 100ms, batches at most 500 channels and at most one subscription request per second on one healthy socket; quiet trades require ACK, not a fabricated initial trade.
 - All-options hour evidence: `~/dc-all-options-data/runs/467b3e8616744e1cb69dff8e2f6855b0/all-options` and its parent discovery in dc-acceptance; config, 1-second resources, chrony reports and summary under `~/dc-all-options-evidence/20261030T172150Z/`.
-- Futures/index selection: freeze every discovered native future, including perpetual and coin/linear variants, plus each metadata price_index dependency; shared raw envelopes use multiplex product and retain exact native topics/data rather than labelling index messages as futures.
+- Historical futures/index selection: freeze every discovered native future, including perpetual and coin/linear variants, plus each metadata price_index dependency; shared raw envelopes use multiplex product and retain exact native topics/data rather than labelling index messages as futures.
 - Futures/index hour evidence: `~/dc-futures-data/runs/4c65d28370dd43038df8dd800801b234/continuous` and its parent discovery in dc-acceptance; config, chrony reports, resources, summary and successful verification under `~/dc-futures-evidence/20261030T185115Z/`.
 - Reconnect pacing follows FEEDS.md after the observed DNS outage: exponential 1/2/4…60-second backoff with jitter, reset after full initialization; stop and supervisor-death checks continue during the wait.
 - Binance discovery: request showPermissionSets=false after measuring a 17.8 MB spot response; preserve all BTC/ETH rows and native filters, mark non-trading rows explicitly, and leave unavailable spot listing incarnation null rather than infer it.

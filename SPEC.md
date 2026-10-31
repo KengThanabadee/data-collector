@@ -1,16 +1,20 @@
 # Data Collector (DC) — Specification v2
 
-Specification baseline: 23 October 2026, Asia/Bangkok. Status: implementation-ready contracts with explicit adapter evidence gates; **v2 runtime is not implemented or production-certified**. Scope approval comes from the [reviewed handoff snapshot](docs/v2/HANDOFF_BASELINE.md). This specification governs future work; it does not enable any capture, deploy a service or change the running v1 program.
+Contract baseline: 23 October 2026; collection scope updated 31 October 2026, Asia/Bangkok. Raw v2 capture has measured historical runs; the current collection profile and production readiness remain unverified. The [reviewed handoff snapshot](docs/v2/HANDOFF_BASELINE.md) is historical. This specification does not deploy a service or change the v1 program.
 
 ## 1. Outcome and scope
 
-Build a reusable public market-data archive for **Deribit, Binance and Bybit**, initially underlying BTC/ETH. Continuously capture WebSocket messages, REST bootstrap/recovery/reference/history where available, reconstruct books and produce market states at a shared reference time. Preserve native payloads, provenance, units, historical metadata, capture gaps and reproducible replay.
+The current collection scope is the self-contained [31 October collection decision](docs/v2/COLLECTION_SCOPE.md). It supersedes the earlier full multi-product queue and historical capability profiles. Live-record data that cannot be downloaded later, plus cheap alignment feeds. Preserve exact native bytes, provenance, units, metadata history and explicit gaps. Derived snapshots, replay products and VPS setup are outside this implementation goal; their contracts below remain for later consumers.
 
-Target products: spot, perpetuals, dated futures, options, and exchange-listed combos/spreads. Include inverse/linear, quote/settlement currency variants discovered under BTC/ETH; do not equate BTC-underlying with BTC-settled. Include a spread when all underlying legs are within BTC/ETH scope and public metadata identifies them. Reference assets needed for those contracts may be collected with an explicit dependency reason. A missing product/feed remains visible as unsupported, access-required or unverified, rather than silently reducing the target scope.
+| Venue | Selected live capture |
+|---|---|
+| Deribit BTC/ETH options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms`, plus BTC/ETH index dependencies |
+| Binance USDⓈ-M | `bookTicker`, `depth20@100ms`, `aggTrade` for a configured list initially BTCUSDT and ETHUSDT; additional symbols require explicit configuration |
+| Bybit BTC/ETH options | Per-symbol `tickers` and base-coin `publicTrade`, including PreLaunch instruments; USDT settlement is native metadata |
 
-Books, trades, tickers, mark/index/pricing forwards, IV/Greeks, open interest, lifecycle, funding and settlement/delivery are target families. Public liquidation/risk statistics and RPI are separately labelled profiles. Each venue/product has independent supervision and loss accounting. Analytics, BSAD/direct ML model design, feature fitting, trading, private account data and execution simulation remain downstream.
+Full-depth and diff books, REST book seeds, Deribit futures/spot/combos, Binance spot/COIN-M/options, and Bybit non-option products, option books, spreads/RPI/liquidation are `not_enabled`. Their individual reasons remain visible in [FEEDS.md](docs/v2/FEEDS.md). Downloadable bars, trades, funding and reference history use the sources listed in the collection decision; they are not additional live jobs. Do not substitute marks for absent quotes.
 
-The [feed catalogue](docs/v2/FEEDS.md) is normative for routes, identity, continuity and capability. The [acceptance profile](docs/v2/ACCEPTANCE.md) and [candidate configuration](docs/v2/pilot-budget.toml) freeze measurable trial budgets. Live access/fixtures are subsequent implementation gates, including Binance options; documentation support does not mean adapter readiness.
+The feed catalogue is normative for identity, routes and capability. Selected top-20 pushes must be verified as complete bounded snapshots before use; historical diff recipes do not apply to them. Selection does not assert runtime readiness. Earlier measured runs retain their original feed meaning and do not certify this changed profile.
 
 ## 2. Compatibility and project name
 
@@ -32,7 +36,7 @@ Do not have v1 and v2 write the same root. Old rolling REST sweeps retain `rolli
 
 Instrument key is `(venue, environment, native_product, native_symbol, listing_incarnation)`. Alias/base/quote/settlement/underlying are attributes, not the key. Record routing/actual matching venue, contract size/multiplier, inverse or linear, price and quantity units, tick/lot, expiry/strike/right, combo legs/ratios, states and supported feed profiles. All numerics retain native strings/lexemes in raw; derived decimal arithmetic uses explicit units.
 
-Discovery stores raw pages/cursors/status and a versioned universe with selected/excluded/reason lists. Bootstrap complete pagination, then reconcile lifecycle notifications immediately. Poll discovery every 60s where no authoritative lifecycle feed exists; Deribit uses `instrument.state.{kind}.{currency}` with a slower 300s REST audit to respect its documented collection guidance. No listing stream means `poll_observed`, not instant discovery. Empty/unrecognized discovery cannot erase the last known universe; mark discovery unhealthy, retain the previous list as stale and report uncertainty. Rate-budget inability to finish a poll becomes a visible overdue event. New listings subscribe within 120s of observation; that is not a guarantee relative to true exchange listing time. Delist/state/tick changes retire or reset the affected stream at the observed time. Unknown symbol or product identity is quarantined, never guessed from host or symbol substring alone.
+Discovery stores raw pages/cursors/status and a versioned universe with selected/excluded/reason lists. Bootstrap complete pagination, then reconcile lifecycle notifications immediately. Poll discovery every 60s where no authoritative lifecycle feed exists; Deribit uses `instrument.state.{kind}.{currency}` with a slower 300s REST audit to respect its documented collection guidance. No listing stream means `poll_observed`, not instant discovery. Empty/unrecognized discovery cannot erase the last known universe; mark discovery unhealthy, retain the previous list as stale and report uncertainty. Rate-budget inability to finish a poll becomes a visible overdue event. New options must subscribe within 120 seconds; record both creation-to-subscription delay when native creation time is available and observation-to-subscription delay. Deribit lifecycle notifications are required because a 300-second REST audit cannot meet this deadline. Bybit discovery must include PreLaunch and Trading, record launchTime and the observed transition, and subscribe PreLaunch options immediately. Retire expired options with recorded controls. Delist/state/tick changes retire or reset the affected stream at the observed time. Unknown symbol or product identity is quarantined, never guessed from host or symbol substring alone.
 
 Point-in-time metadata is append-only bitemporal: `observed_at_receive`, `effective_at` when supplied, acquisition time, source raw ID, revision, superseded version. Historical REST imports keep their later acquisition time. Receive-time replay cannot treat them as information known before acquisition. Maintain settlement/funding revision histories; distinguish predicted, currently published and realized rates. Record null for unavailable fields and provide a field-capability reason.
 
@@ -93,14 +97,13 @@ No automatic deletion of raw locally or remotely. Storage pressure pauses captur
 
 ## 9. Acceptance, delivery and readiness
 
-The target universe is the entire discovered BTC/ETH scope, not the bounded trial cohort. Trial caps prove code paths; full-universe capacity must be measured independently. Proposed resource settings and pass/fail rules are frozen in [ACCEPTANCE.md](docs/v2/ACCEPTANCE.md); update configuration version before rerunning, never relax thresholds after seeing a soak result and call the original run passed.
+Current implementation order, each with a brief in PLANS.md, fresh agent review and commit:
 
-Implementation order:
+1. Option universe rediscovery during capture, including new listings and expiry retirement.
+2. Deribit top-20 option book, ticker, per-kind trades and index; disable futures feeds.
+3. Binance USDⓈ-M configured-list bookTicker, depth20@100ms and aggTrade; reuse applicable unfinished work and remove spot capture parts.
+4. Bybit option tickers and publicTrade.
 
-1. Common schema/identity, v1 reader dispatcher, metadata, coverage/gap ledger and deterministic archive/replay fixtures.
-2. Bounded durable writer/recovery/restore and fault harness; then adapter interfaces and venue quota supervisors.
-3. One small public capture per feed family, archive fixtures including ACK/bootstrap/reconnect; resolve feed gates. Start with Deribit and Binance spot, then futures/options and Bybit profiles without changing the accepted scope.
-4. Measure complete target-universe workload/depth/reference fan-out; allocate a host/storage/network profile. Authentication-gated feeds stay visibly disabled until credentials are explicitly available.
-5. Fault tests, independent restore and ≥24h full-profile soak on the intended Linux host. Publish resource/validity/gap report per feed/product, including excluded/blocked feeds.
+Acceptance requires one Linux run under the collector acceptance setup, at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC. Use Lima dc-acceptance with chrony, its Python 3.12 venv and Mac `caffeinate -i -s`. `verify-run` must pass. Record Deribit options created at 08:00 and their subscription delays; Bybit PreLaunch-to-Trading near launchTime, first bid/ask ticker after 08:00, and any new strike; whether predictedDeliveryPrice became non-zero before expiry; native/archive/including-WAL bytes per hour and GiB per day; peak RSS and CPU; rejected or throttled subscriptions. Preserve failed attempts and explicit gaps. Bybit settlement fallback is 1-minute index-price klines, with separate provenance. All details and historical alternatives are local in [COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md).
 
-A release may be labelled partial with a coverage report; it cannot claim all-three-venue/all-product readiness with unresolved rows. Binance options requires current route + contract discovery + REST/WS sequence bridge + reset fixtures, not a legacy example. Bybit full/RPI/spreads each have their own gate. Operations guide remains concise: start/stop/status, coverage/gaps, export, backup status, restore, upgrade/rollback. No runtime change, service activation, model fitting or deployment is authorized by completion of this spec phase.
+This goal does not certify production readiness. Independent backup/restore and a 24-hour VPS soak remain later gates under [ACCEPTANCE.md](docs/v2/ACCEPTANCE.md). Old full-product recipes are retained for compatibility and historical evidence, not permission to enable dropped feeds.
