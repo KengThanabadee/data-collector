@@ -139,3 +139,17 @@ still allow 10,000 segments; configured unbounded limits do not remove that guar
 
 Observed acceptance runs and their evidence locations are recorded in
 [PLANS.md](../../PLANS.md).
+
+Bybit transport remains scheduled for step 4 of the current plan. Its public origins
+are configured independently with `bybit_rest_host` and `bybit_ws_host`; values
+are bare DNS hostnames. Without overrides, production and testnet use their
+respective bybit.com hosts. The acceptance configuration on this network must
+include these overrides because the bybit.com names do not resolve here:
+
+```toml
+bybit_rest_host = "api.bytick.com"
+bybit_ws_host = "stream.bytick.com"
+```
+
+The option WebSocket path remains `/v5/public/option`, REST uses HTTPS, and venue
+identity remains Bybit. Effective configuration archives and hashes both hosts.

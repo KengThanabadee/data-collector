@@ -6,6 +6,8 @@ Contract baseline: 23 October 2026; collection scope updated 31 October 2026, As
 
 The current collection scope is the self-contained [31 October collection decision](docs/v2/COLLECTION_SCOPE.md). It supersedes the earlier full multi-product queue and historical capability profiles. Live-record data that cannot be downloaded later, plus cheap alignment feeds. Preserve exact native bytes, provenance, units, metadata history and explicit gaps. Derived snapshots, replay products and VPS setup are outside this implementation goal; their contracts below remain for later consumers.
 
+Features use 20 book levels from the deepest market for the instrument type: Deribit options and Binance perps, including Binance perp-book features for Deribit option research. Cost models use the trading venue's own top of book with size; the collection decision describes the permitted Bybit perp proxy and downloadable replacements.
+
 | Venue | Selected live capture |
 |---|---|
 | Deribit BTC/ETH inverse options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms`, plus `btc_usd` and `eth_usd` indexes |

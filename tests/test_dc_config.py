@@ -5,6 +5,7 @@ import unittest
 
 from data_collector.config import DiscoveryConfig, MAX_CONFIG_BYTES, SCHEMA, load
 from data_collector.contracts import strict_json
+from data_collector.bybit_endpoints import public_origins
 from option_collector.config import load as load_v1
 
 
@@ -30,6 +31,19 @@ class DiscoveryConfigTests(unittest.TestCase):
         self.assertFalse(config.data_root.exists())
         with self.assertRaises(FrozenInstanceError):
             config.environment = "production"
+
+    def test_bybit_public_hosts_are_configurable_pinned_and_environment_aware(self):
+        default=self.read()
+        self.assertEqual(public_origins(default),('https://api-testnet.bybit.com','wss://stream-testnet.bybit.com/v5/public/option'))
+        production=replace(default,environment='production')
+        self.assertEqual(public_origins(production),('https://api.bybit.com','wss://stream.bybit.com/v5/public/option'))
+        alternate=self.read(self.body+'bybit_rest_host="api.bytick.com"\nbybit_ws_host="stream.bytick.com"\n')
+        self.assertEqual(public_origins(alternate),('https://api.bytick.com','wss://stream.bytick.com/v5/public/option'))
+        self.assertEqual(strict_json(alternate.to_bytes())['bybit_rest_host'],'api.bytick.com')
+        self.assertNotEqual(default.config_sha256,alternate.config_sha256)
+        for host in ('https://api.bytick.com','user@api.bytick.com','api.bytick.com/path','api.bytick.com:443','a..com','-a.com','a.com?x=1','a.com\n',123):
+            for field in ('bybit_rest_host','bybit_ws_host'):
+                with self.subTest(field=field,host=host),self.assertRaises(ValueError):replace(default,**{field:host})
 
     def test_effective_hash_ignores_formatting_but_pins_every_setting(self):
         original = self.read()

@@ -5,6 +5,7 @@ contact an exchange or certify a full production release configuration.
 """
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
+import re
 import tomllib
 
 from .contracts import canonical, digest, integer, text
@@ -40,12 +41,21 @@ class DiscoveryConfig:
     subscription_budget_file: Path | None = None
     subscription_batch_size: int = 500
     bootstrap_timeout_seconds: int = 180
+    bybit_rest_host: str | None = None
+    bybit_ws_host: str | None = None
 
     def __post_init__(self):
         if self.schema != SCHEMA or self.venue not in ("deribit","binance"):
             raise ValueError("supported v2 discovery schema/venue required")
         if self.environment not in ("production", "testnet"):
             raise ValueError("explicit production or testnet environment required")
+        for name in ('bybit_rest_host','bybit_ws_host'):
+            host=getattr(self,name)
+            if host is not None:
+                if (not isinstance(host,str) or len(host)>253 or not host or any(
+                        re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?',label) is None
+                        for label in host.split('.'))):
+                    raise ValueError('plain DNS hostname required: '+name)
         if self.venue=='binance' and (self.environment!='production' or self.capture_mode!='raw'
                 or self.all_options or self.all_futures or self.symbols):
             raise ValueError('Binance public profile requires production raw mode and whole-universe selection')

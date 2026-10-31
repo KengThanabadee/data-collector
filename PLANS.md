@@ -33,16 +33,16 @@ Observed linear projections divide all captured bytes, including initialization 
 
 ## Next
 
-Deribit selected inverse-option profile:
+Deribit full-universe throughput follow-up:
 ```
-Goal: Capture every current BTC/ETH inverse option with full top-20 pushes, ticker, per-kind trades and BTC/ETH index while rediscovering new options.
-Done when: The configured raw capture uses book.<id>.none.20.100ms, ticker.<id>.100ms, trades.option.BTC/ETH.100ms and btc_usd/eth_usd index only; Linux capture and verify-run confirm first book push after ACK without a type field, and USDC options/indexes and futures are not enabled. Final cross-venue expiry-window acceptance remains below.
-Out of scope: USDC linear options/indexes, futures feeds, derived snapshots/replay, VPS setup and other dropped feeds.
+Goal: Reduce measured capture overhead while preserving every current inverse option, raw bytes, receipt timing and durability checks.
+Done when: The profiled identity-text check preserves its accepted/rejected strings with lower CPU cost, then a full-universe Linux development capture and verify-run measure remaining lag and actual connection losses; use workers if the measured single-process bottleneck remains. Final cross-venue acceptance remains below.
+Out of scope: Feed/universe reduction, relaxed durability or clock policy, snapshots, VPS setup and other dropped feeds.
 When unsure: pick the simplest option consistent with SPEC.md, add one line to PLANS.md Notes, continue.
 ```
 
 1. Rediscovery foundation is implemented: shared bounded option membership/timing policy, Bybit complete-pagination/PreLaunch projection, and the runnable Deribit lifecycle/300-second audit driver with append-only metadata and per-version verification. Bybit transport applies the shared policy in step 4; live cross-venue lifecycle acceptance remains pending.
-2. Deribit BTC/ETH inverse options only: top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Drop futures and USDC linear options/indexes (nearly all liquidity is inverse). Write own brief, review and commit.
+2. Deribit selected-feed chunk is committed: inverse-option top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Futures and USDC linear options/indexes are disabled. Resolve measured full-universe throughput under the brief above before moving to Binance.
 3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker, depth20@100ms and aggTrade. Reuse applicable unfinished Binance work; drop spot parts. Write own brief, review and commit.
 4. Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. Write own brief, review and commit.
 5. Run the selected feeds together in dc-acceptance under caffeinate -i -s for at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC, any day including weekends. Fail on verify-run failure (including any universe version), a Deribit option created during the run subscribed later than creation plus 120 seconds or never, a next-expiry Bybit PreLaunch option not subscribed before 08:00, an 08:00 expiry not retired, or any rejected subscription. Record-only: Bybit PreLaunch→Trading within one discovery interval of launchTime, first post-08:00 bid/ask ticker, any added strikes (none acceptable), the separate live character-cap enforcement result, storage rates, RSS/CPU and throttling. Prior runs do not satisfy this gate; a run without a Bybit intraday strike addition does not exercise its mid-run listing path.
@@ -52,6 +52,9 @@ When unsure: pick the simplest option consistent with SPEC.md, add one line to P
 
 One line per deferred idea or choice made while working.
 
+- Bybit network correction: configure REST and WebSocket hosts independently; acceptance must use api.bytick.com and stream.bytick.com because api.bybit.com and stream.bybit.com do not resolve on this network. Binance endpoints work normally. Bybit transport wiring remains step 4.
+- Throughput measurement attempt at `~/dc-top20-evidence/20261031T123931Z` ended at the unchanged 600-second clock-warmup deadline with zero WebSocket frames; its 87-record failed archive verified for raw integrity only. Reset stale chrony source history and requested fresh samples without a clock step, but root-distance uncertainty remains too high for a new capacity claim.
+- Collection decision clarification carried over: option features use Deribit, perp features use Binance even for Deribit option research, and costs use trading-venue quotes subject to the documented Bybit perp proxy; selected live feeds are unchanged.
 - Step-2 development evidence: dc-acceptance `~/dc-top20-data/runs/7907085f02bf4add8f797231cc95fe90`, reports under `~/dc-top20-evidence/20261031T075603Z`; 600.567 post-ready seconds, peak sampled RSS 193,468 KiB and CPU 108.51%, index receipt lag up to 45.137 seconds; profile the receiver before choosing further parallelism.
 - Reviewed step-2 timing corrections: reconcile eligibility at the current receipt clock, retain each new instrument's own first observation, and briefly remember retired identities so delayed settlement notifications do not become false new listings; prune consumed verifier lifecycle receipts after reconciliation.
 - Step-2 CPU profile: the 90.332-second post-ready development run at `~/dc-top20-evidence/20261031T123036Z` passed verify-run for 103,723 WebSocket messages and two versions/connections; cProfile attributed 46.193 cumulative seconds to identity text validation across capture initialization and recording, so remove its repeated Python character loop before adding workers.

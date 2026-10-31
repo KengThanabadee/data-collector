@@ -6,8 +6,8 @@ Decided by Keng on 31 Oct 2026. This repository copy is normative for the curren
 
 - Live-record what cannot be downloaded later.
 - Also record cheap feeds when they make use simpler.
-- Features use 20 book levels.
-- Cost modelling uses top of book with size.
+- Features come from the deepest market for each instrument type, wherever the trade happens: Deribit for options, Binance for perps. They use 20 book levels.
+- Cost modelling uses the trading venue's own top of book with size: Binance perps, Bybit options and Bybit perps.
 
 ## Consumers
 
@@ -15,7 +15,7 @@ Decided by Keng on 31 Oct 2026. This repository copy is normative for the curren
 |---|---|---|
 | Stat arb (trade) | Binance USDⓈ-M perps | features + cost |
 | Options strategy (trade) | Bybit options, hedged with Bybit perps (portfolio margin) | cost |
-| Options research | Deribit options, hedged with the Deribit perp | features |
+| Options research | Deribit options, hedged with the Deribit perp | features; perp book features come from the Binance perp book |
 
 Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit funding and fees. On a quiet 1m sample, Bybit sat 2.5 bp (BTC) and 1.3 bp (ETH) below Binance, with a 1m return-difference sd of about 0.6 bp. Bybit's own downloadable data can replace the proxy at any time.
 
@@ -96,5 +96,5 @@ Bybit options are pre-listed before 07:25, so this run does not exercise Bybit's
 - **trading-bot:**
   - `bot.convert` assumes Deribit diff books and needs a snapshot path.
   - `bot.convert` builds instruments only from the startup `universe.json`. Options listed mid-run need the later metadata versions.
-  - PLANS.md says Bybit options are USDC-settled; they are USDT-settled.
+  - Update PLANS.md: Bybit options are USDT-settled.
 - **VPS sizing:** wait for the acceptance sizes. The earlier full-book Deribit run measured 541 GiB/day including WAL.
