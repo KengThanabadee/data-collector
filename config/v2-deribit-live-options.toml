@@ -1,5 +1,4 @@
-# Inverse-only live option rediscovery development profile; existing per-instrument feeds.
-# Selected top-20/per-kind/index profile is the next implementation step.
+# Inverse-only top-20, ticker, per-kind trades and BTC/ETH indexes with live discovery.
 # Choose environment/data_root explicitly for production; use a writable Linux root.
 [data_collector]
 schema = "dc.config/2"

@@ -5,11 +5,11 @@ option books → committed archive → independent replay/export. It reuses the 
 writer, lane, clock sampler, receiver and publication pipeline. The selected scope is defined in
 COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This command is a **partial pilot**, not a production service.
 
-## Live option rediscovery development path
+## Current inverse-option profile
 
 The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
 
-Use `config/v2-deribit-live-options.toml` with `rediscover_options = true`,
+Use `config/v2-deribit-options.toml` (or `config/v2-deribit-live-options.toml`) with `rediscover_options = true`,
 `all_options = true`, `raw_processes = 1` and a fresh writable Linux data root.
 Choose testnet or production explicitly. Run `capture --config <your-copy.toml>`,
 then `verify-run <printed-root>` with the Linux Python 3.12 venv. Healthy sockets
@@ -27,13 +27,22 @@ cannot produce successful coverage. Deribit creation-to-ACK over 120 seconds
 fails verification for options created during the run; both request and ACK
 latencies are retained, with ACK as the conservative subscription-time bound.
 
-This is the step-1 development path: it currently retains per-instrument
-book/ticker/trades at 100ms. Conversion to the selected top-20/per-kind/index
-profile is pending; this path has fixture evidence, not expiry-window acceptance.
-Bybit pagination/PreLaunch policy is shared, while Bybit transport integration
-remains in step 4. The older frozen-universe paths below remain available for
-historical compatibility. No multi-owner raw export is enabled for this path.
-A verified failed prefix is raw integrity evidence, not a passed capture.
+The profile uses `book.<id>.none.20.100ms` and `ticker.<id>.100ms` for
+current inverse options, plus `trades.option.BTC.100ms`,
+`trades.option.ETH.100ms`, `deribit_price_index.btc_usd` and
+`deribit_price_index.eth_usd`. Each book push is a complete top-20 replacement
+with price/amount pairs; it has no type field. The first book and ticker after
+that instrument's ACK initialize it. A consolidated trade channel requires its
+ACK, not an invented initial trade. Both index values are required after their
+ACK. Reconnect opens an explicit coverage gap and repeats initialization;
+stopping in a later gap does not erase earlier proven coverage of that same
+incarnation. New options still require their own ACK and first pushes.
+
+Bybit transport integration and the cross-venue expiry-window run remain
+pending. Old archive formats remain verifiable, while new CLI futures capture
+is not_enabled because its history is downloadable. No multi-owner raw export
+is enabled for this path. A verified failed prefix is integrity evidence, not a
+passed capture.
 
 ## Requirements
 
@@ -45,118 +54,65 @@ Keep at least 5 GiB and 10% free disk space. No API key is required.
 
 ## Start and inspect
 
-Copy `config/v2-discovery.toml` and select `testnet` or `production` explicitly.
-Relative `data_root` paths resolve against the config file. Use a new v2 root;
-the command rejects a v1 root, a different bound environment, an unbound nonempty
-directory, and a second command owning that same root.
+Copy `config/v2-deribit-options.toml`, explicitly choose production or testnet,
+and set a fresh writable Linux `data_root`. Relative paths resolve against the
+configuration file. In Lima use its Python 3.12 venv and a data root inside the
+VM; the macOS repository mount and `.venv` are not writable Linux runtime roots.
+The command rejects a v1 root, environment mismatch, unbound nonempty directory
+and a second owner of the same root.
 
 ```sh
-.venv/bin/python -m data_collector config-check --config config/v2-discovery.toml
-.venv/bin/python -m data_collector discover --config config/v2-discovery.toml
+python -m data_collector config-check --config YOUR_OPTIONS_CONFIG
+python -m data_collector discover --config YOUR_OPTIONS_CONFIG
+python -m data_collector capture --config YOUR_OPTIONS_CONFIG
 ```
 
-Discovery prints `available_symbols` and an archive `root`. Set `symbols` in the
-TOML to current active option names from that list, or set `all_options = true`
-with `symbols = []` to freeze every listed BTC/ETH option in discovery, then run:
+Discovery retains complete native metadata, including explicitly excluded
+products. Capture selects inverse options from native base and settlement
+currency. It uses at most 500 channels per request and one subscription request
+per second. The duration starts when all current options and both indexes are
+initialized. Set `duration_seconds = 3600` for an hour after initialization;
+zero duration/frame/byte limits mean unbounded. Positive frame/byte limits stop
+after a bounded receive burst, so they can include its admitted tail. Ctrl-C
+stops ingress, drains admitted writes and in-flight metadata HTTP, then prints
+the archive root. Listing observations unresolved at stop fail coverage.
+
+Receive bursts are bounded by 512 frames, 1 MiB of native bytes plus at most one
+message, or 20 ms. FIFO group commit retains queue charges and clock barriers
+until fsync. Raw segments target a configurable 8 MiB, with the 5-second
+receive-to-durable deadline unchanged. Writer failures retain their durable
+prefix and fail the run. Rejections and throttling are archived before failure.
+
+Healthy sockets stay open. Real connection loss opens a recorded gap, closes
+the socket and reconnects with exponential 1/2/4…60-second backoff and jitter.
+Close codes/reasons are retained. A recovered connection repeats ACK, book,
+ticker and index initialization. A previously covered incarnation remains
+covered before its later gap; a new incarnation never inherits that coverage.
+The recorded gaps remain gaps, without a native sequence-continuity claim.
+
+## Read back
+
+Keep the entire printed root, including its `metadata/` owner, source/config
+bundles, WAL and immutable segments. Run:
 
 ```sh
-.venv/bin/python -m data_collector capture --config config/v2-discovery.toml
+python -m data_collector verify-run RUN_ROOT
 ```
 
-For the full options universe, `config/v2-deribit-options.toml` provides the
-all-options settings; select the environment and a writable data root explicitly.
+Verification rereads native bodies, checks source/config hashes and receipt
+ordering, rebuilds every universe version from raw discovery, and binds timing
+evidence to raw requests and ACKs. It validates full top-20 pair shape on every
+book push and requires post-ACK book/ticker/index initialization. This is raw
+coverage with explicit gaps, not a derived book replay. A failed prefix may pass
+integrity verification while reporting `changing_universe_coverage_verified`
+as false; that does not pass capture acceptance.
 
-For perpetuals and dated futures with their index dependencies, use
-`config/v2-deribit-futures.toml`. `all_futures = true` selects every native future
-in the frozen BTC/ETH discovery, including coin and linear currency variants,
-and each distinct metadata `price_index`. It is exclusive with `all_options`
-and explicit symbols. One socket captures book/ticker/trades at 100ms plus
-`deribit_price_index.<index_name>` updates at their native cadence. ACKs,
-native book snapshots, initial tickers and initial index values are required
-before the duration starts. Shared future/index raw envelopes use product
-`multiplex`; native topic/data and the pinned discovery retain their identities.
-Verification checks the complete future/index plan and its initialization.
-
-Capture defaults to raw mode (`capture_mode = "raw"`) on explicit
-`book.<symbol>.100ms` channels. With `all_options = true`, raw capture also
-subscribes `ticker.<symbol>.100ms` and `trades.<symbol>.100ms` for every listed
-option, including returned inactive states. The universe is frozen at startup. All-options mode defaults to
-`raw_processes = 4` (at most 8), partitioning that one discovery into disjoint
-worker symbol sets. Workers reuse the verified frozen discovery without extra
-REST calls, and share one subscription-per-second reservation across processes.
-Each worker owns one socket, measured clock sampler and durable raw lane. The
-supervisor starts the duration only when every worker is initialized, propagates
-Ctrl-C, and drains workers before reporting completion. A worker also stops if its
-supervisor PID disappears, preventing orphan captures after a controller crash.
-Subscriptions use batches of at most `subscription_batch_size` (default 500)
-channels paced at one request per second. All batches must be acknowledged,
-every book must receive its native snapshot and every ticker an initial value
-within `bootstrap_timeout_seconds` (default 180). Quiet trade streams need an
-ACK, not an artificial initial trade. Raw receive bursts are bounded at 512
-frames, 1 MiB of native payload (plus one message), or 50 ms. FIFO raw write
-groups keep queue charges until fsync, stop at clock/control barriers and sync
-before segment sealing; acknowledgements never precede durability. Raw WAL
-segments target `raw_segment_bytes` (default 8 MiB, configurable from 1 to 64 MiB)
-to shorten synchronous sealing pauses; the 5-second receive-to-durable deadline
-is unchanged. Native close codes/reasons are retained as socket-event controls. The all-options duration starts once the
-whole plan is initialized. Rejections and throttle messages are retained verbatim
-and counted, then fail the run; they are never silently skipped. See
-[Deribit usage policy](https://docs.deribit.com/articles/api-usage-policy) and
-[subscription rate limits](https://docs.deribit.com/articles/rate-limits). `duration_seconds`, `max_frames`, and `max_bytes`
-default to 0, meaning unbounded. Positive values stop at the first limit in single-process mode; positive frame/byte
-budgets require `raw_processes = 1` rather than being silently ignored. Multi-worker
-mode supports the global duration and explicit stop. Byte
-limits count native payload bytes and may overshoot by one message. For a one-hour
-run set `duration_seconds = 3600`, leaving the other limits at 0. Ctrl-C requests
-a stop, closes the socket, drains admitted disk work, and prints the run root.
-
-Raw mode reconnects after transport loss with a one-second delay and a fresh
-connection identity. Gap controls identify connection start/end and acquisition
-of all selected native snapshots plus the subscription ACK. They do not certify
-native sequence continuity between messages. Archive or malformed-message errors
-fail the run and retain the durable prefix. Connections remain open until a real transport failure or a requested stop.
-After 64 failed/closed connections, a fresh archive owner bounds connection state
-before retrying; a healthy socket is never closed for owner rollover.
-Reconnect failures use exponential backoff up to 60 seconds with jitter; a
-fully initialized connection resets it. Stop requests remain responsive during
-the wait.
-The owner uses the existing chrony sampler and waits for measured alignment. Disk free space
-is checked during capture against the existing 5 GiB and 10% stop thresholds.
-
-Single-process raw capture is stored under the discovery run's `continuous/`
-directory. Multi-worker runs are under `all-options/`, with immutable worker
-configuration, stdout/stderr, the aggregate `result.json`, and raw data under
-`workers/<n>/continuous/`. Keep the whole parent discovery run when moving data.
-`verify-run ALL_OPTIONS_ROOT` validates every worker and the disjoint, exhaustive
-union against discovery. Export individual worker roots with `--export`; aggregate
-export is intentionally rejected. The mutable subscription-budget file is pacing
-state, not raw evidence. `verify-run` checks committed segment
-integrity, receipt ordering, payload counts and the parent discovery archive.
-It explicitly reports raw verification scope, without claiming derived book
-replay. Snapshot mode remains available with `capture_mode = "snapshots"`, positive
-`duration_seconds` at most 120 and `max_frames` at most 64; that mode retains its
-minute snapshot publication and final book replay checks.
-
-The default REST response bound is8MiB. This pilot freezes a16MiB metadata-proof
-budget in each run result and uses it consistently for capture and readback.
-These values were sized after an actual public discovery response exceeded4MiB
-and its complete response-plus-derived-metadata proof exceeded8MiB. Larger future
-universes still fail closed; this is not a full-universe capacity certificate.
-
-## Read back and export
-
-Replace `RUN_ROOT` with the printed run directory:
-
-```sh
-.venv/bin/python -m data_collector verify-run RUN_ROOT
-.venv/bin/python -m data_collector verify-run RUN_ROOT --export raw.jsonl
-```
-
-Snapshot-mode verification rereads committed segments, validates metadata source
-dependencies, replays selected books, compares final states and verifies published snapshots.
-Export creates a new JSONL file of the original versioned raw envelopes, including
-lossless payload encoding. It never overwrites an existing export. This preserves
-data for downstream processing; it is not an ML feature table.
+Historical single-owner/frozen-shard/snapshot archives remain readable. Existing
+exports remain exact raw envelopes; multi-owner live-option export is disabled.
+The old frozen raw capture and futures CLI paths are not_enabled for new runs.
+The bounded historical snapshot path still uses `capture_mode = "snapshots"`,
+at most 120 seconds and 64 frames, with explicit symbols and its original
+snapshot/replay semantics. It is separate from the selected live raw profile.
 
 ## Current boundary
 

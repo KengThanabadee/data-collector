@@ -92,9 +92,20 @@ class RawOwner:
         ack=await future
         return self.confirm(record,ack)
 
+    @staticmethod
+    def check_ack(record,ack):
+        """Check the admission's fsynced ACK without serializing its body again.
+
+        Identity/UTC/monotonic receipt fields do not change when the lane stamps
+        clock epoch and ingress ordinal. Receive routing only needs those fields;
+        metadata dependencies use confirm() for the fully stamped raw hash.
+        """
+        if not isinstance(ack,DurableAck) or not ack.timing_valid or ack.record_id!=record.record_id:
+            raise ValueError('raw durability unconfirmed, foreign or late')
+        return record
+
     def confirm(self,record,ack):
-        if not isinstance(ack,DurableAck) or not ack.timing_valid:
-            raise ValueError('raw durability unconfirmed or late')
+        self.check_ack(record,ack)
         fields=dict(strict_json(record.native_fields_json),collector_ingress_ordinal=ack.ingress_ordinal)
         stored=replace(record,receipt=replace(record.receipt,clock_epoch=ack.clock_epoch),native_fields_json=canonical(fields))
         if digest(stored.to_bytes())!=ack.raw_sha256:raise ValueError('durable raw hash differs')

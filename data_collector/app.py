@@ -169,6 +169,11 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
         from .binance import run as binance_run
         return await binance_run(config,discover_only=discover_only,session_factory=session_factory,
             observer=observer,clock_read=clock_read,clock_wait=clock_wait)
+    if not discover_only and config.all_futures:
+        raise ValueError('Deribit futures feeds are not_enabled: downloadable history; inverse options are the selected live scope')
+    if (not discover_only and config.capture_mode=='raw' and not config.rediscover_options
+            and (config.symbols or config.all_options)):
+        raise ValueError('legacy Deribit raw capture is not_enabled; use the live inverse-options configuration with rediscover_options=true')
     if not discover_only and config.rediscover_options:
         from .dynamic_options import capture
         return await capture(config,session_factory=session_factory,observer=observer,clock_read=clock_read,clock_wait=clock_wait)

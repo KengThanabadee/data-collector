@@ -1,5 +1,5 @@
 # Bounded v2 discovery bootstrap; not a full release or capture configuration.
-# Run discover first, then set current option symbols before capture.
+# Use this for discover; use v2-deribit-options.toml for selected live capture.
 [data_collector]
 schema = "dc.config/2"
 venue = "deribit"

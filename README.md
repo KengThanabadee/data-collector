@@ -2,9 +2,9 @@
 
 GitHub: [KengThanabadee/option-collector](https://github.com/KengThanabadee/option-collector) (private)
 
-เป้าหมาย v2 คือสะสม public market data ของ BTC/ETH จาก Deribit, Binance และ Bybit ผ่าน WebSocket พร้อม REST เสริม ครอบคลุม spot, perpetuals, dated futures, options และ combos/spreads ตาม feed ที่มี เก็บต้นฉบับ เวลา metadata และช่วงข้อมูลขาด เพื่อ replay และสร้างภาพตลาด ณ เวลาอ้างอิงร่วมกัน
+ขอบเขต v2 ปัจจุบันคือ Deribit BTC/ETH inverse options (book 20 levels, ticker, trades และ index), Binance USDⓈ-M ตามรายชื่อที่ตั้งค่า และ Bybit options (ticker และ publicTrade) เก็บ raw bytes, เวลา, metadata และช่วงข้อมูลขาด ตาม [collection scope](docs/v2/COLLECTION_SCOPE.md)
 
-สถานะปัจจุบันและงานถัดไปอยู่ที่ [PLANS.md](PLANS.md) โดยย่อ: v1 คือ Deribit REST collector ที่ใช้งานได้ ส่วน v2 รัน `discover`, `capture` และ `verify-run` สำหรับ Deribit option books ได้แล้ว โดย `capture` แบบ raw เก็บต่อเนื่องได้ โดย duration, frame และ byte limits เป็น unbounded ตามค่าเริ่มต้น และผ่านการรันหนึ่งชั่วโมงใน Linux VM แล้ว ส่วน snapshot mode ยังจำกัดที่ 120 วินาที งานถัดไปคือรัน 24 ชั่วโมงบน VPS เมื่อพร้อม ดูวิธีรันที่ [docs/v2/RUNNING.md](docs/v2/RUNNING.md) ประวัติการพัฒนาทีละ chunk อยู่ใน [docs/v2/history/](docs/v2/history/IMPLEMENTATION.md)
+สถานะและงานถัดไปอยู่ที่ [PLANS.md](PLANS.md): v1 เป็น Deribit REST collector ส่วน v2 มี `discover`, `capture` และ `verify-run` พร้อม live option rediscovery โดย raw mode มี duration, frame และ byte limits เป็น unbounded ตามค่าเริ่มต้น Snapshot mode เดิมยังจำกัด 120 วินาที ผลรันหนึ่งชั่วโมงเดิมเป็น profile เก่า; เกณฑ์รับงานใหม่ที่ครบสาม venues และคร่อม 08:00 UTC ยังไม่เสร็จ ดูวิธีรันที่ [docs/v2/RUNNING.md](docs/v2/RUNNING.md) และ [ประวัติการพัฒนา](docs/v2/history/IMPLEMENTATION.md)
 
 - [Specification v2: ขอบเขตและ contracts](SPEC.md)
 - [Feed capability/coverage และข้อจำกัดแต่ละตลาด](docs/v2/FEEDS.md)

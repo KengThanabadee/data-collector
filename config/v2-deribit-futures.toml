@@ -1,3 +1,4 @@
+# Historical profile; new CLI capture is not_enabled because history is downloadable.
 [data_collector]
 schema = "dc.config/2"
 environment = "testnet"

@@ -90,8 +90,8 @@ class DiscoveryConfig:
         for name,maximum in (('subscription_batch_size',500),('bootstrap_timeout_seconds',600)):
             integer(getattr(self,name),name,1)
             if getattr(self,name)>maximum:raise ValueError('subscription bound exceeded: '+name)
-        if self.rediscover_options and self.subscription_batch_size<3:
-            raise ValueError('live option batches must fit all three instrument feeds')
+        if self.rediscover_options and self.subscription_batch_size<5:
+            raise ValueError('live option batches must fit the five global channels')
         text(self.chronyc, "chronyc executable")
         # An executable name/path, never a shell command or argument list.
         if self.chronyc.startswith("-") or "\x7f" in self.chronyc:

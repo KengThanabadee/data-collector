@@ -1,4 +1,4 @@
-# Full listed BTC/ETH option universe; book, ticker and trades at100ms.
+# Current BTC/ETH inverse options; top-20 replacements, ticker, per-kind trades and index.
 # Choose environment/data_root explicitly for production; use a writable Linux root.
 [data_collector]
 schema = "dc.config/2"
@@ -7,7 +7,8 @@ environment = "testnet"
 data_root = "../data/v2/testnet-options"
 capture_mode = "raw"
 all_options = true
-raw_processes = 4
+raw_processes = 1
+rediscover_options = true
 raw_segment_bytes = 8388608
 symbols = []
 subscription_batch_size = 500

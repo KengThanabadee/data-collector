@@ -145,7 +145,7 @@ class OptionUniverse:
         self.members={};self.pending={};self.acknowledged=set();self.requests={}
         self.revision=0;self.revision_sha256=None;self.unhealthy=False
 
-    def refresh(self, rows, *, source_ids, utc_ns, monotonic_ns, base=None, exclusions=()):
+    def refresh(self, rows, *, source_ids, utc_ns, monotonic_ns, base=None, exclusions=(), observations=None):
         integer(utc_ns,'observation UTC',1);integer(monotonic_ns,'observation monotonic',0)
         if base not in {None,'BTC','ETH'}:raise ValueError('selected refresh partition required')
         if not isinstance(source_ids,(list,tuple)) or not source_ids:
@@ -177,12 +177,24 @@ class OptionUniverse:
             added=added,retired=retired,changed=changed,
             retirements=[dict(symbol=name,incarnation=previous[name].incarnation,
                 retirement_utc_ns=utc_ns,retirement_monotonic_ns=monotonic_ns) for name in retired])
+        if observations is not None:
+            if not isinstance(observations,dict):raise ValueError('per-instrument source observations required')
+            body['instrument_observations']=[]
+            for name in added:
+                value=observations[name]
+                if set(value)!={'record_id','utc_ns','monotonic_ns'}:
+                    raise ValueError('typed instrument observation required')
+                text(value['record_id'],'observation raw source')
+                integer(value['utc_ns'],'instrument observation UTC',1)
+                integer(value['monotonic_ns'],'instrument observation monotonic',0)
+                body['instrument_observations'].append(dict(symbol=name,**value))
         encoded=canonical(body)
         for name in retired:
             self.pending.pop(name,None);self.acknowledged.discard(name);self.requests.pop(name,None)
         for name in added:
-            self.pending[name]=dict(observed_utc_ns=utc_ns,observed_monotonic_ns=monotonic_ns,
-                deadline_monotonic_ns=monotonic_ns+DEADLINE_NS)
+            seen=dict(utc_ns=utc_ns,monotonic_ns=monotonic_ns) if observations is None else observations[name]
+            self.pending[name]=dict(observed_utc_ns=seen['utc_ns'],observed_monotonic_ns=seen['monotonic_ns'],
+                deadline_monotonic_ns=seen['monotonic_ns']+DEADLINE_NS)
         self.members=proposed;self.revision+=1;self.revision_sha256=digest(encoded);self.unhealthy=False
         return encoded
 

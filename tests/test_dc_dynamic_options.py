@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock,patch
 
 from data_collector.app import run,verify_run
 from data_collector.contracts import canonical,strict_json
-from data_collector.dynamic_options import LIFECYCLE,instrument_channels
+from data_collector.dynamic_options import LIFECYCLE,GLOBALS,INDEXES,instrument_channels,native_push
 from data_collector.rawrun import RawOwner
 from data_collector.segments import iter_segment_records
 from tests import test_dc_app as fixtures
@@ -20,19 +20,29 @@ class LiveSession:
     _retry_connection=False
     def __init__(self):
         self.socket=Socket();self.rows=[];self.calls=0;self.subscribed=set();self.rejected=False
-        self.push=True;self.malformed=False;self.delay=None;self.connects=0;self.bad_push=False;self.closed=False
+        self.push=True;self.malformed=False;self.delay=None;self.connects=0;self.bad_push=False;self.closed=False;self.book_push=True;self.before_ack=False;self.index_push=True;self.suppress_reconnect_options=False
         async def send(body):
             value=strict_json(body.encode());self.socket.sent.append(value)
             method=value['method']
             if method in {'public/subscribe','public/unsubscribe'}:
                 channels=value['params']['channels']
-                if self.rejected and channels!=[LIFECYCLE]:
+                if self.suppress_reconnect_options and self.connects>=2 and LIFECYCLE not in channels:return
+                if self.rejected and LIFECYCLE not in channels:
                     self.socket.put(dict(jsonrpc='2.0',id=value['id'],error=dict(code=10028,message='too_many_requests')))
                     self.socket.put(dict(jsonrpc='2.0',method='heartbeat',params=dict(type='heartbeat')))
                     return
+                if self.before_ack and method=='public/subscribe':
+                    for channel in channels:
+                        if channel.startswith('book.'):
+                            self.book(channel)
                 self.socket.put(dict(jsonrpc='2.0',id=value['id'],result=channels))
                 if method=='public/subscribe':
                     for channel in channels:
+                        if channel in INDEXES and self.index_push:
+                            self.socket.put(dict(jsonrpc='2.0',method='subscription',params=dict(channel=channel,
+                                data=dict(index_name=channel.removeprefix('deribit_price_index.'),price=100,timestamp=1))))
+                        elif channel.startswith('book.') and self.book_push and self.push:
+                            self.book(channel)
                         if channel.startswith('ticker.'):
                             name=channel[7:-6];self.subscribed.add(name)
                             if self.bad_push:self.socket.put(b'{broken')
@@ -40,6 +50,9 @@ class LiveSession:
                                 channel=channel,data=dict(instrument_name=name))))
             else:self.socket.put(dict(jsonrpc='2.0',id=value['id'],result=True))
         self.socket.send_str=send
+    def book(self,channel):
+        self.socket.put(dict(jsonrpc='2.0',method='subscription',params=dict(channel=channel,
+            data=dict(instrument_name=channel[5:-14],timestamp=1,change_id=1,bids=[[100,1]],asks=[[101,2]]))))
     async def __aenter__(self):return self
     async def __aexit__(self,*args):self.closed=True
     async def ws_connect(self,*args,**kwargs):
@@ -284,6 +297,161 @@ class DynamicOptionsTests(unittest.IsolatedAsyncioTestCase):
         revisions=[strict_json(r.body)['revision'] for r in self.records(result,metadata=True) if r.channel=='option_universe']
         excluded=revisions[0]['exclusions'];self.assertEqual(excluded[0]['status'],'not_enabled')
         self.assertIn('inverse',excluded[0]['reason'])
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+
+    async def test_book_before_ack_cannot_initialize_top20(self):
+        self.setup_live();self.session.before_ack=True;self.session.book_push=False
+        task=asyncio.create_task(run(self.config,session_factory=lambda:self.session,observer=self.observe,
+            clock_read=self.clock_read,clock_wait=self.clock_wait))
+        self.addAsyncCleanup(self.cleanup_task,task)
+        await self.wait_for(lambda:bool(self.session.subscribed))
+        result=await self.finish(task)
+        self.assertEqual(result['status'],'failed',result)
+        self.assertTrue(verify_run(result['root'])['archive_verified'])
+        path=Path(result['root'])/'result.json';report=strict_json(path.read_bytes())
+        report['status']='raw_capture_complete';path.write_bytes(canonical(report))
+        with self.assertRaisesRegex(ValueError,'initialized|first push'):verify_run(result['root'])
+
+    async def test_index_ack_without_initial_value_is_incomplete(self):
+        self.setup_live();self.session.index_push=False
+        task=asyncio.create_task(run(self.config,session_factory=lambda:self.session,observer=self.observe,
+            clock_read=self.clock_read,clock_wait=self.clock_wait))
+        self.addAsyncCleanup(self.cleanup_task,task)
+        await self.wait_for(lambda:bool(self.session.subscribed))
+        result=await self.finish(task)
+        self.assertEqual(result['status'],'failed',result)
+        path=Path(result['root'])/'result.json';report=strict_json(path.read_bytes())
+        report['status']='raw_capture_complete';path.write_bytes(canonical(report))
+        with self.assertRaisesRegex(ValueError,'initialized'):verify_run(result['root'])
+
+    async def test_selected_topics_have_no_per_instrument_trade_or_linear_index(self):
+        self.setup_live();task=await self.start_live();result=await self.finish(task)
+        self.assertEqual(result['status'],'raw_capture_complete',result)
+        topics={c for request in self.session.socket.sent if request['method']=='public/subscribe'
+            for c in request['params']['channels']}
+        self.assertEqual(topics,set(GLOBALS)|set(instrument_channels('BTC-OLD-C')))
+        self.assertNotIn('trades.BTC-OLD-C.100ms',topics)
+        books=[strict_json(r.body)['params']['data'] for r in self.records(result)
+            if r.kind=='ws_message' and b'book.BTC-OLD-C.none.20.100ms' in r.body and b'instrument_name' in r.body]
+        self.assertTrue(books);self.assertTrue(all('type' not in b for b in books))
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+
+    def test_top20_shape_requires_complete_pairs_and_allows_empty_replacements(self):
+        def push(data):return dict(method='subscription',params=dict(
+            channel='book.BTC-OLD-C.none.20.100ms',data=data))
+        first=dict(instrument_name='BTC-OLD-C',change_id=1,timestamp=1,
+            bids=[[100-i,1] for i in range(20)],asks=[[101+i,2] for i in range(20)])
+        self.assertEqual(native_push(push(first)),('book','BTC-OLD-C'))
+        second=dict(first,change_id=2,bids=[],asks=[[102,3]])
+        self.assertEqual(native_push(push(second)),('book','BTC-OLD-C'))
+        for malformed in (dict(first,bids=[['new',100,1]]),dict(first,asks=[[i,1] for i in range(21)]),
+                dict(first,instrument_name='ETH-WRONG-P')):
+            with self.assertRaises(ValueError):native_push(push(malformed))
+
+    def test_top20_and_index_reject_non_numeric_or_nonfinite_fields(self):
+        for bad in ('bad','NaN','Infinity','1e','00',True,None):
+            with self.subTest(value=bad):
+                book=dict(method='subscription',params=dict(channel='book.BTC-OLD-C.none.20.100ms',
+                    data=dict(instrument_name='BTC-OLD-C',change_id=1,timestamp=1,bids=[[bad,1]],asks=[])))
+                with self.assertRaisesRegex(ValueError,'numeric'):native_push(book)
+                index=dict(method='subscription',params=dict(channel=INDEXES[0],
+                    data=dict(index_name='btc_usd',timestamp=1,price=bad)))
+                with self.assertRaisesRegex(ValueError,'numeric'):native_push(index)
+
+    async def test_duration_during_rebootstrap_preserves_prior_coverage_and_explicit_gap(self):
+        import aiohttp
+        self.setup_live();self.config=replace(self.config,duration_seconds=3)
+        task=await self.start_live();self.session.suppress_reconnect_options=True
+        self.session.socket.incoming.put_nowait(aiohttp.WSMessage(aiohttp.WSMsgType.CLOSE,1000,'server restart'))
+        result=await asyncio.wait_for(task,8)
+        self.assertEqual(result['status'],'raw_capture_complete',result)
+        self.assertEqual(result['connections'],2)
+        self.assertTrue(result['connection_incomplete_at_stop'])
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+        events=[strict_json(r.body) for r in self.records(result) if r.channel=='socket_event']
+        self.assertEqual(events[0]['reason'],'server restart')
+
+    async def test_cli_rejects_dropped_futures_and_legacy_raw_profiles(self):
+        self.setup_live()
+        future=replace(self.config,all_options=False,rediscover_options=False,all_futures=True)
+        with self.assertRaisesRegex(ValueError,'futures.*not_enabled'):await run(future)
+        legacy=replace(self.config,rediscover_options=False)
+        with self.assertRaisesRegex(ValueError,'legacy.*not_enabled'):await run(legacy)
+        self.assertFalse(self.root.exists())
+
+    def test_receive_ack_rejects_foreign_identity_and_late_durability(self):
+        from data_collector.contracts import RawRecord,Receipt,Provenance
+        from data_collector.lane import DurableAck
+        record=RawRecord(Receipt('capture','process','socket',0,1,1,'pending'),
+            'deribit','testnet','multiplex','multiplex','ws_message',b'{}',Provenance('a'*64,'b'*64,'c'*64))
+        ack=DurableAck(record.record_id,'d'*64,0,1,True,'epoch')
+        self.assertIs(RawOwner.check_ack(record,ack),record)
+        with self.assertRaisesRegex(ValueError,'foreign'):RawOwner.check_ack(record,replace(ack,record_id='wrong'))
+        with self.assertRaisesRegex(ValueError,'late'):RawOwner.check_ack(record,replace(ack,timing_valid=False))
+
+    async def test_reconciled_lifecycle_receipts_do_not_accumulate_past_instrument_bound(self):
+        self.setup_live();self.config=replace(self.config,max_instruments=2)
+        task=await self.start_live()
+        for _ in range(4):
+            before=self.session.calls
+            self.session.notify('BTC-OLD-C')
+            await self.wait_for(lambda:self.session.calls>before)
+            # Wait for the completed REST response to publish its revision.
+            await asyncio.sleep(.3)
+        result=await self.finish(task)
+        self.assertEqual(result['status'],'raw_capture_complete',result)
+        self.assertGreaterEqual(result['universe_versions'],5)
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+
+    async def test_each_added_option_uses_its_own_first_native_observation(self):
+        self.setup_live();task=await self.start_live()
+        gate=asyncio.Event();self.session.delay=gate
+        self.session.rows.append(self.row('BTC-NEW-A-C',2));self.session.notify('BTC-NEW-A-C')
+        await self.wait_for(lambda:self.session.calls>=2)
+        self.session.rows.append(self.row('BTC-NEW-B-P',3));self.session.notify('BTC-NEW-B-P')
+        await asyncio.sleep(.1);self.session.delay=None;gate.set()
+        await self.wait_for(lambda:'BTC-NEW-B-P' in self.session.subscribed)
+        result=await self.finish(task);self.assertEqual(result['status'],'raw_capture_complete',result)
+        raw=self.records(result)
+        observed={}
+        for record in raw:
+            if record.kind!='ws_message':continue
+            value=strict_json(record.body)
+            if value.get('method')=='subscription' and value['params']['channel']==LIFECYCLE:
+                observed[value['params']['data']['instrument_name']]=record
+        claims=[v for r in self.records(result,metadata=True) if r.channel=='option_universe'
+            for v in strict_json(r.body)['revision']['instrument_observations'] if v['symbol'] in observed]
+        self.assertEqual(len(claims),2)
+        for claim in claims:
+            actual=observed[claim['symbol']]
+            self.assertEqual(claim['record_id'],actual.record_id)
+            self.assertEqual(claim['monotonic_ns'],actual.receipt.monotonic_ns)
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+
+    async def test_slow_cached_refresh_does_not_resurrect_expired_members(self):
+        self.setup_live();expiry=time.time_ns()//1_000_000+4500
+        self.session.rows=[self.row('BTC-OLD-C',1,expiry=expiry),self.row('BTC-LATER-P',2)]
+        task=await self.start_live();gate=asyncio.Event();self.session.delay=gate
+        self.session.notify('BTC-LATER-P')
+        await self.wait_for(lambda:self.session.calls>=2)
+        await self.wait_for(lambda:any(r['method']=='public/unsubscribe' for r in self.session.socket.sent))
+        self.session.delay=None;gate.set();await asyncio.sleep(.3)
+        result=await self.finish(task);self.assertEqual(result['status'],'raw_capture_complete',result)
+        self.assertEqual(result['retired_options'],1)
+        revisions=[strict_json(r.body)['revision'] for r in self.records(result,metadata=True) if r.channel=='option_universe']
+        self.assertFalse(any('BTC-OLD-C' in r['added'] for r in revisions[1:]))
+        self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
+
+    async def test_delayed_settlement_of_retired_option_is_not_a_new_listing(self):
+        self.setup_live();expiry=time.time_ns()//1_000_000+4500
+        later=self.row('BTC-LATER-P',2)
+        self.session.rows=[self.row('BTC-OLD-C',1,expiry=expiry),later]
+        task=await self.start_live()
+        await self.wait_for(lambda:any(r['method']=='public/unsubscribe' for r in self.session.socket.sent))
+        self.session.rows=[later];self.session.notify('BTC-OLD-C','settlement')
+        await self.wait_for(lambda:self.session.calls>=2)
+        result=await self.finish(task);self.assertEqual(result['status'],'raw_capture_complete',result)
+        self.assertEqual(result['retired_options'],1)
         self.assertTrue(verify_run(result['root'])['changing_universe_coverage_verified'])
 
 

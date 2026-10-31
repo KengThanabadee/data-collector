@@ -52,7 +52,7 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 | Data | Source |
 |---|---|
 | Deribit perp/futures 1m bars, trades, funding | `get_tradingview_chart_data`, history.deribit.com, `get_funding_rate_history` |
-| Deribit option settlement, expired instruments | `get_delivery_prices`; history.deribit.com `get_instruments?include_old=true` |
+| Deribit option settlement, expired instruments | `get_delivery_prices`; history.deribit.com `get_instruments?expired=true` (verified 31 Oct 2026: 124,759 expired BTC options; `include_old=true` returns only the 985 active ones) |
 | Binance klines, aggTrades, funding, mark/index/premium | data.binance.vision (from 2020-01) |
 | Bybit perp book and trades | quote-saver.bycsi.com (ob200, 100 ms), public.bybit.com |
 | Bybit klines, mark/index/premium | `/v5/market/*kline`, 1000 rows per request, back to 2020 |
