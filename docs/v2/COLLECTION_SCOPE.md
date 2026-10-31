@@ -25,7 +25,7 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 |---|---|---|
 | Deribit BTC/ETH inverse options (USDC linear options excluded) | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms` | no free book/ticker history |
 | Deribit | BTC/ETH index | reference for options |
-| Binance USDⓈ-M | `bookTicker` and `depth20@100ms` on the `/public` route; `aggTrade` on the `/market` route. Symbols come from a configured list (BTCUSDT, ETHUSDT, alts TBD). | bookTicker archive ended 2024-03-30; no depth-20 archive. aggTrade is kept for alignment with the book. |
+| Binance USDⓈ-M | `bookTicker` and `depth20@100ms` on the `/public` route; `aggTrade` on the `/market` route. Symbols come from a configured list (BTCUSDT, ETHUSDT, alts TBD). Liquidations: `!forceOrder@arr` (all symbols) on the `/market` route; on 31 Oct the `/public` route ACKed it and delivered nothing. | bookTicker archive ended 2024-03-30; no depth-20 archive; no liquidation archive. aggTrade is kept for alignment with the book. Liquidations are a stat-arb feature; Binance sends at most one per symbol per second. |
 | Bybit BTC/ETH options | `tickers.<symbol>`, `publicTrade.<baseCoin>` | no option book, ticker or trade history |
 | All three venues | discovery and instrument metadata (Deribit instruments, Binance `exchangeInfo`, Bybit `instruments-info`), append-only | tick/lot, strikes and expiries are current-only on the venues |
 
@@ -59,7 +59,7 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 | Bybit funding | `/v5/market/funding/history`, 200 rows per request |
 | Bybit option settlement prices | `/v5/market/new-delivery-price?category=option&baseCoin=<coin>&settleCoin=USDT` (daily history; the old `/delivery-price` returns an empty list) |
 
-**Dropped entirely:** Deribit futures feeds; Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`), since nearly all liquidity is in the inverse options; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI, liquidation, and option depth books; full-depth books on all venues.
+**Dropped entirely:** Deribit futures feeds; Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`), since nearly all liquidity is in the inverse options; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI and liquidation (Binance liquidations are the feature); Bybit option depth books for now (see Open); full-depth books on all venues.
 
 ## Acceptance
 
@@ -89,6 +89,7 @@ Bybit options are pre-listed before 07:25, so this run does not exercise Bybit's
 
 - The Binance alt list. Book data for an alt starts only from the day it is added.
 - Bybit Thai-KYC access from a foreign IP. This concerns trading only; public data needs no account.
+- Bybit option depth books (`orderbook.25`, 20 ms; no smaller depth exists). Revisit once order sizes show whether fills go past the top level that `tickers` carries. They have no archive, so data before that decision is not recoverable.
 - Optional: Deribit DVOL (`deribit_volatility_index`). Its 1m history is downloadable only about 4–6 months back.
 
 ## Affected elsewhere

@@ -11,7 +11,7 @@ Features use 20 book levels from the deepest market for the instrument type: Der
 | Venue | Selected live capture |
 |---|---|
 | Deribit BTC/ETH inverse options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms`, plus `btc_usd` and `eth_usd` indexes |
-| Binance USDⓈ-M | `bookTicker`, `depth20@100ms`, `aggTrade` for a configured list initially BTCUSDT and ETHUSDT; additional symbols require explicit configuration |
+| Binance USDⓈ-M | `bookTicker`, `depth20@100ms`, `aggTrade` for a configured list initially BTCUSDT and ETHUSDT; additional symbols require explicit configuration. Also record all-symbol `!forceOrder@arr` on `/market`, limited by Binance to at most one liquidation per symbol per second |
 | Bybit BTC/ETH options | Per-symbol `tickers` and base-coin `publicTrade`, including PreLaunch instruments; USDT settlement is native metadata |
 
 Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`) and their indexes are `not_enabled` because nearly all liquidity is in inverse options. Full-depth and diff books, REST book seeds, Deribit futures/spot/combos, Binance spot/COIN-M/options, and Bybit non-option products, option books, spreads/RPI/liquidation are `not_enabled`. Their individual reasons remain visible in [FEEDS.md](docs/v2/FEEDS.md). Downloadable bars, trades, funding and reference history use the sources listed in the collection decision; they are not additional live jobs. Do not substitute marks for absent quotes.
@@ -103,7 +103,7 @@ Current implementation order, each with a brief in PLANS.md, fresh agent review 
 
 1. Option universe rediscovery during capture, including new listings and expiry retirement.
 2. Deribit inverse-only top-20 option book, ticker, per-kind trades and BTC/ETH indexes; disable futures and USDC linear option/index feeds.
-3. Binance USDⓈ-M configured-list bookTicker, depth20@100ms and aggTrade; reuse applicable unfinished work and remove spot capture parts.
+3. Binance USDⓈ-M configured-list bookTicker, depth20@100ms and aggTrade, plus all-symbol !forceOrder@arr liquidations on /market; reuse applicable unfinished work and remove spot capture parts. The liquidation feed is not exhaustive: at most one per symbol per second.
 4. Bybit option tickers and publicTrade, sharded across connections under both 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run a separate live enforcement probe once and retain its result; continue per-connection sharding unless that evidence shows otherwise.
 
 Acceptance requires one Linux run under the collector acceptance setup, at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC; any day including weekends qualifies. Use Lima dc-acceptance with chrony, its Python 3.12 venv and Mac `caffeinate -i -s`.
