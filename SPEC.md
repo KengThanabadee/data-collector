@@ -8,13 +8,13 @@ The current collection scope is the self-contained [31 October collection decisi
 
 | Venue | Selected live capture |
 |---|---|
-| Deribit BTC/ETH options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms`, plus BTC/ETH index dependencies |
+| Deribit BTC/ETH inverse options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms`, plus `btc_usd` and `eth_usd` indexes |
 | Binance USDⓈ-M | `bookTicker`, `depth20@100ms`, `aggTrade` for a configured list initially BTCUSDT and ETHUSDT; additional symbols require explicit configuration |
 | Bybit BTC/ETH options | Per-symbol `tickers` and base-coin `publicTrade`, including PreLaunch instruments; USDT settlement is native metadata |
 
-Full-depth and diff books, REST book seeds, Deribit futures/spot/combos, Binance spot/COIN-M/options, and Bybit non-option products, option books, spreads/RPI/liquidation are `not_enabled`. Their individual reasons remain visible in [FEEDS.md](docs/v2/FEEDS.md). Downloadable bars, trades, funding and reference history use the sources listed in the collection decision; they are not additional live jobs. Do not substitute marks for absent quotes.
+Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`) and their indexes are `not_enabled` because nearly all liquidity is in inverse options. Full-depth and diff books, REST book seeds, Deribit futures/spot/combos, Binance spot/COIN-M/options, and Bybit non-option products, option books, spreads/RPI/liquidation are `not_enabled`. Their individual reasons remain visible in [FEEDS.md](docs/v2/FEEDS.md). Downloadable bars, trades, funding and reference history use the sources listed in the collection decision; they are not additional live jobs. Do not substitute marks for absent quotes.
 
-The feed catalogue is normative for identity, routes and capability. Selected top-20 pushes must be verified as complete bounded snapshots before use; historical diff recipes do not apply to them. Selection does not assert runtime readiness. Earlier measured runs retain their original feed meaning and do not certify this changed profile.
+The feed catalogue is normative for identity, routes and capability. Selected Deribit top-20 pushes have no `type` field and must be verified as complete bounded snapshots; initialize at the first push after subscribe ACK. The old `type == snapshot` check does not apply; historical diff recipes do not apply to them. Selection does not assert runtime readiness. Earlier measured runs retain their original feed meaning and do not certify this changed profile.
 
 ## 2. Compatibility and project name
 
@@ -100,14 +100,14 @@ No automatic deletion of raw locally or remotely. Storage pressure pauses captur
 Current implementation order, each with a brief in PLANS.md, fresh agent review and commit:
 
 1. Option universe rediscovery during capture, including new listings and expiry retirement.
-2. Deribit top-20 option book, ticker, per-kind trades and index; disable futures feeds.
+2. Deribit inverse-only top-20 option book, ticker, per-kind trades and BTC/ETH indexes; disable futures and USDC linear option/index feeds.
 3. Binance USDⓈ-M configured-list bookTicker, depth20@100ms and aggTrade; reuse applicable unfinished work and remove spot capture parts.
-4. Bybit option tickers and publicTrade.
+4. Bybit option tickers and publicTrade, sharded across connections under both 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run a separate live enforcement probe once and retain its result; continue per-connection sharding unless that evidence shows otherwise.
 
 Acceptance requires one Linux run under the collector acceptance setup, at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC; any day including weekends qualifies. Use Lima dc-acceptance with chrony, its Python 3.12 venv and Mac `caffeinate -i -s`.
 
 The run fails if `verify-run` fails (including coverage for every universe version), a Deribit option created during the run is subscribed more than 120 seconds after creation or never, a next-expiry Bybit PreLaunch option is not subscribed before 08:00 UTC, an option expiring at 08:00 UTC is not retired, or any subscription is rejected. Mid-run additions require an ACK plus a first push; retired options are exempt only after their retirement time.
 
-Record-only evidence: Bybit PreLaunch-to-Trading observed within one discovery interval of launchTime and first bid/ask ticker after 08:00; added strikes on either venue (none acceptable); whether predictedDeliveryPrice filled before expiry; native/archive/including-WAL bytes per hour and GiB per day; peak RSS/CPU; throttled subscriptions. A run without a Bybit intraday strike addition does not prove its mid-run listing path. Preserve failed attempts and explicit gaps. Bybit settlement fallback is 1-minute index-price klines with separate provenance. The full normative scope and acceptance are local in [COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md).
+Record-only evidence: Bybit PreLaunch-to-Trading observed within one discovery interval of launchTime and first bid/ask ticker after 08:00; added strikes on either venue (none acceptable); native/archive/including-WAL bytes per hour and GiB per day; peak RSS/CPU; throttled subscriptions. A run without a Bybit intraday strike addition does not prove its mid-run listing path. Preserve failed attempts and explicit gaps. Bybit option settlement is downloadable from `/v5/market/new-delivery-price?category=option&baseCoin=<coin>&settleCoin=USDT`; no predictedDeliveryPrice derivation or index-kline fallback is required. Record the separate live character-cap enforcement probe (per connection or per request). The full normative scope and acceptance are local in [COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md).
 
 This goal does not certify production readiness. Independent backup/restore and a 24-hour VPS soak remain later gates under [ACCEPTANCE.md](docs/v2/ACCEPTANCE.md). Old full-product recipes are retained for compatibility and historical evidence, not permission to enable dropped feeds.

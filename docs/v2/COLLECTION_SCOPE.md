@@ -23,10 +23,10 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 
 | Venue | Feeds | Why live |
 |---|---|---|
-| Deribit BTC/ETH options | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms` | no free book/ticker history |
+| Deribit BTC/ETH inverse options (USDC linear options excluded) | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms` | no free book/ticker history |
 | Deribit | BTC/ETH index | reference for options |
 | Binance USDⓈ-M | `bookTicker` and `depth20@100ms` on the `/public` route; `aggTrade` on the `/market` route. Symbols come from a configured list (BTCUSDT, ETHUSDT, alts TBD). | bookTicker archive ended 2024-03-30; no depth-20 archive. aggTrade is kept for alignment with the book. |
-| Bybit BTC/ETH options | `tickers.<symbol>`, `publicTrade.<baseCoin>` | no option history at all, settlement price included |
+| Bybit BTC/ETH options | `tickers.<symbol>`, `publicTrade.<baseCoin>` | no option book, ticker or trade history |
 | All three venues | discovery and instrument metadata (Deribit instruments, Binance `exchangeInfo`, Bybit `instruments-info`), append-only | tick/lot, strikes and expiries are current-only on the venues |
 
 ## Requirements
@@ -40,12 +40,10 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
   - the retirement time.
   The 120 s requirement is measured from these records.
 - **Coverage with a changing universe.** verify-run checks each universe version. An option added mid-run must have an ACK and a first push. A retired option is exempt after its retirement time.
-- **Deribit book.** Verify that each depth-20 push on an option is a full top-20 snapshot.
-- **Bybit settlement price.** It cannot be downloaded: `/v5/market/delivery-price?category=option` returns an empty list. It comes from the recorded ticker (`predictedDeliveryPrice`, `indexPrice`). Fallback: Bybit 1m index-price klines.
-- **Bybit subscription limits.**
-  - Use one connection per base coin.
-  - Per connection: at most 2,000 option args.
-  - Per subscribe request: at most 21,000 characters in the args array. About 730 BTC topics come to roughly 27k characters, so the initial subscribe must be split across several requests.
+- **Deribit book.** Verify that each depth-20 push on an option is a full top-20 snapshot. These pushes have no `type` field (keys: `asks`, `bids`, `change_id`, `instrument_name`, `timestamp`). A book counts as initialized at its first push after the subscribe ACK. The old verifier's `type == 'snapshot'` check does not apply.
+- **Bybit subscription limits.** Bybit's docs cap the `args` array at 21,000 characters per public connection, and at 2,000 option args per connection. BTC tickers alone come to about 26k characters as JSON, so a single coin does not fit on one connection.
+  - Shard topics across connections so each connection stays under the cap, with headroom for new listings.
+  - Test once, live, whether the cap is enforced per connection or per request, and record the result. Shard per connection unless the test shows otherwise.
   - On 31 Oct, 1,378 options were listed (730 BTC, 648 ETH), all USDT-settled.
 - **Dropped feeds.** Each is marked `not_enabled` with its reason, never removed silently (SPEC.md).
 
@@ -59,8 +57,9 @@ Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit fun
 | Bybit perp book and trades | quote-saver.bycsi.com (ob200, 100 ms), public.bybit.com |
 | Bybit klines, mark/index/premium | `/v5/market/*kline`, 1000 rows per request, back to 2020 |
 | Bybit funding | `/v5/market/funding/history`, 200 rows per request |
+| Bybit option settlement prices | `/v5/market/new-delivery-price?category=option&baseCoin=<coin>&settleCoin=USDT` (daily history; the old `/delivery-price` returns an empty list) |
 
-**Dropped entirely:** Deribit futures feeds; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI, liquidation, and option depth books; full-depth books on all venues.
+**Dropped entirely:** Deribit futures feeds; Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`), since nearly all liquidity is in the inverse options; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI, liquidation, and option depth books; full-depth books on all venues.
 
 ## Acceptance
 
@@ -68,8 +67,6 @@ One Linux run under the collector's acceptance setup. Both venues list and expir
 - be at least one hour long;
 - start by 07:25 UTC (14:25 Bangkok time);
 - continue past 08:00 UTC.
-
-Bybit's settlement averaging runs 07:30–08:00.
 
 **The run fails if any of these is true:**
 - verify-run fails, including coverage of every universe version;
@@ -81,7 +78,7 @@ Bybit's settlement averaging runs 07:30–08:00.
 **Record only (these do not fail the run):**
 - Bybit: the `PreLaunch`→`Trading` change, seen within one discovery interval of `launchTime`, and the first ticker with bid/ask after 08:00;
 - strikes added during the run on either venue (none is acceptable);
-- whether Bybit `predictedDeliveryPrice` filled before the expiry;
+- the live test of Bybit's character cap: per connection or per request;
 - bytes per hour and GiB per day (native, archive, and including WAL);
 - peak RSS and CPU;
 - throttled subscriptions.
