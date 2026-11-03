@@ -1,6 +1,6 @@
 # Collection scope
 
-Decided by Keng on 31 Oct 2026. This repository copy is normative for the current collection goal. Copied from the decision in `orchestrator/docs/collection-scope.md`; runtime implementation and acceptance remain pending. The repo is self-contained and does not require that external file.
+Decided by Keng on 31 Oct 2026. This file is the contract for the current collection goal; runtime implementation and acceptance remain pending.
 
 ## Principle
 

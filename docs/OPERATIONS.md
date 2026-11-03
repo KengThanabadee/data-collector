@@ -28,6 +28,8 @@ Export อ่าน archive ที่ complete โดย default ถ้าตั
 
 ## เตรียม VPS ก่อนเปิดเก็บ
 
+แผนเครื่อง: Hetzner CX23 (สำรอง CAX11/CX33) ใช้ Ubuntu 24.04 และเข้าด้วย SSH key เท่านั้น ใช้เครื่องร่วมกับ trading-bot โดยแยก repo, service และ user ส่วนขนาด disk ให้คำนวณจาก GiB/day รวม WAL ที่วัดได้จาก acceptance run
+
 ใช้ Ubuntu24.04/Python3.12 บัญชี service `option-collector` วาง release ใหม่ใน `/opt/option-collector/releases/<VERSION>` และ symlink `/opt/option-collector/current` ไป release นั้น สร้าง `.venv` บน VPS ใหม่ ไม่คัดลอก `.venv` จาก Mac
 
 ติดตั้ง source, `requirements.lock`, config และ unit files จากโปรเจกต์ ใช้ `config/vps.toml` เป็น `/etc/option-collector/collector.toml` ข้อมูล `/var/lib/option-collector` ต้องเป็นของ service user รักษา code/release แยกจาก data และไม่ใช้ root รัน collector ตรวจสิทธิ์ด้วย `sudo -u option-collector test -w /var/lib/option-collector`

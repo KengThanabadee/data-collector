@@ -34,7 +34,7 @@ Use four-space indentation, `snake_case` functions/modules, `PascalCase` classes
 
 ## Testing Guidelines
 
-Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, temporary directories, and deterministic clocks. HTTP tests require loopback access; live exchange probes remain separate. Cover changed invariants, failure paths, replay determinism, and v1 compatibility. There is no percentage coverage threshold; production acceptance follows `docs/v2/ACCEPTANCE.md`.
+Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, temporary directories, and deterministic clocks; venue-facing code is tested against recorded venue replies. HTTP tests require loopback access; live exchange probes remain separate. Cover changed invariants, failure paths, replay determinism, and v1 compatibility. There is no percentage coverage threshold; production acceptance follows `docs/v2/ACCEPTANCE.md`.
 
 ## Commit & Pull Request Guidelines
 
@@ -50,6 +50,7 @@ Handle an edge case only when it is realistic: observed in live capture or logs,
 - Make limits configurable, with defaults sized for real use. The collector runs continuously, so duration, frame and byte limits default to unbounded or to values measured from live data.
 - Start every goal from a brief in the format of `docs/agents/BRIEF.md`.
 - Work autonomously toward the goal; the user is usually away. When a choice is unclear, pick the simplest option consistent with SPEC.md, record it as one line in `PLANS.md`, and continue.
+- Live runs on the Lima VM `dc-acceptance` (6 CPU, 6 GiB): when the run ends or stalls, check `limactl list` and run `limactl stop dc-acceptance` if it is idle. The disk is kept, and `limactl start` restores it in under a minute.
 - Measure progress by what the user can run. When three consecutive chunks have not improved it, re-plan: take the shortest path to the goal's runnable result and move the remaining ideas to one-line notes in `PLANS.md`.
 - State each limitation once, in the document where it belongs. Write plain sentences with normal spacing, such as `at most 120 seconds` and `16 MiB`.
 - Count tests as passing only when they finish without errors or warnings, including `ResourceWarning`.
