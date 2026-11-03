@@ -86,6 +86,9 @@ def verify_run(root, *, export=None):
     """Read committed raw afresh, rebuild final books, and optionally export raw."""
     root = Path(root).resolve()
     report = strict_json((root/'result.json').read_bytes())
+    if report.get('schema')=='dc.bybit-options/1':
+        from .bybit_options import verify
+        return verify(root,report,export=export)
     if report.get('schema')=='dc.binance-selected/1':
         from .binance_capture import verify
         return verify(root,report,export=export)
@@ -180,6 +183,11 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
     if (not discover_only and config.capture_mode=='raw' and not config.rediscover_options
             and (config.symbols or config.all_options)):
         raise ValueError('legacy Deribit raw capture is not_enabled; use the live inverse-options configuration with rediscover_options=true')
+    if isinstance(config,DiscoveryConfig) and config.venue=='bybit':
+        if discover_only:raise ValueError('Bybit discovery is archived by capture; run capture')
+        from .bybit_options import capture as bybit_capture
+        return await bybit_capture(config,session_factory=session_factory,observer=observer,
+            clock_read=clock_read,clock_wait=clock_wait)
     if not discover_only and config.rediscover_options:
         from .dynamic_options import capture
         return await capture(config,session_factory=session_factory,observer=observer,clock_read=clock_read,clock_wait=clock_wait)

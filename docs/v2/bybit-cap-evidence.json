@@ -1,0 +1,45 @@
+{
+  "schema": "dc.bybit-cap-readback/1",
+  "evidence_root": "/home/keng.guest/exp-bybit-b/args-probe",
+  "index_sha256": "cb8a8b5e093cc591d51b1e28a80683e36519228dbdeeb6bb4cf19a23ea24ac2f",
+  "cases": {
+    "one_request": [
+      {
+        "topics": 658,
+        "args_chars": 22887,
+        "request_file": "000003.bin",
+        "request_sha256": "b1b1f0f66e6abd365a7e76da2a244414cf268ca3638f2b4f50651b0e95e3888e",
+        "request_utc_ns": 1793453195812910523,
+        "ack_file": "000662.bin",
+        "ack_sha256": "7d045d048cef31741a50272cf936540fd1aaa2604f4c2ee8c04b9a23613b7ebc",
+        "ack_utc_ns": 1793453196164452903,
+        "connection": "db6t924i2jsb5l7d8uqg-2vf45"
+      }
+    ],
+    "two_requests": [
+      {
+        "topics": 329,
+        "args_chars": 11602,
+        "request_file": "000663.bin",
+        "request_sha256": "3f78ceec6c0dd593d089b627aacfc45eacccac8dacb5a8f06e51d178fc52c0fa",
+        "request_utc_ns": 1793453201750536212,
+        "ack_file": "000993.bin",
+        "ack_sha256": "1bdd1498e56a3a911343cb142b6ca76529ac998a08ecb92c9a48eb51cc0be4d5",
+        "ack_utc_ns": 1793453202013675580,
+        "connection": "db6t9ebu7gev06oiju1g-2ve5v"
+      },
+      {
+        "topics": 329,
+        "args_chars": 11286,
+        "request_file": "000994.bin",
+        "request_sha256": "2553579038eaa489f84200a18b3b1925ad572fd2ee62fa4a64b186bd6564168e",
+        "request_utc_ns": 1793453202013881871,
+        "ack_file": "001513.bin",
+        "ack_sha256": "6fe98774d4cf1ca84d454481b9fc6f19c20193aa9442262ace1e386c6cfd5d0e",
+        "ack_utc_ns": 1793453202294695600,
+        "connection": "db6t9ebu7gev06oiju1g-2ve5v"
+      }
+    ]
+  },
+  "conclusion": "One request with 22,887 args characters and two requests totalling 22,887 on one connection were ACKed in the 31 October probe. Neither limit was enforced by rejection in these cases; keep documented per-connection sharding. This is protocol evidence only, not reuse of the rejected exp/bybit-b adapter."
+}

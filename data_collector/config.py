@@ -46,12 +46,27 @@ class DiscoveryConfig:
     option_partition_count: int = 1
     option_partition_index: int = 0
     binance_symbols: tuple[str, ...] = ('BTCUSDT','ETHUSDT')
+    discovery_interval_seconds: int = 60
+    shard_arg_chars: int = 14000
+    shard_max_args: int = 1000
 
     def __post_init__(self):
-        if self.schema != SCHEMA or self.venue not in ("deribit","binance"):
+        if self.schema != SCHEMA or self.venue not in ("deribit","binance","bybit"):
             raise ValueError("supported v2 discovery schema/venue required")
         if self.environment not in ("production", "testnet"):
             raise ValueError("explicit production or testnet environment required")
+        if self.venue=='bybit':
+            for name,default in (('bybit_rest_host','api.bybit.com'),('bybit_ws_host','stream.bybit.com')):
+                if getattr(self,name) is None:object.__setattr__(self,name,default)
+            if (self.environment!='production' or self.capture_mode!='raw' or not self.all_options
+                    or not self.rediscover_options or self.raw_processes!=1 or self.symbols
+                    or self.option_partition_count!=1 or self.option_partition_index!=0
+                    or self.raw_feeds!=('ticker','trades')):
+                raise ValueError('Bybit requires production single-process all_options rediscovery with ticker/trades')
+            for name,low,high in (('discovery_interval_seconds',1,100),('shard_arg_chars',1000,21000),
+                    ('shard_max_args',1,2000)):
+                integer(getattr(self,name),name,low)
+                if getattr(self,name)>high:raise ValueError('Bybit bound exceeded: '+name)
         for name in ('bybit_rest_host','bybit_ws_host'):
             host=getattr(self,name)
             if host is not None:
@@ -96,8 +111,8 @@ class DiscoveryConfig:
         if (self.all_options or self.all_futures) and self.source_discovery_root is not None:
             raise ValueError('whole-family capture requires fresh discovery')
         if type(self.rediscover_options) is not bool or (self.rediscover_options and (
-                self.venue!='deribit' or not self.all_options or self.capture_mode!='raw')):
-            raise ValueError('rediscover_options requires Deribit all_options raw capture')
+                self.venue not in ('deribit','bybit') or not self.all_options or self.capture_mode!='raw')):
+            raise ValueError('rediscover_options requires Deribit/Bybit all_options raw capture')
         integer(self.option_partition_count,'option partition count',1)
         integer(self.option_partition_index,'option partition index',0)
         if (self.option_partition_count>8 or self.option_partition_index>=self.option_partition_count or
@@ -113,7 +128,7 @@ class DiscoveryConfig:
         for name,maximum in (('subscription_batch_size',500),('bootstrap_timeout_seconds',600)):
             integer(getattr(self,name),name,1)
             if getattr(self,name)>maximum:raise ValueError('subscription bound exceeded: '+name)
-        if self.rediscover_options and self.subscription_batch_size<5:
+        if self.rediscover_options and self.venue=='deribit' and self.subscription_batch_size<5:
             raise ValueError('live option batches must fit the five global channels')
         text(self.chronyc, "chronyc executable")
         # An executable name/path, never a shell command or argument list.

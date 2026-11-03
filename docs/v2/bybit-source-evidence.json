@@ -1,0 +1,41 @@
+{
+  "body_root": "experiments/results/bybit-step4/sources",
+  "sources": [
+    {
+      "url": "https://bybit-exchange.github.io/docs/v5/ws/connect",
+      "final_url": "https://bybit-exchange.github.io/docs/v5/ws/connect",
+      "file": "connect.html",
+      "headers_file": "connect.headers",
+      "retrieved_utc": "2026-11-03T08:44:57Z",
+      "sha256": "11f7e69b90fa19a72fe0f1f49c06dbf2baa1b42753b86b43da00fe92684f128f",
+      "bytes": 100152
+    },
+    {
+      "url": "https://bybit-exchange.github.io/docs/v5/market/instrument",
+      "final_url": "https://bybit-exchange.github.io/docs/v5/market/instrument",
+      "file": "instrument.html",
+      "headers_file": "instrument.headers",
+      "retrieved_utc": "2026-11-03T08:44:58Z",
+      "sha256": "2efeee10b0d15ccd4c0bca3096dd0643ccee7dc3a15319516ec6d970a7b8d412",
+      "bytes": 226853
+    },
+    {
+      "url": "https://bybit-exchange.github.io/docs/v5/websocket/public/ticker",
+      "final_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/ticker",
+      "file": "ticker.html",
+      "headers_file": "ticker.headers",
+      "retrieved_utc": "2026-11-03T08:44:59Z",
+      "sha256": "440d41b2a4950a962f9f8839af620b66a8992f39df0e9df3b4168b0cad14c63d",
+      "bytes": 107579
+    },
+    {
+      "url": "https://bybit-exchange.github.io/docs/v5/websocket/public/trade",
+      "final_url": "https://bybit-exchange.github.io/docs/v5/websocket/public/trade",
+      "file": "trade.html",
+      "headers_file": "trade.headers",
+      "retrieved_utc": "2026-11-03T08:44:59Z",
+      "sha256": "c58e2421a49e7813d7658e732cad6beee4c6c8866491a194b6be08b564d48039",
+      "bytes": 48667
+    }
+  ]
+}

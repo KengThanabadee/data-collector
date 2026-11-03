@@ -48,8 +48,8 @@ ACK. Reconnect opens an explicit coverage gap and repeats initialization;
 stopping in a later gap does not erase earlier proven coverage of that same
 incarnation. New options still require their own ACK and first pushes.
 
-Bybit transport integration and the cross-venue expiry-window run remain
-pending. Old archive formats remain verifiable, while new CLI futures capture
+Bybit transport is described below; its intended-host live capacity and the
+cross-venue expiry-window run remain pending. Old archive formats remain verifiable, while new CLI futures capture
 is not_enabled because its history is downloadable. No multi-owner raw export
 is enabled for this path. A verified failed prefix is integrity evidence, not a
 passed capture.
@@ -189,18 +189,64 @@ still allow 10,000 segments; configured unbounded limits do not remove that guar
 Observed acceptance runs and their evidence locations are recorded in
 [PLANS.md](../../PLANS.md).
 
-Bybit transport remains scheduled for step 4 of the current plan. Its public origins
-are configured independently with `bybit_rest_host` and `bybit_ws_host`; values
-are bare DNS hostnames. Without overrides, production and testnet use their
-respective bybit.com hosts. The acceptance configuration on this network must
-include these overrides because the bybit.com names do not resolve here:
+## Bybit option raw capture
+
+Use the single-process sharded profile with a writable Linux data root and the
+Linux Python 3.12 environment:
+
+```sh
+.venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
+.venv/bin/python -m data_collector capture --config config/v2-bybit-options.toml
+.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
+```
+
+It selects BTC/ETH option `tickers.<symbol>` and `publicTrade.BTC/ETH`, including
+PreLaunch instruments from a complete unfiltered paginated discovery walk every
+60 seconds. Each full HTTP response and poll result is archived append-only in
+`metadata/`; changed metadata and expiry produce referenced universe versions.
+Expired instruments are retired and unsubscribed on their current connection.
+The effective config must explicitly select `raw_feeds = ["ticker", "trades"]`;
+other selections are rejected.
+
+Default shard targets are 14,000 args-array characters and 1,000 topics, below
+the documented 21,000-character / 2,000-arg per-connection caps. Set
+`shard_arg_chars`, `shard_max_args` and `discovery_interval_seconds` to change
+these targets within their validation bounds. New listings use available shard
+headroom or a new shard, with at least five seconds between connection attempts.
+One command is in flight per connection because the observed option ACK has no
+request id. Requests and exact COMMAND_RESP topics bind ACK evidence to their
+connection and listing incarnation. A ticker may push before its ACK; it counts
+once requested, while the ACK remains independently required. publicTrade needs
+its ACK without a fabricated initial trade.
+
+`verify-run` re-derives every metadata poll and universe version from raw bytes.
+Every option incarnation needs an ACK and a first ticker push by retirement or
+stop; there is no last-120-second exemption. A first subscription ACK more than
+120 seconds after observation fails, using the ACK as a conservative bound and
+retaining the request time separately. Reconnects of already covered options
+retain explicit gaps and do not repeat that listing deadline. Stopping during a
+later gap preserves earlier coverage; it does not prove that the gap recovered.
+Raw prefixes from failed runs remain verifiable for integrity.
+
+The independent [cap probe readback](bybit-cap-evidence.json) found no rejection
+in its tested 22,887-character cases; sharding still follows the documented caps.
+[Official source hashes](bybit-source-evidence.json), recorded-reply fixtures and
+the [corrected historical experiment](history/BYBIT_EXPERIMENT_A.md) retain the
+evidence and its limits. Bybit live capacity and combined expiry-window runs
+await the VPS because the home connection could not keep up with the experiment.
+
+Public origins are configured independently with `bybit_rest_host` and
+`bybit_ws_host`; values are bare DNS hostnames. The selected production profile
+uses these overrides on the acceptance network:
 
 ```toml
 bybit_rest_host = "api.bytick.com"
 bybit_ws_host = "stream.bytick.com"
 ```
 
-The option WebSocket path remains `/v5/public/option`, REST uses HTTPS, and venue
-identity remains Bybit. Effective configuration archives and hashes both hosts.
+Without overrides the production Bybit profile freezes api.bybit.com and
+stream.bybit.com. The WebSocket path remains `/v5/public/option`, REST uses HTTPS,
+and venue identity remains Bybit. The legacy multi-owner export restriction and
+shared raw-owner connection/segment guards also apply to this profile.
 
 Live Deribit workers negotiate WebSocket per-message deflate and archive the negotiated window in `transport_ready` controls. Raw bodies remain the exact decoded native WebSocket payloads.

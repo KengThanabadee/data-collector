@@ -1,0 +1,28 @@
+# Bybit BTC/ETH option tickers and publicTrade with live rediscovery.
+# api.bybit.com and stream.bybit.com do not resolve on the acceptance network;
+# api.bytick.com and stream.bytick.com are Bybit's documented alternative hosts.
+# Choose a writable Linux data_root.
+[data_collector]
+schema = "dc.config/2"
+venue = "bybit"
+environment = "production"
+data_root = "../data/v2/bybit-options"
+capture_mode = "raw"
+raw_feeds = ["ticker", "trades"]
+all_options = true
+rediscover_options = true
+raw_processes = 1
+raw_segment_bytes = 8388608
+bybit_rest_host = "api.bytick.com"
+bybit_ws_host = "stream.bytick.com"
+discovery_interval_seconds = 60
+shard_arg_chars = 14000
+shard_max_args = 1000
+subscription_batch_size = 200
+bootstrap_timeout_seconds = 180
+timeout_seconds = 30
+warmup_timeout_seconds = 180
+chronyc = "chronyc"
+duration_seconds = 0
+max_frames = 0
+max_bytes = 0

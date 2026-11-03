@@ -152,12 +152,14 @@ class OptionUniverse:
         self.members={};self.pending={};self.acknowledged=set();self.requests={}
         self.revision=0;self.revision_sha256=None;self.unhealthy=False
 
-    def refresh(self, rows, *, source_ids, utc_ns, monotonic_ns, base=None, exclusions=(), observations=None):
-        integer(utc_ns,'observation UTC',1);integer(monotonic_ns,'observation monotonic',0)
+    def changes(self, rows, *, utc_ns, base=None):
+        """Preview a refresh without adding a redundant metadata revision."""
+        proposed=self._propose(rows,utc_ns,base)
+        return proposed!=self.members
+
+    def _propose(self, rows, utc_ns, base):
+        integer(utc_ns,'observation UTC',1)
         if base not in {None,'BTC','ETH'}:raise ValueError('selected refresh partition required')
-        if not isinstance(source_ids,(list,tuple)) or not source_ids:
-            raise ValueError('durable raw source IDs required')
-        for source in source_ids:text(source,'source record ID')
         rows=tuple(rows)
         if not rows:raise ValueError('empty refresh; retain previous universe as stale')
         incoming={}
@@ -174,6 +176,15 @@ class OptionUniverse:
         retained={name:row for name,row in self.members.items() if base and row.base!=base}
         proposed=dict(retained,**eligible)
         if len(proposed)>self.max_instruments:raise ValueError('option bound; no prefix selected')
+        return proposed
+
+    def refresh(self, rows, *, source_ids, utc_ns, monotonic_ns, base=None, exclusions=(), observations=None):
+        integer(utc_ns,'observation UTC',1);integer(monotonic_ns,'observation monotonic',0)
+        if base not in {None,'BTC','ETH'}:raise ValueError('selected refresh partition required')
+        if not isinstance(source_ids,(list,tuple)) or not source_ids:
+            raise ValueError('durable raw source IDs required')
+        for source in source_ids:text(source,'source record ID')
+        proposed=self._propose(rows,utc_ns,base)
         previous=self.members
         added=sorted(name for name,row in proposed.items() if name not in previous or previous[name].key!=row.key)
         retired=sorted(name for name,row in previous.items() if name not in proposed or proposed[name].key!=row.key)

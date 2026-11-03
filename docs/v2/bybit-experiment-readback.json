@@ -1,0 +1,28 @@
+{
+  "source": "/home/keng.guest/exp-bybit-a/data-live3/runs/e17d001e3f784f7b908cc1f1373da441",
+  "source_sha256": "844135692574b5e81ff930ea9c8b6f94ec3006e384c8dc0d79646a7e7c4f7237",
+  "config_sha256": "4aee6c39375b8ad038e7414fcfb7ac346aadef491fc44989d4637a30db854f93",
+  "opened": 14,
+  "epochs_with_ack": 14,
+  "initialized": 11,
+  "never_initialized": [
+    "shard-1-2",
+    "shard-1-3",
+    "shard-2-2"
+  ],
+  "max_native_to_receipt_lag_ms": 173492.07447,
+  "gap_start_to_full_initialization_seconds": [
+    2.107020222,
+    20.295169663,
+    27.874998283,
+    53.76497054,
+    2.432603023,
+    33.281516306,
+    8.250091066,
+    5.114616371,
+    31.692842143,
+    150.269831816,
+    70.224778435
+  ],
+  "note": "Historical coverage does not prove that every connection recovered or continuous low latency."
+}

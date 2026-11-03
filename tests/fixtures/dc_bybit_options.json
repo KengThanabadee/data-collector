@@ -1,0 +1,84 @@
+{
+  "source": "/home/keng.guest/exp-bybit-a/data-live3/runs/e17d001e3f784f7b908cc1f1373da441",
+  "metadata_projection": "one unmodified row from each full archived coin response",
+  "metadata": [
+    {
+      "base": "BTC",
+      "row": {
+        "symbolId": 424533,
+        "symbol": "BTC-24SEP27-65000-P-USDT",
+        "status": "Trading",
+        "baseCoin": "BTC",
+        "quoteCoin": "USDT",
+        "settleCoin": "USDT",
+        "optionsType": "Put",
+        "launchTime": "1792855800000",
+        "deliveryTime": "1821772800000",
+        "deliveryFeeRate": "0.00015",
+        "priceFilter": {
+          "minPrice": "5",
+          "maxPrice": "1110000",
+          "tickSize": "5"
+        },
+        "lotSizeFilter": {
+          "maxOrderQty": "500",
+          "minOrderQty": "0.01",
+          "qtyStep": "0.01"
+        },
+        "displayName": "BTCUSDT-24SEP27-65000-P"
+      },
+      "response_sha256": "b239a5dd5453405f36cf211cb40c5dc6e16ca9cd164c1cd9d491dab87b56e4e4",
+      "receipt_utc_ns": 1793456559441713724
+    },
+    {
+      "base": "ETH",
+      "row": {
+        "symbolId": 428209,
+        "symbol": "ETH-24SEP27-1800-P-USDT",
+        "status": "Trading",
+        "baseCoin": "ETH",
+        "quoteCoin": "USDT",
+        "settleCoin": "USDT",
+        "optionsType": "Put",
+        "launchTime": "1793320200000",
+        "deliveryTime": "1821772800000",
+        "deliveryFeeRate": "0.00015",
+        "priceFilter": {
+          "minPrice": "0.1",
+          "maxPrice": "41000",
+          "tickSize": "0.1"
+        },
+        "lotSizeFilter": {
+          "maxOrderQty": "5000",
+          "minOrderQty": "0.1",
+          "qtyStep": "0.1"
+        },
+        "displayName": "ETHUSDT-24SEP27-1800-P"
+      },
+      "response_sha256": "f29ec25f315c282de6115ba46d0ec30136c8fc2369d816df49293542be5cc98b",
+      "receipt_utc_ns": 1793456559569045817
+    }
+  ],
+  "samples": {
+    "ticker": {
+      "body": "{\"topic\":\"tickers.BTC-13NOV26-68000-C-USDT\",\"ts\":1793456559089,\"type\":\"snapshot\",\"id\":\"tickers.BTC-13NOV26-68000-C-USDT-79391621860-1793456559089\",\"data\":{\"symbol\":\"BTC-13NOV26-68000-C-USDT\",\"bidPrice\":\"9780\",\"bidSize\":\"3\",\"bidIv\":\"0.4675\",\"askPrice\":\"10015\",\"askSize\":\"3\",\"askIv\":\"0.5767\",\"lastPrice\":\"0\",\"highPrice24h\":\"0\",\"lowPrice24h\":\"0\",\"markPrice\":\"9875.87635583\",\"indexPrice\":\"77448.21828868\",\"markPriceIv\":\"0.5174\",\"underlyingPrice\":\"77599.2\",\"openInterest\":\"0\",\"turnover24h\":\"0\",\"volume24h\":\"0\",\"totalVolume\":\"0\",\"totalTurnover\":\"0\",\"delta\":\"0.92145299\",\"gamma\":\"0.00001956\",\"vega\":\"21.25122659\",\"theta\":\"-43.16520924\",\"predictedDeliveryPrice\":\"0\",\"change24h\":\"0\"}}",
+      "sha256": "973b3083e4984459a04c5775e10f842f0b4ace2f9763787dc15a222b5a495895",
+      "receipt_utc_ns": 1793456560015724688
+    },
+    "ack": {
+      "body": "{\"success\":true,\"conn_id\":\"db8el5r7ekaa2hbmcovg-2iibx\",\"data\":{\"failTopics\":[],\"successTopics\":[\"tickers.BTC-13NOV26-98000-C-USDT\",\"tickers.BTC-1NOV26-76250-C-USDT\",\"tickers.BTC-1NOV26-80500-C-USDT\",\"tickers.BTC-1NOV26-80750-C-USDT\",\"tickers.BTC-1NOV26-83000-C-USDT\",\"tickers.BTC-20NOV26-72000-P-USDT\",\"tickers.BTC-20NOV26-79000-P-USDT\",\"tickers.BTC-13NOV26-80000-C-USDT\",\"tickers.BTC-13NOV26-88000-P-USDT\",\"tickers.BTC-1NOV26-79500-P-USDT\",\"tickers.BTC-1NOV26-82250-P-USDT\",\"tickers.BTC-1NOV26-83500-C-USDT\",\"tickers.BTC-1NOV26-86000-P-USDT\",\"tickers.BTC-20NOV26-68000-P-USDT\",\"tickers.BTC-24SEP27-135000-P-USDT\",\"tickers.BTC-13NOV26-78000-C-USDT\",\"tickers.BTC-13NOV26-94000-C-USDT\",\"tickers.BTC-20NOV26-72000-C-USDT\",\"tickers.BTC-20NOV26-85000-P-USDT\",\"tickers.BTC-20NOV26-90000-C-USDT\",\"tickers.BTC-20NOV26-94000-P-USDT\",\"tickers.BTC-24SEP27-160000-C-USDT\",\"tickers.BTC-13NOV26-77000-P-USDT\",\"tickers.BTC-13NOV26-81000-C-USDT\",\"tickers.BTC-13NOV26-83000-C-USDT\",\"tickers.BTC-1NOV26-81000-C-USDT\",\"tickers.BTC-24SEP27-100000-C-USDT\",\"tickers.BTC-24SEP27-105000-C-USDT\",\"tickers.BTC-24SEP27-120000-C-USDT\",\"tickers.BTC-24SEP27-170000-P-USDT\",\"tickers.BTC-13NOV26-82000-C-USDT\",\"tickers.BTC-13NOV26-89000-C-USDT\",\"tickers.BTC-1NOV26-83500-P-USDT\",\"tickers.BTC-13NOV26-68000-C-USDT\",\"tickers.BTC-1NOV26-84000-P-USDT\",\"tickers.BTC-20NOV26-70000-C-USDT\",\"tickers.BTC-20NOV26-83000-P-USDT\",\"tickers.BTC-20NOV26-88000-C-USDT\",\"tickers.BTC-24SEP27-140000-C-USDT\",\"tickers.BTC-24SEP27-150000-P-USDT\",\"tickers.BTC-13NOV26-86000-C-USDT\",\"tickers.BTC-13NOV26-98000-P-USDT\",\"tickers.BTC-1NOV26-81750-P-USDT\",\"tickers.BTC-24SEP27-110000-P-USDT\",\"tickers.BTC-24SEP27-120000-P-USDT\",\"tickers.BTC-24SEP27-40000-P-USDT\",\"tickers.BTC-13NOV26-78000-P-USDT\",\"tickers.BTC-1NOV26-82250-C-USDT\",\"tickers.BTC-20NOV26-81000-P-USDT\",\"tickers.BTC-24SEP27-110000-C-USDT\",\"tickers.BTC-24SEP27-40000-C-USDT\",\"tickers.BTC-13NOV26-70000-P-USDT\",\"tickers.BTC-13NOV26-86000-P-USDT\",\"tickers.BTC-1NOV26-75500-P-USDT\",\"tickers.BTC-1NOV26-78500-C-USDT\",\"tickers.BTC-1NOV26-79250-C-USDT\",\"tickers.BTC-20NOV26-74000-P-USDT\",\"tickers.BTC-20NOV26-90000-P-USDT\",\"tickers.BTC-13NOV26-92000-P-USDT\",\"tickers.BTC-1NOV26-78000-P-USDT\",\"tickers.BTC-1NOV26-78750-P-USDT\",\"tickers.BTC-1NOV26-80500-P-USDT\",\"tickers.BTC-24SEP27-50000-P-USDT\",\"tickers.BTC-13NOV26-85000-C-USDT\",\"tickers.BTC-24SEP27-30000-P-USDT\",\"tickers.BTC-13NOV26-76000-C-USDT\",\"tickers.BTC-13NOV26-96000-C-USDT\",\"tickers.BTC-13NOV26-96000-P-USDT\",\"tickers.BTC-24SEP27-170000-C-USDT\",\"tickers.BTC-1NOV26-75500-C-USDT\",\"tickers.BTC-1NOV26-78000-C-USDT\",\"tickers.BTC-1NOV26-79000-C-USDT\",\"tickers.BTC-24SEP27-125000-C-USDT\",\"tickers.BTC-1NOV26-78250-C-USDT\",\"tickers.BTC-1NOV26-81000-P-USDT\",\"publicTrade.BTC\",\"tickers.BTC-13NOV26-74000-C-USDT\",\"tickers.BTC-13NOV26-80000-P-USDT\",\"tickers.BTC-1NOV26-82750-P-USDT\",\"tickers.BTC-20NOV26-75000-C-USDT\",\"tickers.BTC-20NOV26-76000-P-USDT\",\"tickers.BTC-1NOV26-81750-C-USDT\",\"tickers.BTC-1NOV26-73000-P-USDT\",\"tickers.BTC-13NOV26-84000-C-USDT\",\"tickers.BTC-1NOV26-71000-C-USDT\",\"tickers.BTC-1NOV26-74000-C-USDT\",\"tickers.BTC-20NOV26-77000-C-USDT\",\"tickers.BTC-20NOV26-92000-C-USDT\",\"tickers.BTC-24SEP27-115000-P-USDT\",\"tickers.BTC-1NOV26-71000-P-USDT\",\"tickers.BTC-1NOV26-75000-P-USDT\",\"tickers.BTC-1NOV26-76500-P-USDT\",\"tickers.BTC-1NOV26-77250-P-USDT\",\"tickers.BTC-1NOV26-80250-P-USDT\",\"tickers.BTC-20NOV26-66000-C-USDT\",\"tickers.BTC-24SEP27-115000-C-USDT\",\"tickers.BTC-13NOV26-87000-P-USDT\",\"tickers.BTC-1NOV26-76000-P-USDT\",\"tickers.BTC-20NOV26-64000-P-USDT\",\"tickers.BTC-20NOV26-76000-C-USDT\",\"tickers.BTC-20NOV26-96000-C-USDT\",\"tickers.BTC-20NOV26-96000-P-USDT\",\"tickers.BTC-13NOV26-77000-C-USDT\",\"tickers.BTC-13NOV26-92000-C-USDT\",\"tickers.BTC-1NOV26-79500-C-USDT\",\"tickers.BTC-1NOV26-80000-P-USDT\",\"tickers.BTC-1NOV26-85000-C-USDT\",\"tickers.BTC-20NOV26-84000-C-USDT\",\"tickers.BTC-13NOV26-75000-C-USDT\",\"tickers.BTC-13NOV26-76000-P-USDT\",\"tickers.BTC-1NOV26-76000-C-USDT\",\"tickers.BTC-1NOV26-79750-C-USDT\",\"tickers.BTC-1NOV26-80250-C-USDT\",\"tickers.BTC-1NOV26-80750-P-USDT\",\"tickers.BTC-1NOV26-81250-P-USDT\",\"tickers.BTC-1NOV26-86000-C-USDT\",\"tickers.BTC-13NOV26-74000-P-USDT\",\"tickers.BTC-13NOV26-90000-P-USDT\",\"tickers.BTC-1NOV26-77500-P-USDT\",\"tickers.BTC-20NOV26-70000-P-USDT\",\"tickers.BTC-20NOV26-74000-C-USDT\",\"tickers.BTC-20NOV26-80000-P-USDT\",\"tickers.BTC-20NOV26-86000-P-USDT\",\"tickers.BTC-24SEP27-160000-P-USDT\",\"tickers.BTC-13NOV26-81000-P-USDT\",\"tickers.BTC-1NOV26-76750-C-USDT\",\"tickers.BTC-1NOV26-77000-P-USDT\",\"tickers.BTC-1NOV26-78500-P-USDT\",\"tickers.BTC-20NOV26-78000-P-USDT\",\"tickers.BTC-24SEP27-105000-P-USDT\",\"tickers.BTC-24SEP27-135000-C-USDT\",\"tickers.BTC-24SEP27-140000-P-USDT\",\"tickers.BTC-1NOV26-72000-C-USDT\",\"tickers.BTC-1NOV26-77500-C-USDT\",\"tickers.BTC-1NOV26-82000-P-USDT\",\"tickers.BTC-1NOV26-82750-C-USDT\",\"tickers.BTC-20NOV26-85000-C-USDT\",\"tickers.BTC-24SEP27-30000-C-USDT\",\"tickers.BTC-1NOV26-73000-C-USDT\",\"tickers.BTC-1NOV26-84000-C-USDT\",\"tickers.BTC-20NOV26-92000-P-USDT\",\"tickers.BTC-1NOV26-79250-P-USDT\",\"tickers.BTC-1NOV26-79750-P-USDT\",\"tickers.BTC-1NOV26-85000-P-USDT\",\"tickers.BTC-20NOV26-82000-C-USDT\",\"tickers.BTC-24SEP27-50000-C-USDT\",\"tickers.BTC-1NOV26-79000-P-USDT\",\"tickers.BTC-20NOV26-77000-P-USDT\",\"tickers.BTC-20NOV26-81000-C-USDT\",\"tickers.BTC-20NOV26-83000-C-USDT\",\"tickers.BTC-1NOV26-72000-P-USDT\",\"tickers.BTC-1NOV26-76250-P-USDT\",\"tickers.BTC-1NOV26-77000-C-USDT\",\"tickers.BTC-20NOV26-86000-C-USDT\",\"tickers.BTC-24SEP27-100000-P-USDT\",\"tickers.BTC-13NOV26-70000-C-USDT\",\"tickers.BTC-13NOV26-83000-P-USDT\",\"tickers.BTC-13NOV26-88000-C-USDT\",\"tickers.BTC-1NOV26-78750-C-USDT\",\"tickers.BTC-20NOV26-66000-P-USDT\",\"tickers.BTC-20NOV26-68000-C-USDT\",\"tickers.BTC-13NOV26-72000-P-USDT\",\"tickers.BTC-13NOV26-79000-P-USDT\",\"tickers.BTC-1NOV26-76750-P-USDT\",\"tickers.BTC-1NOV26-83000-P-USDT\",\"tickers.BTC-20NOV26-64000-C-USDT\",\"tickers.BTC-20NOV26-84000-P-USDT\",\"tickers.BTC-24SEP27-150000-C-USDT\",\"tickers.BTC-1NOV26-80000-C-USDT\",\"tickers.BTC-1NOV26-82000-C-USDT\",\"tickers.BTC-13NOV26-75000-P-USDT\",\"tickers.BTC-13NOV26-82000-P-USDT\",\"tickers.BTC-13NOV26-87000-C-USDT\",\"tickers.BTC-1NOV26-75000-C-USDT\",\"tickers.BTC-1NOV26-78250-P-USDT\",\"tickers.BTC-20NOV26-79000-C-USDT\",\"tickers.BTC-1NOV26-81500-C-USDT\",\"tickers.BTC-1NOV26-81500-P-USDT\",\"tickers.BTC-13NOV26-72000-C-USDT\",\"tickers.BTC-13NOV26-85000-P-USDT\",\"tickers.BTC-13NOV26-90000-C-USDT\",\"tickers.BTC-13NOV26-94000-P-USDT\",\"tickers.BTC-1NOV26-77750-C-USDT\",\"tickers.BTC-20NOV26-78000-C-USDT\",\"tickers.BTC-13NOV26-68000-P-USDT\",\"tickers.BTC-13NOV26-89000-P-USDT\",\"tickers.BTC-1NOV26-74000-P-USDT\",\"tickers.BTC-1NOV26-77250-C-USDT\",\"tickers.BTC-20NOV26-80000-C-USDT\",\"tickers.BTC-20NOV26-88000-P-USDT\",\"tickers.BTC-20NOV26-94000-C-USDT\",\"tickers.BTC-24SEP27-125000-P-USDT\",\"publicTrade.ETH\",\"tickers.BTC-13NOV26-79000-C-USDT\",\"tickers.BTC-1NOV26-76500-C-USDT\",\"tickers.BTC-1NOV26-77750-P-USDT\",\"tickers.BTC-1NOV26-81250-C-USDT\",\"tickers.BTC-20NOV26-75000-P-USDT\",\"tickers.BTC-20NOV26-82000-P-USDT\",\"tickers.BTC-13NOV26-84000-P-USDT\"]},\"type\":\"COMMAND_RESP\"}",
+      "sha256": "640883c19e34d12a42d08595bdb79c06f5c937c85ae3db5f2f98f24d27af66c9",
+      "receipt_utc_ns": 1793456560318609275
+    },
+    "trade": {
+      "body": "{\"topic\":\"publicTrade.BTC\",\"ts\":1793456563679,\"type\":\"snapshot\",\"id\":\"publicTrade.BTC-79391626802-1793456563679\",\"data\":[{\"i\":\"a07eb960-e859-540a-b37c-97ebeae496d1\",\"T\":1793456563665,\"p\":\"5\",\"v\":\"0.01\",\"S\":\"Buy\",\"seq\":79391626802,\"s\":\"BTC-1NOV26-71000-P-USDT\",\"BT\":false,\"mP\":\"1.48184784\",\"iP\":\"77448.21132446\",\"mIv\":\"0.6823\",\"iv\":\"0.7734\"}]}",
+      "sha256": "f3a22bb9111413c467294cb8c5ff74cb88773fdb710c5b68ec28c1c1226d74d8",
+      "receipt_utc_ns": 1793456569142969666
+    },
+    "pong": {
+      "body": "{\"args\":[\"1793456599249\"],\"op\":\"pong\"}",
+      "sha256": "eb1a44e4d9e8ad1d3692f515819109472d5e7d1d2563e792478044e2fa44cb1f",
+      "receipt_utc_ns": 1793456599346775683
+    }
+  }
+}

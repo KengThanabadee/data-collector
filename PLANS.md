@@ -44,12 +44,20 @@ The same observed linear projection basis applies to this five-minute Binance ru
 
 ## Next
 
-Current delivery through step 3 is complete; stop here, as requested by Keng. Bybit options are being built separately as an experiment; do not implement step 4 or start the later cross-venue acceptance run in this goal.
+Step 4 is integrated and committed (3 November 2026). Next is step 5, the combined expiry-window run; Bybit live runs await a VPS as recorded below.
+
+Bybit step 4 integration:
+```
+Goal: Run the selected exp/bybit-a BTC/ETH option ticker/publicTrade collector from this repo with strict listing deadlines, complete changing-universe verification and accurate configuration/evidence.
+Done when: config-check accepts the shipped Bybit profile; capture/verify-run fixtures prove pagination, PreLaunch, new listings, retirement, strict ACK/first-push coverage through stop and reconnect recovery; the archived one-time character-cap probe is checked and recorded; the reviewed integration is committed. Bybit live capacity and combined expiry-window acceptance await the VPS under steps 5–6.
+Out of scope: Bybit option depth, other feeds, VPS setup, step 5 combined acceptance and merging the documentation reorganization.
+When unsure: pick the simplest option consistent with COLLECTION_SCOPE.md, add one line to PLANS.md Notes, continue.
+```
 
 1. Rediscovery foundation is implemented: shared bounded option membership/timing policy, Bybit complete-pagination/PreLaunch projection, and the runnable Deribit lifecycle/300-second audit driver with append-only metadata and per-version verification. Bybit transport applies the shared policy in step 4; live cross-venue lifecycle acceptance remains pending.
 2. Deribit selected-feed chunk is committed: inverse-option top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Futures and USDC linear options/indexes are disabled. The worker capacity chunk is complete with the five-minute evidence below; proceed to Binance.
 3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker and depth20@100ms on /public, aggTrade on /market, plus all-symbol !forceOrder@arr liquidations on /market (at most one per symbol per second). On 31 October /public ACKed liquidation subscriptions without pushes; do not use it. Implemented and reviewed with the five-minute capture/readback evidence below; no spot/COIN-M subscriptions, REST seeds or reference polling. Step 3 is complete.
-4. Deferred to a separate experiment: Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. This goal stops after step 3. The experiment finished on 1 Nov 2026: build step 4 on branch `exp/bybit-a` (e4301c4, worktree `~/Developer/experiments/a`), which both reviewers chose. Fix its agreed defects:
+4. Active integration from the completed experiment: Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. The preceding goal stopped after step 3; this goal implements step 4. The experiment finished on 1 Nov 2026: build step 4 on branch `exp/bybit-a` (e4301c4, worktree `~/Developer/experiments/a`), which both reviewers chose. Fix its agreed defects:
    - verify-run passes a new listing subscribed more than 120 s after it was observed;
    - the run config records `raw_feeds=['book']`;
    - its EXPERIMENT_REPORT.md claims more about reconnect recovery than the evidence shows.
@@ -58,6 +66,11 @@ Current delivery through step 3 is complete; stop here, as requested by Keng. By
 6. Wait for a VPS before the later 24-hour production gate.
 
 ## Notes
+
+- Reviewed Bybit step-4 integration: exp/bybit-a BTC/ETH option tickers/publicTrade now run from this repo with the shipped config/v2-bybit-options.toml, strict 120-second first-ACK deadline, ACK/first-push coverage through stop and reconnect gaps, and ticker/trades recorded in the run config; 755 tests pass. Live capacity and step 5 await the VPS.
+- Bybit review note: assign() may place a new listing on a reconnecting shard; an outage like the observed 150/70-second ones would then miss the 120-second deadline. Prefer ready shards if this appears on the VPS.
+- Bybit review note: in an unbounded run one late first ACK or one unrecognized message fails the whole capture at stop (raw kept); revisit per-shard failure if continuous VPS runs hit it.
+- Step-4 decision: follow the local scope strictly: an option still active at stop needs ACK and first push even when observed in the last 120 seconds; only archived retirement ends its coverage requirement. Keep long reconnects as explicit gaps, and enforce the first-listing deadline independently.
 
 - Reviewed Binance selected-feed chunk: configured USDⓈ-M books/trades and /market all-symbol liquidations now run raw with append-only metadata, exact recorded-reply fixtures and per-route ACK/first-book verification; the final five-minute run above passed readback, and delivery stops after step 3.
 
