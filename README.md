@@ -1,6 +1,6 @@
 # Data Collector (DC)
 
-GitHub: [KengThanabadee/option-collector](https://github.com/KengThanabadee/option-collector) (private)
+GitHub: [KengThanabadee/data-collector](https://github.com/KengThanabadee/data-collector) (private)
 
 ขอบเขต v2 ปัจจุบันคือ Deribit BTC/ETH inverse options (book 20 levels, ticker, trades และ index), Binance USDⓈ-M ตามรายชื่อที่ตั้งค่า และ Bybit options (ticker และ publicTrade) เก็บ raw bytes, เวลา, metadata และช่วงข้อมูลขาด ตาม [collection scope](docs/v2/COLLECTION_SCOPE.md)
 
