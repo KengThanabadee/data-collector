@@ -1,4 +1,4 @@
-"""Shared one-subscription-per-second reservation for local raw workers."""
+"""Shared one-public-request-per-second reservation for local raw workers."""
 import fcntl
 import time
 

@@ -22,6 +22,7 @@ from .journal import _publish_bytes
 from .option_universe import OptionUniverse,deribit_options,deribit_scope,deribit_lifecycle
 from .quota import PriorityQuota,QuotaWindow
 from .rawrun import RawOwner,verified_records
+from .rawquota import take_slot
 
 LIFECYCLE='instrument.state.option.any'
 PROFILE='inverse-top20/1'
@@ -113,8 +114,24 @@ def instrument_observations(selected,previous,response,unresolved):
     return result
 
 
+def classified_members(universe,utc_ns):
+    """Bounded full-discovery identities, including deliberately excluded feeds."""
+    result={}
+    for row in universe['selected']:
+        native=row['attributes']['native'];expiry=native.get('expiration_timestamp')
+        if type(expiry) is int and expiry*1_000_000<=utc_ns:continue
+        if native.get('state') in {'Closed','delivered','archivized','closed','terminated'}:continue
+        identity=row['instrument'];result[identity['native_symbol']]=identity['listing_incarnation']
+    for kind in ('excluded','blocked'):
+        for row in universe[kind]:result[row['native_symbol']]=('not_selected',row['native_product'])
+    return result
+
+
 async def capture(config, *, session_factory, observer, clock_read=None, clock_wait=None):
     from .app import _bind_root,_drain
+    if config.raw_processes>1:
+        from .option_workers import capture_workers
+        return await capture_workers(config,observer=observer)
     if not config.all_options or config.source_discovery_root is not None:
         raise ValueError('live rediscovery requires all_options with fresh metadata')
     lock=_bind_root(config)
@@ -122,14 +139,17 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
     anchor=canonical(dict(schema='dc.dynamic-option-anchor/1',venue='deribit',environment=config.environment))
     main=RawOwner(root,config,observer,universe=anchor,batch_size=512,clock_read=clock_read,clock_wait=clock_wait)
     meta=RawOwner(root/'metadata',config,observer,universe=anchor,clock_read=clock_read,clock_wait=clock_wait)
-    state=OptionUniverse('deribit',max_instruments=config.max_instruments)
+    state=OptionUniverse('deribit',max_instruments=config.max_instruments,
+        partition_count=config.option_partition_count,partition_index=config.option_partition_index)
     report=dict(schema='dc.dynamic-options/1',venue='deribit',environment=config.environment,status='failed',
         profile=PROFILE,metadata={},frames=0,bytes=0,connections=0,universe_versions=0,
         rejected_subscriptions=0,throttled_subscriptions=0,started_utc_ns=observer()[0],
         elapsed_seconds=0,ready_utc_ns=None,retired_options=0)
+    if config.option_partition_count>1:
+        report['worker_partition']=dict(count=config.option_partition_count,index=config.option_partition_index)
     stop=False;fetch_task=None;quota=None;discovery=None;latest=None
     initial_ready=None;next_audit=0;retry_metadata=0;trigger=None;refresh_due=True
-    last_disk=0;generation=0;fetch_generation=0;unresolved={};completed={};missed_retirement=False;recent_retired={}
+    last_disk=0;generation=0;fetch_generation=0;unresolved={};completed={};missed_retirement=False;recent_retired={};full_members={}
 
     def fully_covered(key):
         return completed.get(key,set())>={'ack','book','ticker'}
@@ -142,11 +162,17 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
             report['stop_reason']='duration';return True
         return False
 
+    async def dispatch_slot():
+        async with asyncio.timeout(config.timeout_seconds):
+            while not take_slot(config.subscription_budget_file):
+                if should_stop():raise asyncio.CancelledError
+                await asyncio.sleep(.1)
+
     async def control(value, channel='option_control', *, connection='controls'):
         return await main.save(canonical(value),channel,'control',connection=connection)
 
     async def apply_manifest(manifest, *, observed=None, reason='refresh'):
-        nonlocal latest,missed_retirement
+        nonlocal latest,missed_retirement,full_members
         previous=dict(state.members)
         native_universe=strict_json(manifest)
         classified={v['instrument']['native_symbol'] for v in native_universe['selected']}
@@ -163,6 +189,10 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
         for name in classified:unresolved.pop(name,None)
         for name in list(recent_retired):
             if utc-recent_retired[name]>300_000_000_000:recent_retired.pop(name)
+        current_full=classified_members(native_universe,utc)
+        for name,key in full_members.items():
+            if current_full.get(name)!=key:recent_retired[name]=utc
+        full_members=current_full
         for name in value['retired']:
             recent_retired[name]=utc
             key=previous[name].key
@@ -185,12 +215,12 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
         await main.start();await meta.start()
         started=await control(dict(event='capture_start'))
         report['started_utc_ns']=started.receipt.receive_utc_ns
-        await main.aligned(lambda:stop);await meta.aligned(lambda:stop)
+        await main.aligned(should_stop);await meta.aligned(should_stop)
         quota=PriorityQuota('deribit',(QuotaWindow('public',1,1_000_000_000),
             QuotaWindow('get_instruments',1,1_000_000_000)))
         discovery=DeribitDiscovery(meta.lane,quota,charges={'public':1,'get_instruments':1},max_requests=None,
             max_response_bytes=config.max_response_bytes,max_instruments=config.max_instruments,
-            timeout_seconds=config.timeout_seconds)
+            timeout_seconds=config.timeout_seconds,before_dispatch=dispatch_slot)
         endpoint='www.deribit.com' if config.environment=='production' else 'test.deribit.com'
         backoff=1;initial_deadline=time.monotonic()+config.bootstrap_timeout_seconds
         async with session_factory() as session:
@@ -207,8 +237,10 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                     try:
                         async with asyncio.timeout(config.timeout_seconds):
                             socket=await session.ws_connect('wss://'+endpoint+'/ws/api/v2',max_msg_size=2*1024*1024,
-                                autoping=True,compress=0,timeout=aiohttp.ClientWSTimeout(ws_close=5))
+                                autoping=True,compress=15,timeout=aiohttp.ClientWSTimeout(ws_close=5))
                         report['connections']+=1
+                        await control(dict(event='transport_ready',connection=connection,
+                            compression_window_bits=getattr(socket,'compress',0)))
                         async def request(method,channels,assignments):
                             nonlocal request_id,next_control
                             request_id+=1
@@ -224,6 +256,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                 sent=time.monotonic(),record=saved)
                             await asyncio.wait_for(socket.send_str(body.decode()),config.timeout_seconds)
                             next_control=time.monotonic()+1
+                        await dispatch_slot()
                         await request('public/subscribe',list(GLOBALS),{})
                         heartbeat=canonical(dict(jsonrpc='2.0',id=2,method='public/set_heartbeat',params=dict(interval=10)))
                         await main.save(heartbeat,'public/set_heartbeat','control',connection=connection)
@@ -264,7 +297,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                     if name not in state.members or state.members[name].key!=key}
                                 adding={name:row.key for name,row in state.members.items() if active.get(name)!=row.key}
                                 assignments=dict(list((retiring or adding).items())[:max(1,config.subscription_batch_size//2)])
-                                if assignments:
+                                if assignments and take_slot(config.subscription_budget_file):
                                     channels=[c for name in assignments for c in instrument_channels(name)]
                                     await request('public/unsubscribe' if retiring else 'public/subscribe',channels,assignments)
                             current_ready=(state.revision>0 and not state.pending and
@@ -331,7 +364,7 @@ async def capture(config, *, session_factory, observer, clock_read=None, clock_w
                                 params=value.get('params',{})
                                 if value.get('method')=='subscription' and params.get('channel')==LIFECYCLE:
                                     event=deribit_lifecycle(params.get('data'))
-                                    if not event['terminal'] and event['symbol'] not in state.members and event['symbol'] not in recent_retired:
+                                    if not event['terminal'] and event['symbol'] not in full_members and event['symbol'] not in recent_retired:
                                         unresolved.setdefault(event['symbol'],dict(record_id=record.record_id,
                                             utc_ns=record.receipt.receive_utc_ns,monotonic_ns=record.receipt.monotonic_ns))
                                         if len(unresolved)>config.max_instruments:raise ValueError('unresolved option listing bound')
@@ -445,7 +478,7 @@ class MetadataReplay:
         return None
 
 
-def verify(root, report, *, export=None):
+def verify(root, report, *, export=None,audit=None):
     """Verify raw integrity, every metadata version, ACKs and native first pushes.
 
     This proves raw capture coverage with explicit connection gaps; it does not
@@ -461,11 +494,15 @@ def verify(root, report, *, export=None):
         if descriptor['provenance']['universe_sha256']!=digest(anchor):raise ValueError('option anchor differs')
     if not config.get('rediscover_options') or not config.get('all_options'):
         raise ValueError('changing-universe configuration required')
-    state=OptionUniverse('deribit',max_instruments=config['max_instruments'])
+    state=OptionUniverse('deribit',max_instruments=config['max_instruments'],
+        partition_count=config.get('option_partition_count',1),partition_index=config.get('option_partition_index',0))
+    partition=dict(count=state.partition_count,index=state.partition_index)
+    if report.get('worker_partition',partition)!=partition or (state.partition_count>1 and 'worker_partition' not in report):
+        raise ValueError('worker partition report differs from its frozen configuration')
     metadata=MetadataReplay(root/'metadata',report['metadata'])
     complete=report['status']=='raw_capture_complete';semantic_error=False
     pending={};active={};pushed=set();ticker_seen=set();index_seen=set();current_connection=None;life_ack=False
-    observations={};evidence={};ever={};unresolved={};recent_retired={};records=frames=payload=versions=retired=rejected=throttled=0
+    observations={};evidence={};ever={};unresolved={};recent_retired={};full_members={};records=frames=payload=versions=retired=rejected=throttled=0
     connection_count=0;bounds={};initialized_connections=0
 
     def coverage(names):
@@ -474,7 +511,7 @@ def verify(root, report, *, export=None):
             (profile==LEGACY or ever.get(state.members[name].key,{}).get('ticker')) for name in names)
 
     def check_record(record):
-        nonlocal pending,active,pushed,ticker_seen,index_seen,current_connection,life_ack,versions,retired,rejected,throttled,connection_count,initialized_connections
+        nonlocal pending,active,pushed,ticker_seen,index_seen,current_connection,life_ack,versions,retired,rejected,throttled,connection_count,initialized_connections,full_members
         fields=strict_json(record.native_fields_json)
         if record.channel=='option_control':
             value=strict_json(record.body)
@@ -482,6 +519,7 @@ def verify(root, report, *, export=None):
                 event=value['event']
                 if event in bounds:raise ValueError('duplicate capture boundary')
                 bounds[event]=record.receipt.receive_utc_ns
+                if audit is not None:audit('bound',event=event,utc_ns=record.receipt.receive_utc_ns,monotonic_ns=record.receipt.monotonic_ns)
             elif value.get('event')=='gap_start' and value.get('reason')=='connection_start':
                 current_connection=value['connection'];pending={};active={};pushed=set();ticker_seen=set();index_seen=set();life_ack=False
                 state.reconnect(utc_ns=record.receipt.receive_utc_ns,monotonic_ns=record.receipt.monotonic_ns)
@@ -521,6 +559,8 @@ def verify(root, report, *, export=None):
                     exclusions=excluded,observations=per_instrument)
                 if canonical(revision)!=encoded or digest(encoded)!=value['revision_sha256'] or value['revision']!=state.revision:
                     raise ValueError('universe projection or revision chain differs')
+                if audit is not None:
+                    audit('universe',rows=selected,utc_ns=revision['observed_at_utc_ns'],monotonic_ns=revision['observed_at_monotonic_ns'])
                 if per_instrument is not None:
                     # New revisions prove each first observation from unresolved;
                     # consumed ordinary lifecycle receipts are not lifetime state.
@@ -528,9 +568,15 @@ def verify(root, report, *, export=None):
                 for name in classified:unresolved.pop(name,None)
                 for name in list(recent_retired):
                     if revision['observed_at_utc_ns']-recent_retired[name]>300_000_000_000:recent_retired.pop(name)
+                current_full=classified_members(native_universe,revision['observed_at_utc_ns'])
+                for name,key in full_members.items():
+                    if current_full.get(name)!=key:recent_retired[name]=revision['observed_at_utc_ns']
+                full_members=current_full
                 for name in revision['retired']:
                     recent_retired[name]=revision['observed_at_utc_ns']
                     key=previous[name].key
+                    if audit is not None:audit('coverage',kind='retired',symbol=name,incarnation=previous[name].incarnation,
+                        utc_ns=revision['observed_at_utc_ns'],monotonic_ns=revision['observed_at_monotonic_ns'])
                     if complete and not (ever.get(key,{}).get('ack') and ever.get(key,{}).get('push') and
                             (profile==LEGACY or ever.get(key,{}).get('ticker'))):
                         raise ValueError('retired option lacked ACK plus first push before retirement')
@@ -607,10 +653,12 @@ def verify(root, report, *, export=None):
                             if report['started_utc_ns']<=created<=report['ended_utc_ns'] and record.receipt.receive_utc_ns-created>120_000_000_000:
                                 raise ValueError('Deribit created option subscription exceeded 120 seconds')
                         prior['ack']=True
+                        if audit is not None:audit('coverage',kind='ack',symbol=name,incarnation=row.incarnation,
+                            utc_ns=record.receipt.receive_utc_ns,monotonic_ns=record.receipt.monotonic_ns)
         params=value.get('params',{})
         if value.get('method')=='subscription' and params.get('channel')==LIFECYCLE:
             event=deribit_lifecycle(params.get('data'));observations[record.record_id]=record.receipt
-            if not event['terminal'] and event['symbol'] not in state.members and event['symbol'] not in recent_retired:
+            if not event['terminal'] and event['symbol'] not in full_members and event['symbol'] not in recent_retired:
                 unresolved.setdefault(event['symbol'],dict(record_id=record.record_id,utc_ns=record.receipt.receive_utc_ns,
                     monotonic_ns=record.receipt.monotonic_ns))
             if len(observations)>config['max_instruments']:
@@ -624,8 +672,15 @@ def verify(root, report, *, export=None):
                 kind,name=native_push(value)
                 if kind=='index' and life_ack:index_seen.add(name)
                 elif name in state.members and active.get(name)==state.members[name].key:
-                    if kind=='book':pushed.add(name);ever.setdefault(state.members[name].key,{})['push']=True
-                    elif kind=='ticker':ticker_seen.add(name);ever.setdefault(state.members[name].key,{})['ticker']=True
+                    if kind in {'book','ticker'}:
+                        prior=ever.setdefault(state.members[name].key,{})
+                        flag='push' if kind=='book' else 'ticker'
+                        if audit is not None and not prior.get(flag):audit('coverage',kind=kind,symbol=name,
+                            incarnation=state.members[name].incarnation,utc_ns=record.receipt.receive_utc_ns,
+                            monotonic_ns=record.receipt.monotonic_ns)
+                        prior[flag]=True
+                        if kind=='book':pushed.add(name)
+                        else:ticker_seen.add(name)
 
     for record in verified_records(root,report):
         records+=1
@@ -655,4 +710,5 @@ def verify(root, report, *, export=None):
             raise ValueError('expired option not retired')
     return dict(archive_verified=True,records=records+metadata.count,ws_messages=frames,
         universe_versions_verified=versions,changing_universe_coverage_verified=complete,
+        worker_partition=partition,full_partition_coverage_verified=complete and state.partition_count==1,
         capture_status=report['status'],verification_scope='raw integrity, append-only metadata and every universe version with ACK/first-push/retirement evidence; explicit gaps retained')

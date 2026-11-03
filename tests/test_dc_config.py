@@ -45,6 +45,16 @@ class DiscoveryConfigTests(unittest.TestCase):
             for field in ('bybit_rest_host','bybit_ws_host'):
                 with self.subTest(field=field,host=host),self.assertRaises(ValueError):replace(default,**{field:host})
 
+    def test_live_worker_partition_configuration_is_exclusive_and_pinned(self):
+        parent=self.read(self.body+'all_options=true\nrediscover_options=true\nraw_processes=2\n')
+        child=replace(parent,raw_processes=1,option_partition_count=2,option_partition_index=1)
+        self.assertNotEqual(parent.config_sha256,child.config_sha256)
+        for changes in (dict(option_partition_count=0),dict(option_partition_count=9),
+                dict(option_partition_count=2),dict(option_partition_index=1),
+                dict(raw_processes=1,option_partition_count=2,option_partition_index=2)):
+            with self.subTest(changes=changes),self.assertRaises(ValueError):replace(parent,**changes)
+        with self.assertRaises(ValueError):replace(self.read(),option_partition_count=2)
+
     def test_effective_hash_ignores_formatting_but_pins_every_setting(self):
         original = self.read()
         reformatted = self.read("# no secret comments are retained\n" + self.body +

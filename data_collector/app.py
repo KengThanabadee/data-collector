@@ -86,6 +86,9 @@ def verify_run(root, *, export=None):
     """Read committed raw afresh, rebuild final books, and optionally export raw."""
     root = Path(root).resolve()
     report = strict_json((root/'result.json').read_bytes())
+    if report.get('schema')=='dc.option-workers/1':
+        from .option_workers import verify
+        return verify(root,report,export=export)
     if report.get('schema')=='dc.dynamic-options/1':
         from .dynamic_options import verify
         return verify(root,report,export=export)

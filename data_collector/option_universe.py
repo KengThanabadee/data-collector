@@ -12,6 +12,10 @@ from .contracts import canonical, digest, integer, text
 DEADLINE_NS = 120_000_000_000
 
 
+def option_partition(symbol, count):
+    return int(digest(symbol.encode('utf-8'))[:16],16)%count
+
+
 @dataclass(frozen=True)
 class Option:
     venue: str
@@ -138,9 +142,12 @@ class OptionUniverse:
     refreshes raise before mutation. Poll failures use stale() and preserve the
     previous list. There is no count cap on revisions or ACKs over time.
     """
-    def __init__(self, venue, *, max_instruments=10000):
+    def __init__(self, venue, *, max_instruments=10000, partition_count=1, partition_index=0):
         if venue not in {'deribit','bybit'}:raise ValueError('option venue required')
         integer(max_instruments,'option bound',1)
+        integer(partition_count,'partition count',1);integer(partition_index,'partition index',0)
+        if partition_count>8 or partition_index>=partition_count:raise ValueError('valid option partition required')
+        self.partition_count,self.partition_index=partition_count,partition_index
         self.venue,self.max_instruments=venue,max_instruments
         self.members={};self.pending={};self.acknowledged=set();self.requests={}
         self.revision=0;self.revision_sha256=None;self.unhealthy=False
@@ -162,7 +169,8 @@ class OptionUniverse:
         # Validate all rows before removing expired ones; zero live rows can be
         # a valid expiry transition, whereas zero returned rows is uncertain.
         eligible={name:row for name,row in incoming.items() if row.expiry_ms*1_000_000>utc_ns
-            and row.state not in {'Closed','delivered','archivized','closed','terminated'}}
+            and row.state not in {'Closed','delivered','archivized','closed','terminated'}
+            and option_partition(name,self.partition_count)==self.partition_index}
         retained={name:row for name,row in self.members.items() if base and row.base!=base}
         proposed=dict(retained,**eligible)
         if len(proposed)>self.max_instruments:raise ValueError('option bound; no prefix selected')
@@ -188,6 +196,8 @@ class OptionUniverse:
                 integer(value['utc_ns'],'instrument observation UTC',1)
                 integer(value['monotonic_ns'],'instrument observation monotonic',0)
                 body['instrument_observations'].append(dict(symbol=name,**value))
+        if self.partition_count>1:
+            body['worker_partition']=dict(count=self.partition_count,index=self.partition_index)
         encoded=canonical(body)
         for name in retired:
             self.pending.pop(name,None);self.acknowledged.discard(name);self.requests.pop(name,None)

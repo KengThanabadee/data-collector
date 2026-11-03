@@ -95,7 +95,7 @@ class DeribitDiscovery:
     universe. The owner is poisoned after any unconfirmed archive operation.
     """
     def __init__(self,lane,quota,*,charges,max_requests=10,max_response_bytes=1024*1024,
-                 max_instruments=10000,timeout_seconds=30):
+                 max_instruments=10000,timeout_seconds=30,before_dispatch=None):
         if (not isinstance(lane,ArchiveLane) or not isinstance(quota,PriorityQuota) or
                 quota.venue!='deribit' or lane.writer.identity[0]!='deribit' or
                 lane.writer.identity[1] not in {'production','testnet'} or not lane.health()['accepting'] or
@@ -118,6 +118,8 @@ class DeribitDiscovery:
         self.max_requests,self.max_response_bytes,self.max_instruments=max_requests,max_response_bytes,max_instruments
         self.timeout_seconds=timeout_seconds;self.requests=self._seq=0;self.latest=None;self.last_error=None
         self.poisoned=self._busy=self._cancelled=False
+        if before_dispatch is not None and not callable(before_dispatch):raise ValueError('dispatch callback required')
+        self.before_dispatch=before_dispatch
         identity=lane.identity
         self.source=StreamKey(identity['capture_id'],identity['process_session_id'],'deribit-discovery:'+uuid.uuid4().hex)
         self.endpoint=('https://www.deribit.com/api/v2/' if lane.writer.identity[1]=='production' else
@@ -165,6 +167,7 @@ class DeribitDiscovery:
                 try:
                     _,mono,_=self.lane._sample()
                     await self.quota.acquire(self.charges,priority=Priority.DISCOVERY,deadline_ns=mono+self.timeout_seconds*1_000_000_000)
+                    if self.before_dispatch is not None:await self.before_dispatch()
                     utc,mono,_=self.lane._sample();start=dict(utc_ns=utc,monotonic_ns=mono)
                     async with session.get(self.endpoint,params=dict(PARAMS),allow_redirects=False,auto_decompress=False,
                             headers={'Accept-Encoding':'identity'},raise_for_status=False,middlewares=(),

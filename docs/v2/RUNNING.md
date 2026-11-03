@@ -10,14 +10,24 @@ COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This 
 The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
 
 Use `config/v2-deribit-options.toml` (or `config/v2-deribit-live-options.toml`) with `rediscover_options = true`,
-`all_options = true`, `raw_processes = 1` and a fresh writable Linux data root.
+`all_options = true`, `raw_processes = 2` and a fresh writable Linux data root.
 Choose testnet or production explicitly. Run `capture --config <your-copy.toml>`,
 then `verify-run <printed-root>` with the Linux Python 3.12 venv. Healthy sockets
 stay open while `instrument.state.option.any` triggers immediate complete REST
 reconciliation; the periodic audit is 300 seconds. Raw discovery attempts and
-universe revisions are append-only under `metadata/`. Failed/empty discovery
+universe revisions are append-only under each worker's `metadata/`. Failed/empty discovery
 retains the preceding membership and records unhealthy state. Known expiry
 retires options independently of a successful new REST response.
+
+Workers use stable symbol partitions and independently acquire complete metadata
+throughout the run. The supervisor starts the duration after all workers initialize,
+stops and drains them together, and `verify-run` checks every partition/version.
+A shared file paces subscriptions and metadata requests across workers. Lifecycle,
+per-kind trades and indexes are independent physical raw copies in each worker;
+book/ticker symbols are disjoint. Resource and byte totals include those copies.
+`raw_processes` can be set from one to eight; internal `option_partition_count`
+and `option_partition_index` identify child scope. A child archive verifies its
+own partition; use the supervisor root to verify full coverage.
 
 Each instrument has archived observation, subscribe request, ACK receipt and
 retirement timing. Verification binds requests to native channel ACKs and the
@@ -107,6 +117,14 @@ coverage with explicit gaps, not a derived book replay. A failed prefix may pass
 integrity verification while reporting `changing_universe_coverage_verified`
 as false; that does not pass capture acceptance.
 
+### Export for other repositories
+
+`python -m data_collector verify-run RUN_ROOT --export FILE` is the interface
+other repositories use to read a capture (trading-bot's `bot.convert` calls it).
+It verifies the run as above and writes the raw envelopes losslessly as JSONL to
+`FILE`, which must not already exist. It prints the result JSON on stdout, which
+includes `archive_verified`, and exits nonzero when verification fails.
+
 Historical single-owner/frozen-shard/snapshot archives remain readable. Existing
 exports remain exact raw envelopes; multi-owner live-option export is disabled.
 The old frozen raw capture and futures CLI paths are not_enabled for new runs.
@@ -153,3 +171,5 @@ bybit_ws_host = "stream.bytick.com"
 
 The option WebSocket path remains `/v5/public/option`, REST uses HTTPS, and venue
 identity remains Bybit. Effective configuration archives and hashes both hosts.
+
+Live Deribit workers negotiate WebSocket per-message deflate and archive the negotiated window in `transport_ready` controls. Raw bodies remain the exact decoded native WebSocket payloads.

@@ -56,6 +56,7 @@ class LiveSession:
     async def __aenter__(self):return self
     async def __aexit__(self,*args):self.closed=True
     async def ws_connect(self,*args,**kwargs):
+        if kwargs.get('compress')!=15:raise AssertionError('negotiate transport compression')
         self.connects+=1
         if self.socket.closed:
             send=self.socket.send_str;self.socket=Socket();self.socket.send_str=send

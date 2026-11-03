@@ -43,6 +43,8 @@ class DiscoveryConfig:
     bootstrap_timeout_seconds: int = 180
     bybit_rest_host: str | None = None
     bybit_ws_host: str | None = None
+    option_partition_count: int = 1
+    option_partition_index: int = 0
 
     def __post_init__(self):
         if self.schema != SCHEMA or self.venue not in ("deribit","binance"):
@@ -88,8 +90,13 @@ class DiscoveryConfig:
         if (self.all_options or self.all_futures) and self.source_discovery_root is not None:
             raise ValueError('whole-family capture requires fresh discovery')
         if type(self.rediscover_options) is not bool or (self.rediscover_options and (
-                self.venue!='deribit' or not self.all_options or self.raw_processes!=1 or self.capture_mode!='raw')):
-            raise ValueError('rediscover_options requires single-process Deribit all_options raw capture')
+                self.venue!='deribit' or not self.all_options or self.capture_mode!='raw')):
+            raise ValueError('rediscover_options requires Deribit all_options raw capture')
+        integer(self.option_partition_count,'option partition count',1)
+        integer(self.option_partition_index,'option partition index',0)
+        if (self.option_partition_count>8 or self.option_partition_index>=self.option_partition_count or
+                (self.option_partition_count>1 and (not self.rediscover_options or self.raw_processes!=1))):
+            raise ValueError('distinct live option worker partition required')
         if self.all_options and self.raw_processes>1 and (self.max_frames or self.max_bytes):
             raise ValueError('positive frame/byte budgets require raw_processes=1')
         if type(self.all_options) is not bool or (self.all_options and (self.symbols or self.capture_mode!='raw')):
