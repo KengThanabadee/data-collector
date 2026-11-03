@@ -140,7 +140,38 @@ explicit writable Linux data root. It archives spot, UM and CM exchangeInfo,
 requests spot `showPermissionSets=false`, and verifies the BTC/ETH projection
 against those exact responses. Non-trading rows remain visible as disabled.
 Spot listing incarnation is null because exchangeInfo does not supply it.
-Binance continuous capture is not enabled yet.
+Binance continuous capture uses the selected USDⓈ-M profile:
+
+```sh
+.venv/bin/python -m data_collector capture --config config/v2-binance.toml
+.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
+```
+
+Set `binance_symbols = ["BTCUSDT", "ETHUSDT"]` to the complete desired native list;
+a missing or non-trading configured symbol fails startup. The profile always
+subscribes bookTicker and depth20@100ms on `/public`, aggTrade and the all-symbol
+`!forceOrder@arr` feed on `/market`. The feed plan is archived explicitly;
+`raw_feeds`, `raw_processes` and the Deribit selection settings do not choose
+Binance feeds or workers. No spot/COIN-M subscription, REST seed or reference
+polling is used. Full UM exchangeInfo replies are appended every 60 seconds;
+changes to configured listing identities stop capture so a fresh plan is required.
+Filters and other metadata changes remain recorded without stopping.
+
+Each connection archives its subscribe request, ACK and native pushes, plus
+transport gap start/end controls. Public initialization requires first bookTicker
+and depth20 pushes after ACK for every configured symbol. aggTrade and
+liquidations require ACK; quiet feeds do not require an invented event. The
+verifier reports whether a liquidation push was observed. All liquidation rows
+are preserved even for unconfigured symbols or native CM rows after Binance's
+UM/CM migration; raw envelopes retain multiplex identity, and native `st`/`ps`
+remain untouched. This all-market stream is sampled by Binance at most once per
+symbol per second and is not an exhaustive liquidation tape.
+
+Failed runs retain raw prefixes. The shared raw owner still has a 128-connection
+identity bound; reaching it stops with retained evidence rather than growing
+memory indefinitely. Healthy sockets have no collector rollover. Server close,
+serverShutdown and connection loss trigger paced reconnect and fresh ACK/book
+initialization. No REST backfill repairs the earlier transport gap.
 
 Failed/cancelled runs retain their durable raw prefix; inspect their error before
 using data. Each command starts a new capture identity, so separate runs do not

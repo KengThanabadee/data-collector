@@ -108,7 +108,10 @@ def project(responses, *, environment, max_instruments):
 
 async def run(config, *, discover_only, session_factory, observer, clock_read=None, clock_wait=None):
     from .app import _bind_root, _drain
-    if not discover_only:raise ValueError('Binance capture path is not enabled yet; discovery is available')
+    if not discover_only:
+        from .binance_capture import capture
+        return await capture(config,session_factory=session_factory,observer=observer,
+            clock_read=clock_read,clock_wait=clock_wait)
     lock=_bind_root(config);root=config.data_root/'runs'/uuid.uuid4().hex
     owner=RawOwner(root,config,observer,clock_read=clock_read,clock_wait=clock_wait)
     stopped=False

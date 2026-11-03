@@ -29,23 +29,26 @@ Observed linear projections divide all captured bytes, including initialization 
 | Compressed immutable archive and manifests | 220,160,167 | 4.92 |
 | All retained capture data, including WAL and archive | 1,771,514,629 | 39.60 |
 
-- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. Its broad continuous capture prototype is unfinished and superseded by the configured USDⓈ-M profile; new-profile acceptance is not complete.
+- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. The configured USDⓈ-M raw profile now captures BTCUSDT/ETHUSDT bookTicker and depth20@100ms on /public, aggTrade and all-symbol liquidations on /market; its five-minute development evidence is recorded below. The later combined expiry-window acceptance remains deferred.
+
+- Selected Binance USDⓈ-M development run: 300.224 post-ready seconds in dc-acceptance under caffeinate -i -s, with BTCUSDT/ETHUSDT bookTicker/depth20@100ms on /public and aggTrade plus all-symbol !forceOrder@arr on /market. verify-run passed 150,472 records, including 150,414 WebSocket messages, 35,313,051 native bytes and five append-only full exchangeInfo versions. Both connections stayed open; subscription rejections and throttles were zero. Delivery included 153 liquidation pushes and all six configured symbol topics; all 11,618 recorded depth sides had exactly 20 levels.
+- Binance sampled peak RSS was 62,068 KiB and CPU 100.47% (one vCPU is 100%). Native-event receipt lag peaked at 9.262 seconds and returned to about 50–100 ms at stop; depth medians were about 51 ms and bookTicker medians 104/166 ms. This five-minute development result does not certify the deferred combined expiry-window acceptance. Evidence: dc-acceptance ~/dc-binance-selected-evidence/20261103T082241Z; raw root ~/dc-binance-selected-data/runs/bc4c0c5bbe0f4e099908ba151275839d.
+
+The same observed linear projection basis applies to this five-minute Binance run; retained sizes include its WAL, archive and frozen collector source, and exclude the separate vendor-document evidence bundle.
+
+| Binance byte basis | Bytes per hour | Projected GiB per day |
+|---|---:|---:|
+| Native WebSocket payload | 423,440,057 | 9.46 |
+| Compressed immutable archive and manifests | 240,960,535 | 5.39 |
+| All retained run files, including WAL and archive | 2,896,240,572 | 64.74 |
 
 ## Next
 
-Current delivery stops after step 3, as requested by Keng. Bybit options are being built separately as an experiment; do not implement step 4 or start the later cross-venue acceptance run in this goal.
-
-Binance configured USDⓈ-M raw capture (after worker capacity):
-```
-Goal: Capture configured Binance USDⓈ-M bookTicker, depth20@100ms and aggTrade, plus the complete all-symbol liquidation stream on its market route, with append-only exchangeInfo.
-Done when: capture runs for five minutes in dc-acceptance under caffeinate -i -s, verify-run proves route ACKs and first book pushes with exact raw readback and metadata evidence, live aggTrade/liquidation delivery is recorded, then the chunk is reviewed and committed.
-Out of scope: Bybit, spot, COIN-M subscriptions, options, diff books, REST seeds, reference polling, snapshots and VPS setup.
-When unsure: pick the simplest option consistent with COLLECTION_SCOPE.md, add one line to PLANS.md Notes, continue.
-```
+Current delivery through step 3 is complete; stop here, as requested by Keng. Bybit options are being built separately as an experiment; do not implement step 4 or start the later cross-venue acceptance run in this goal.
 
 1. Rediscovery foundation is implemented: shared bounded option membership/timing policy, Bybit complete-pagination/PreLaunch projection, and the runnable Deribit lifecycle/300-second audit driver with append-only metadata and per-version verification. Bybit transport applies the shared policy in step 4; live cross-venue lifecycle acceptance remains pending.
 2. Deribit selected-feed chunk is committed: inverse-option top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Futures and USDC linear options/indexes are disabled. The worker capacity chunk is complete with the five-minute evidence below; proceed to Binance.
-3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker and depth20@100ms on /public, aggTrade on /market, plus all-symbol !forceOrder@arr liquidations on /market (at most one per symbol per second). On 31 October /public ACKed liquidation subscriptions without pushes; do not use it. Reuse applicable unfinished Binance work; drop spot parts. Write own brief, review and commit.
+3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker and depth20@100ms on /public, aggTrade on /market, plus all-symbol !forceOrder@arr liquidations on /market (at most one per symbol per second). On 31 October /public ACKed liquidation subscriptions without pushes; do not use it. Implemented and reviewed with the five-minute capture/readback evidence below; no spot/COIN-M subscriptions, REST seeds or reference polling. Step 3 is complete.
 4. Deferred to a separate experiment: Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. This goal stops after step 3. The experiment finished on 1 Nov 2026: build step 4 on branch `exp/bybit-a` (e4301c4, worktree `~/Developer/experiments/a`), which both reviewers chose. Fix its agreed defects:
    - verify-run passes a new listing subscribed more than 120 s after it was observed;
    - the run config records `raw_feeds=['book']`;
@@ -55,6 +58,11 @@ When unsure: pick the simplest option consistent with COLLECTION_SCOPE.md, add o
 6. Wait for a VPS before the later 24-hour production gate.
 
 ## Notes
+
+- Reviewed Binance selected-feed chunk: configured USDⓈ-M books/trades and /market all-symbol liquidations now run raw with append-only metadata, exact recorded-reply fixtures and per-route ACK/first-book verification; the final five-minute run above passed readback, and delivery stops after step 3.
+
+- Binance choice: the configured list is explicit and fixed for a run, full UM exchangeInfo is appended every 60 seconds, and quiet trades/liquidations require ACK without a fabricated push. Keep all native all-market liquidation rows, including possible CM st/ps identities, in multiplex raw envelopes; no COIN-M subscription is added.
+- Binance exact source bundle: official SDK revision 13fda514bb2a4358712d849aa3163a0505d96da0 schema/models and official llms-full documentation are archived under experiments/results/binance-selected-sources and dc-acceptance ~/dc-binance-selected-evidence/sources-20261103; hashes, retrieval details and recorded-reply fixture provenance are in docs/v2/binance-selected-source-evidence.json. Empty catalogue replies were not treated as schema evidence.
 
 - Reviewed worker capacity: two stable live partitions with negotiated WebSocket deflate completed 300.429 post-ready seconds in dc-acceptance under caffeinate -i -s; verify-run passed 520,070 records, six universe versions and cross-worker coverage of all 1,630 inverse options. Two connections stayed open, no rejection/throttle or too-slow close, index lag medians 136.502/126.871 ms and peaks 6.949/7.260 s returned to about 100 ms at stop; peak summed RSS 305,152 KiB and CPU 196.93%. Evidence: ~/dc-top20-evidence/20261103T080456Z, raw root ~/dc-top20-data/runs/a3288661fd7144638d8e99f4c592a31c. This meets the development capacity brief, not the later expiry-window acceptance.
 

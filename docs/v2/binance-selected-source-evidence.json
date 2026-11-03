@@ -1,0 +1,77 @@
+{
+  "schema": "dc.binance-selected-source-evidence/1",
+  "sdk_revision": "13fda514bb2a4358712d849aa3163a0505d96da0",
+  "body_root": "experiments/results/binance-selected-sources",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/streams/public_api.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/streams/public_api.py",
+      "sha256": "5ed435cc9201faddb3d074d8ac65277671b2fc110912dcf59b9ffd74ec40149d",
+      "retrieved_utc": "2026-11-03T08:10:14Z",
+      "bytes": 10332,
+      "file": "public_api.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/streams/market_api.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/streams/market_api.py",
+      "sha256": "cbee219675115bf53508ad6b2488708a8894901251f3344c8532a9d1531f61f6",
+      "retrieved_utc": "2026-11-03T08:10:14Z",
+      "bytes": 27194,
+      "file": "market_api.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/partial_book_depth_streams_response.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/partial_book_depth_streams_response.py",
+      "sha256": "df16cae76cf1526afab9ddaaec7eeac0ec08940cb4ff1989ee25ac2984fea31b",
+      "retrieved_utc": "2026-11-03T08:10:15Z",
+      "bytes": 4798,
+      "file": "partial_book_depth_streams_response.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/individual_symbol_book_ticker_streams_response.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/individual_symbol_book_ticker_streams_response.py",
+      "sha256": "b13c8d94fbd4e0dcd345d029cf0abea13f8528ea9480b7482bd5b99b34dec5a4",
+      "retrieved_utc": "2026-11-03T08:10:15Z",
+      "bytes": 4683,
+      "file": "individual_symbol_book_ticker_streams_response.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/aggregate_trade_streams_response.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/aggregate_trade_streams_response.py",
+      "sha256": "f62fe378f3a213a83b1643f254a7947eee4b90466ea2cea82a5dfbfff2ba5b46",
+      "retrieved_utc": "2026-11-03T08:10:16Z",
+      "bytes": 4830,
+      "file": "aggregate_trade_streams_response.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/all_market_liquidation_order_streams_response.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/all_market_liquidation_order_streams_response.py",
+      "sha256": "d314a90f5406e66adbfa64b868652ddeefa3578f815c827f514b6c32f47bf12c",
+      "retrieved_utc": "2026-11-03T08:10:16Z",
+      "bytes": 4311,
+      "file": "all_market_liquidation_order_streams_response.py"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/all_market_liquidation_order_streams_response_o.py",
+      "final_url": "https://raw.githubusercontent.com/binance/binance-connector-python/13fda514bb2a4358712d849aa3163a0505d96da0/clients/derivatives_trading_usds_futures/src/binance_sdk_derivatives_trading_usds_futures/websocket_streams/models/all_market_liquidation_order_streams_response_o.py",
+      "sha256": "9247c019bff72a693edc738c735ab550df417c10a69a347a9b1670dec2d02dad",
+      "retrieved_utc": "2026-11-03T08:22:00Z",
+      "bytes": 4606,
+      "file": "all_market_liquidation_order_streams_response_o.py"
+    },
+    {
+      "url": "https://developers.binance.com/en/docs/llms-full.txt",
+      "final_url": "https://developers.binance.com/en/docs/llms-full.txt",
+      "sha256": "7fe8634d231eacc5564bef1995fe45c1bbc52ea7b7072cc50e3b0d06ad05c68e",
+      "retrieved_utc": "2026-11-03T08:06:16.860230+00:00",
+      "bytes": 8344376,
+      "file": "binance-llms-full.txt"
+    }
+  ],
+  "fixture": "tests/fixtures/dc_binance_selected.json",
+  "notes": [
+    "Official SDK public_api.py/market_api.py freeze routing and current schema models, including nested liquidation order.",
+    "llms-full.txt includes Connect and Important-WebSocket-Change-Notice bodies; direct catalogue requests returned empty bodies and are not counted as evidence.",
+    "Current official all-market streams include native UM and CM rows; exact payloads are retained without assigning a UM instrument identity."
+  ]
+}

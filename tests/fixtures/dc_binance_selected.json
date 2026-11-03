@@ -1,0 +1,194 @@
+{
+  "source": {
+    "root": "/home/keng.guest/dc-binance-selected-data/runs/ceea9048363a4aae9eb07f0b4a2b015e",
+    "response_sha256": "21c2d02251fb88ca8cb36d4963de36a1870e83d1b723337e5b60612598af7ed6",
+    "receipt_utc_ns": 1793693813923665422,
+    "metadata_fixture": "selected rows from full archived UM response"
+  },
+  "metadata": {
+    "symbols": [
+      {
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "contractType": "PERPETUAL",
+        "deliveryDate": 4133404800000,
+        "onboardDate": 1567965300000,
+        "status": "TRADING",
+        "maintMarginPercent": "2.5000",
+        "requiredMarginPercent": "5.0000",
+        "baseAsset": "BTC",
+        "quoteAsset": "USDT",
+        "marginAsset": "USDT",
+        "pricePrecision": 2,
+        "quantityPrecision": 3,
+        "baseAssetPrecision": 8,
+        "quotePrecision": 8,
+        "underlyingType": "COIN",
+        "underlyingSubType": [
+          "PoW",
+          "Crypto"
+        ],
+        "triggerProtect": "0.0300",
+        "liquidationFee": "0.012500",
+        "marketTakeBound": "0.03",
+        "maxMoveOrderLimit": 10000,
+        "filters": [
+          {
+            "filterType": "PRICE_FILTER",
+            "tickSize": "0.10",
+            "maxPrice": "4529764",
+            "minPrice": "556.80"
+          },
+          {
+            "maxQty": "1000",
+            "filterType": "LOT_SIZE",
+            "stepSize": "0.001",
+            "minQty": "0.001"
+          },
+          {
+            "stepSize": "0.001",
+            "maxQty": "120",
+            "filterType": "MARKET_LOT_SIZE",
+            "minQty": "0.001"
+          },
+          {
+            "limit": 200,
+            "filterType": "MAX_NUM_ORDERS"
+          },
+          {
+            "filterType": "MIN_NOTIONAL",
+            "notional": "50"
+          },
+          {
+            "multiplierDown": "0.9700",
+            "multiplierUp": "1.0300",
+            "multiplierDecimal": "4",
+            "filterType": "PERCENT_PRICE"
+          },
+          {
+            "filterType": "POSITION_RISK_CONTROL",
+            "positionControlSide": "NONE"
+          }
+        ],
+        "orderTypes": [
+          "LIMIT",
+          "MARKET",
+          "STOP",
+          "STOP_MARKET",
+          "TAKE_PROFIT",
+          "TAKE_PROFIT_MARKET",
+          "TRAILING_STOP_MARKET"
+        ],
+        "timeInForce": [
+          "GTC",
+          "IOC",
+          "FOK",
+          "GTX",
+          "GTD"
+        ],
+        "permissionSets": [
+          "GRID",
+          "COPY",
+          "DCA",
+          "PSB"
+        ]
+      },
+      {
+        "symbol": "ETHUSDT",
+        "pair": "ETHUSDT",
+        "contractType": "PERPETUAL",
+        "deliveryDate": 4133404800000,
+        "onboardDate": 1574840700000,
+        "status": "TRADING",
+        "maintMarginPercent": "2.5000",
+        "requiredMarginPercent": "5.0000",
+        "baseAsset": "ETH",
+        "quoteAsset": "USDT",
+        "marginAsset": "USDT",
+        "pricePrecision": 2,
+        "quantityPrecision": 3,
+        "baseAssetPrecision": 8,
+        "quotePrecision": 8,
+        "underlyingType": "COIN",
+        "underlyingSubType": [
+          "Layer-1",
+          "Crypto"
+        ],
+        "triggerProtect": "0.0300",
+        "liquidationFee": "0.012500",
+        "marketTakeBound": "0.03",
+        "maxMoveOrderLimit": 10000,
+        "filters": [
+          {
+            "tickSize": "0.01",
+            "minPrice": "39.86",
+            "maxPrice": "306177",
+            "filterType": "PRICE_FILTER"
+          },
+          {
+            "filterType": "LOT_SIZE",
+            "minQty": "0.001",
+            "maxQty": "10000",
+            "stepSize": "0.001"
+          },
+          {
+            "stepSize": "0.001",
+            "filterType": "MARKET_LOT_SIZE",
+            "minQty": "0.001",
+            "maxQty": "2000"
+          },
+          {
+            "filterType": "MAX_NUM_ORDERS",
+            "limit": 200
+          },
+          {
+            "filterType": "MIN_NOTIONAL",
+            "notional": "20"
+          },
+          {
+            "filterType": "PERCENT_PRICE",
+            "multiplierUp": "1.0300",
+            "multiplierDown": "0.9700",
+            "multiplierDecimal": "4"
+          },
+          {
+            "positionControlSide": "NONE",
+            "filterType": "POSITION_RISK_CONTROL"
+          }
+        ],
+        "orderTypes": [
+          "LIMIT",
+          "MARKET",
+          "STOP",
+          "STOP_MARKET",
+          "TAKE_PROFIT",
+          "TAKE_PROFIT_MARKET",
+          "TRAILING_STOP_MARKET"
+        ],
+        "timeInForce": [
+          "GTC",
+          "IOC",
+          "FOK",
+          "GTX",
+          "GTD"
+        ],
+        "permissionSets": [
+          "GRID",
+          "COPY",
+          "DCA",
+          "PSB"
+        ]
+      }
+    ]
+  },
+  "samples": {
+    "ack": "{\"result\":null,\"id\":1}",
+    "btcusdt@bookTicker": "{\"stream\":\"btcusdt@bookTicker\",\"data\":{\"e\":\"bookTicker\",\"u\":11999312918037,\"s\":\"BTCUSDT\",\"ps\":\"BTCUSDT\",\"b\":\"76781.50\",\"B\":\"0.159\",\"a\":\"76781.60\",\"A\":\"11.099\",\"T\":1793693814593,\"E\":1793693814593,\"st\":1}}",
+    "ethusdt@bookTicker": "{\"stream\":\"ethusdt@bookTicker\",\"data\":{\"e\":\"bookTicker\",\"u\":11999312918602,\"s\":\"ETHUSDT\",\"ps\":\"ETHUSDT\",\"b\":\"2258.94\",\"B\":\"97.913\",\"a\":\"2258.95\",\"A\":\"110.108\",\"T\":1793693814598,\"E\":1793693814598,\"st\":1}}",
+    "ethusdt@depth20@100ms": "{\"stream\":\"ethusdt@depth20@100ms\",\"data\":{\"e\":\"depthUpdate\",\"E\":1793693814653,\"T\":1793693814650,\"s\":\"ETHUSDT\",\"ps\":\"ETHUSDT\",\"U\":11999312911964,\"u\":11999312925086,\"pu\":11999312911003,\"b\":[[\"2258.94\",\"97.913\"],[\"2258.93\",\"0.077\"],[\"2258.92\",\"0.026\"],[\"2258.91\",\"0.031\"],[\"2258.90\",\"0.611\"],[\"2258.89\",\"3.106\"],[\"2258.88\",\"0.011\"],[\"2258.87\",\"0.010\"],[\"2258.86\",\"0.912\"],[\"2258.85\",\"0.086\"],[\"2258.84\",\"6.066\"],[\"2258.83\",\"0.035\"],[\"2258.82\",\"0.287\"],[\"2258.81\",\"13.014\"],[\"2258.80\",\"0.079\"],[\"2258.79\",\"3.960\"],[\"2258.78\",\"1.069\"],[\"2258.77\",\"0.964\"],[\"2258.76\",\"8.215\"],[\"2258.75\",\"1.152\"]],\"a\":[[\"2258.95\",\"110.417\"],[\"2258.96\",\"0.092\"],[\"2258.97\",\"0.009\"],[\"2258.99\",\"0.910\"],[\"2259.00\",\"1.205\"],[\"2259.02\",\"0.020\"],[\"2259.03\",\"0.160\"],[\"2259.04\",\"0.215\"],[\"2259.05\",\"18.279\"],[\"2259.06\",\"1.162\"],[\"2259.07\",\"0.143\"],[\"2259.08\",\"3.772\"],[\"2259.09\",\"0.787\"],[\"2259.10\",\"37.187\"],[\"2259.11\",\"77.107\"],[\"2259.12\",\"0.539\"],[\"2259.13\",\"58.092\"],[\"2259.14\",\"3.560\"],[\"2259.15\",\"0.264\"],[\"2259.16\",\"28.770\"]],\"st\":1}}",
+    "btcusdt@depth20@100ms": "{\"stream\":\"btcusdt@depth20@100ms\",\"data\":{\"e\":\"depthUpdate\",\"E\":1793693814661,\"T\":1793693814657,\"s\":\"BTCUSDT\",\"ps\":\"BTCUSDT\",\"U\":11999312913439,\"u\":11999312926175,\"pu\":11999312913398,\"b\":[[\"76781.50\",\"0.139\"],[\"76781.40\",\"0.003\"],[\"76781.30\",\"0.001\"],[\"76781.10\",\"0.002\"],[\"76780.90\",\"0.001\"],[\"76780.80\",\"0.081\"],[\"76780.40\",\"0.004\"],[\"76780.10\",\"0.001\"],[\"76780.00\",\"0.082\"],[\"76779.80\",\"0.001\"],[\"76779.70\",\"0.021\"],[\"76779.60\",\"0.080\"],[\"76779.50\",\"0.001\"],[\"76779.00\",\"0.001\"],[\"76778.80\",\"0.002\"],[\"76778.40\",\"0.001\"],[\"76778.00\",\"0.003\"],[\"76777.90\",\"0.001\"],[\"76777.40\",\"0.001\"],[\"76777.20\",\"0.001\"]],\"a\":[[\"76781.60\",\"11.086\"],[\"76781.70\",\"0.006\"],[\"76781.80\",\"0.004\"],[\"76781.90\",\"0.001\"],[\"76782.00\",\"0.031\"],[\"76782.30\",\"0.001\"],[\"76782.40\",\"0.027\"],[\"76782.50\",\"0.003\"],[\"76782.60\",\"0.066\"],[\"76782.70\",\"0.001\"],[\"76782.80\",\"0.010\"],[\"76782.90\",\"0.002\"],[\"76783.00\",\"0.002\"],[\"76783.10\",\"0.001\"],[\"76783.20\",\"0.028\"],[\"76783.30\",\"0.002\"],[\"76783.40\",\"0.119\"],[\"76783.50\",\"0.003\"],[\"76783.60\",\"0.001\"],[\"76783.70\",\"0.055\"]],\"st\":1}}",
+    "ethusdt@aggTrade": "{\"stream\":\"ethusdt@aggTrade\",\"data\":{\"e\":\"aggTrade\",\"E\":1793693819667,\"a\":3138134580,\"s\":\"ETHUSDT\",\"p\":\"2258.95\",\"q\":\"1.223\",\"nq\":\"1.223\",\"f\":8928352762,\"l\":8928352776,\"T\":1793693819667,\"m\":false,\"st\":1}}",
+    "btcusdt@aggTrade": "{\"stream\":\"btcusdt@aggTrade\",\"data\":{\"e\":\"aggTrade\",\"E\":1793693819683,\"a\":3505477142,\"s\":\"BTCUSDT\",\"p\":\"76781.50\",\"q\":\"0.402\",\"nq\":\"0.402\",\"f\":8229044621,\"l\":8229044628,\"T\":1793693819532,\"m\":true,\"st\":1}}",
+    "!forceOrder@arr": "{\"stream\":\"!forceOrder@arr\",\"data\":{\"e\":\"forceOrder\",\"E\":1793693821093,\"o\":{\"s\":\"JCTUSDT\",\"S\":\"BUY\",\"o\":\"LIMIT\",\"f\":\"IOC\",\"q\":\"8821\",\"p\":\"0.0052720\",\"ap\":\"0.0050740\",\"X\":\"FILLED\",\"l\":\"337\",\"z\":\"8821\",\"T\":1793693820086,\"ps\":\"JCTUSDT\",\"st\":1}}}"
+  }
+}

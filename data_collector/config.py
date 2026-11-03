@@ -45,6 +45,7 @@ class DiscoveryConfig:
     bybit_ws_host: str | None = None
     option_partition_count: int = 1
     option_partition_index: int = 0
+    binance_symbols: tuple[str, ...] = ('BTCUSDT','ETHUSDT')
 
     def __post_init__(self):
         if self.schema != SCHEMA or self.venue not in ("deribit","binance"):
@@ -61,6 +62,11 @@ class DiscoveryConfig:
         if self.venue=='binance' and (self.environment!='production' or self.capture_mode!='raw'
                 or self.all_options or self.all_futures or self.symbols):
             raise ValueError('Binance public profile requires production raw mode and whole-universe selection')
+        if (type(self.binance_symbols) is not tuple or not self.binance_symbols
+                or len(set(self.binance_symbols))!=len(self.binance_symbols)
+                or any(not isinstance(v,str) or re.fullmatch(r'[A-Z0-9_]{1,40}',v) is None for v in self.binance_symbols)):
+            raise ValueError('distinct native Binance symbols required')
+        if len(self.binance_symbols)*2>256:raise ValueError('Binance configured list exceeds route limit')
         if not isinstance(self.data_root, Path) or not self.data_root.is_absolute():
             raise ValueError("absolute data_root required")
         for name, maximum in (("max_response_bytes", 16 * 1024 * 1024),
@@ -157,9 +163,10 @@ def load(path):
         if name in values:
             text(values[name],name)
             values[name]=(path.parent/Path(values[name]).expanduser()).resolve()
-    if 'raw_feeds' in values:
-        if not isinstance(values['raw_feeds'],list):raise ValueError('raw_feeds array required')
-        values['raw_feeds']=tuple(values['raw_feeds'])
+    for name in ('raw_feeds','binance_symbols'):
+        if name in values:
+            if not isinstance(values[name],list):raise ValueError(name+' array required')
+            values[name]=tuple(values[name])
     if "symbols" in values:
         if not isinstance(values["symbols"], list) or any(not isinstance(s,str) for s in values["symbols"]):
             raise ValueError("symbols must be a TOML string array")
