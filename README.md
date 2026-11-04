@@ -1,33 +1,116 @@
-# Data Collector (DC)
+# Data Collector
 
-GitHub: [KengThanabadee/data-collector](https://github.com/KengThanabadee/data-collector) (private)
+A raw-first market-data recorder for crypto options and perpetuals. It records live WebSocket feeds from Deribit, Binance and Bybit byte-for-byte, writes each message to disk before it acknowledges it, and keeps an explicit, verifiable record of every gap in coverage.
 
-ขอบเขต v2 ปัจจุบันคือ Deribit BTC/ETH inverse options (book 20 levels, ticker, trades และ index), Binance USDⓈ-M ตามรายชื่อที่ตั้งค่า และ Bybit options (ticker และ publicTrade) เก็บ raw bytes, เวลา, metadata และช่วงข้อมูลขาด ตาม [collection scope](docs/v2/COLLECTION_SCOPE.md)
+The goal is a research archive of data **that cannot be downloaded later**: option order books, tickers and trades, perp top-20 books and liquidations. Those are gone once the moment passes. Anything a venue already offers as history (bars, funding, settlement prices) is fetched later and left out of live capture.
 
-สถานะและงานถัดไปอยู่ที่ [PLANS.md](PLANS.md): v1 เป็น Deribit REST collector ส่วน v2 มี `discover`, `capture` และ `verify-run` พร้อม live option rediscovery โดย raw mode มี duration, frame และ byte limits เป็น unbounded ตามค่าเริ่มต้น Snapshot mode เดิมยังจำกัด 120 วินาที ผลรันหนึ่งชั่วโมงเดิมเป็น profile เก่า; เกณฑ์รับงานใหม่ที่ครบสาม venues และคร่อม 08:00 UTC ยังไม่เสร็จ ดูวิธีรันที่ [docs/v2/RUNNING.md](docs/v2/RUNNING.md) และ [ประวัติการพัฒนา](docs/v2/history/IMPLEMENTATION.md)
+> **Status:** working pilot, not yet deployed as a 24/7 service. Hour-long runs have passed verification on a Linux VM. The combined three-venue run and the 24-hour VPS soak are still to do. See [PLANS.md](PLANS.md) for current status.
 
-- [Specification v2: ขอบเขตและ contracts](SPEC.md)
-- [Feed capability/coverage และข้อจำกัดแต่ละตลาด](docs/v2/FEEDS.md)
-- [กฎปิด snapshot, replay และแก้ validity ย้อนหลัง](docs/v2/SNAPSHOTS.md)
-- [เกณฑ์รับงานและงบทรัพยากรสำหรับทดลอง](docs/v2/ACCEPTANCE.md) · [ค่าตั้งต้นที่ยังไม่เปิดใช้](docs/v2/pilot-budget.toml)
-- [Specification v1 ต้นฉบับ](docs/SPEC_V1.md)
-- [ผล agent review ของ spec v1](docs/SPEC_REVIEW.md)
-- [ความคืบหน้า implementation](PLANS.md)
-- [เริ่มใช้และดูแล collector](docs/OPERATIONS.md)
-- [ผลทดสอบ implementation บนเครื่อง](docs/LOCAL_VALIDATION.md)
-- [ข้อมูลเพียงพอสำหรับ BSAD/ML หรือไม่: ผลจาก dataset และการฟิตจริง](docs/RESEARCH_DATA_SUFFICIENCY.md)
-- [ผลการทดลองและตาราง TF](docs/EXPERIMENT_REPORT.md)
-- [ตัวเลขจากหลักฐานที่เก็บจริง](docs/experiment_metrics.json)
-- [วิธีรันการทดลองซ้ำ](experiments/README.md)
+## What it captures
 
-มี collector สำหรับรัน local แล้ว: async collection, lossless gzip JSONL, frozen-universe coverage, verified publication/recovery, delivery pagination, CLI/reader/export และ monitoring พร้อม systemd units สำหรับทดสอบบน Linux ยังไม่ได้ติดตั้งหรือเปิดเก็บต่อเนื่องบน VPS
+| Venue | Live feeds | Why live |
+|---|---|---|
+| Deribit BTC/ETH inverse options | top-20 book and ticker at 100 ms for every listed option, option trades, BTC/ETH index | no free book or ticker history |
+| Binance USDⓈ-M perps | `bookTicker`, `depth20@100ms`, `aggTrade` for configured symbols; all-symbol liquidations | bookTicker archive ended in 2024; no depth-20 or liquidation archive |
+| Bybit BTC/ETH options | per-symbol `tickers`, `publicTrade`, including PreLaunch listings | no option book, ticker or trade history |
+| All three | instrument metadata (tick size, strikes, expiries), append-only | venues only publish current values |
 
-ใช้ Python3.12 แล้วติดตั้ง dependencies ตาม `requirements.lock` ใน `.venv` จากนั้นรัน:
+The reasons behind each choice are in [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md). Feeds that were looked at and left out are listed with reasons in [docs/v2/FEEDS.md](docs/v2/FEEDS.md).
 
-```sh
-.venv/bin/python -m option_collector status --json
-.venv/bin/python -m option_collector collect-once
-.venv/bin/python -m unittest discover -s tests -v
+## Measured results
+
+From a one-hour Deribit options run on an Ubuntu 24.04 VM (6 vCPU, 6 GiB):
+
+| Metric | Value |
+|---|---:|
+| Instruments / channels | 2,800 options / 8,400 channels across 4 worker processes |
+| WebSocket messages | 10,993,156 (all records passed `verify-run`) |
+| Native payload | 7.15 GB per hour, about 160 GiB per day |
+| Compressed archive | 2.76 GB per hour, about 62 GiB per day |
+| Peak memory / CPU | 481 MiB summed RSS, about 4 of 6 vCPUs |
+| Faults handled | 3 server heartbeat closes, 94 failed DNS lookups; every worker reconnected and re-initialized, with each gap recorded |
+
+A separate ten-minute run spanning the 08:00 UTC Deribit expiry passed verification across 13 universe versions: 118 expired options retired, new listings subscribed, and zero rejected subscriptions. Full numbers are in [PLANS.md](PLANS.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph Venues
+        D[Deribit WS]
+        B[Binance WS]
+        Y[Bybit WS]
+    end
+    D & B & Y --> A[Venue adapters<br/>subscribe, ACK, reconnect]
+    R[REST discovery +<br/>lifecycle stream] --> U[Option universe<br/>versioned, append-only]
+    U --> A
+    A --> L[Serialized lane<br/>one per venue]
+    L --> W[Write-ahead log<br/>fsync before ack]
+    W --> S[Immutable gzip segments<br/>manifest = commit]
+    S --> V[verify-run<br/>coverage + replay check]
+    V --> E[Lossless JSONL export]
 ```
 
-ข้อมูลจริงอยู่ `data/production/` (ไม่เข้า Git) คำสั่ง collect-once เป็น manual run หนึ่งรอบ การเปิดเก็บจริงยังต้องผ่าน Linux checks/Telegram/24-hour VPS soak ตาม spec Optional candle backfill ยังแยกจาก core rollout นี้
+Design decisions worth knowing:
+
+- **Exact bytes, never re-encoded.** Each record keeps the original message bytes inside a versioned envelope (`dc.raw/2`) with receive time, monotonic clock, connection ID, sequence number and config hash. Prices stay as the venue's own strings, so nothing is lost to float conversion.
+- **Durable before acknowledged.** A single writer owns a framed write-ahead log and fsyncs before a record counts as captured. After a crash, the damaged tail is kept for inspection, the good prefix is sealed, and capture resumes under a new session ID, so no gap is hidden.
+- **Gaps are data.** Disconnects, reconnects, rejected subscriptions, clock problems and writer failures become `control` records. `verify-run` will not report coverage for an instrument until it has seen the subscription ACK and the first real update after every reconnect.
+- **The universe follows listings.** Deribit lists new expiries at 08:00 UTC and adds strikes during the day. The collector listens to Deribit's `instrument.state` stream, runs a full REST audit every 300 seconds, and must subscribe each new option within 120 seconds of its creation. Bybit pre-lists the next expiry as `PreLaunch`; those options are subscribed as soon as discovery sees them. Each universe change is stored as a new version.
+- **Scaled by partition.** Options are split across worker processes by stable symbol hash. Each worker owns its archive; a supervisor starts and stops them together and checks coverage across all partitions. Bybit subscriptions are spread over connections to stay under its per-connection argument limits.
+- **Clock honesty.** Receive timestamps are never adjusted. Clock offset and uncertainty are sampled from chrony and recorded beside the data, so later analysis can judge time quality.
+
+## Quick start
+
+Requires Python 3.12. No API keys are needed; every feed is public.
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock
+.venv/bin/python -m unittest discover -s tests        # 755 tests, about 5 minutes, loopback only
+```
+
+Check a configuration (this works on macOS):
+
+```sh
+.venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
+```
+
+Live capture runs on Linux with chrony. Copy a config, pick `production` or `testnet`, set a fresh `data_root`, then:
+
+```sh
+.venv/bin/python -m data_collector discover   --config my-config.toml
+.venv/bin/python -m data_collector capture    --config my-config.toml
+.venv/bin/python -m data_collector verify-run <printed-root> --export out.jsonl
+```
+
+[docs/v2/RUNNING.md](docs/v2/RUNNING.md) covers configs for each venue, disk requirements and running in a Lima VM.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `data_collector/` | v2 collector: venue adapters, write-ahead log, segment publisher, discovery, supervision, verification and replay (about 14,000 lines) |
+| `option_collector/` | v1 Deribit REST snapshot collector, kept working for compatibility |
+| `tests/` | `unittest` suites using synthetic fixtures and recorded venue replies (about 13,000 lines) |
+| `config/` | example configs for each venue profile |
+| `deploy/` | systemd units and installer for Linux hosts |
+| `experiments/` | bounded live probes and research notebooks |
+
+## Documentation
+
+- [SPEC.md](SPEC.md): v2 contracts for record formats, ordering, gaps and adapters
+- [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md): what is recorded live and why
+- [docs/v2/FEEDS.md](docs/v2/FEEDS.md): feed catalogue and per-venue limits
+- [docs/v2/RUNNING.md](docs/v2/RUNNING.md): how to run and verify a capture
+- [docs/v2/ACCEPTANCE.md](docs/v2/ACCEPTANCE.md): production acceptance gates
+- [docs/v2/SNAPSHOTS.md](docs/v2/SNAPSHOTS.md): snapshot, replay and validity-correction rules
+- [PLANS.md](PLANS.md): current status and next steps; [docs/v2/history/](docs/v2/history/) holds the earlier development log
+- v1: [docs/SPEC_V1.md](docs/SPEC_V1.md), [docs/OPERATIONS.md](docs/OPERATIONS.md)
+- Research: [docs/RESEARCH_DATA_SUFFICIENCY.md](docs/RESEARCH_DATA_SUFFICIENCY.md), [docs/EXPERIMENT_REPORT.md](docs/EXPERIMENT_REPORT.md)
+
+## Roadmap
+
+1. One run of at least an hour with all three venues together, spanning the 08:00 UTC expiry.
+2. Deploy to a VPS and pass a 24-hour soak test.
+3. Add derived layers (book snapshots, replay products) when a research use needs them.
