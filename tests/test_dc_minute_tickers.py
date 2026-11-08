@@ -44,6 +44,7 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.retirement_seen = asyncio.Event()
         self.lifecycle = False
         self.metadata_throttled = False
+        self.socket_unavailable = False
         self.drop_first = True
         self.new_sent = set()
         self.new_seen = asyncio.Event()
@@ -79,6 +80,8 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         return web.Response(body=body, status=200 if body is not None else 404)
 
     async def socket(self, request):
+        if self.socket_unavailable:
+            return web.Response(status=503)
         ws = web.WebSocketResponse(compress=True)
         await ws.prepare(request)
         self.connections.append(ws)
@@ -191,6 +194,37 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         path = next((root / "minutes").glob("**/0759/index.jsonl"))
         path.write_bytes(dumps(legacy))
         self.assertEqual(read_minute(root, FIRST_SLOT), (legacy, []))
+        self.assertEqual(path.read_bytes(), dumps(legacy))
+
+    async def test_all_missing_tickers_with_retained_catalog_and_no_rest_attempts_are_a_gap(self):
+        await self.capture(1)
+        self.metadata_throttled = True
+        self.socket_unavailable = True
+        await self.capture(1)
+
+        root = self.config.data_root
+        slot = FIRST_SLOT + 60
+        index, records = read_minute(root, slot)
+        snapshot = read_ticker_samples(root, slot)
+        self.assertEqual(records, [])
+        self.assertEqual(snapshot["metadata_version"], 1)
+        self.assertIsNone(snapshot["current_connection_id"])
+        self.assertEqual(set(snapshot["samples"]), {FUTURE, QUIET})
+        for sample in snapshot["samples"].values():
+            self.assertEqual(sample["status"], "missing")
+            self.assertIsNone(body_bytes(sample))
+        self.assertTrue(index["gap"])
+        self.assertEqual(index["gap_reason"], "no_requests_sent")
+        self.assertTrue(index["deribit_tickers_empty"])
+        self.assertEqual(set(index["requests"].values()), {"missed"})
+
+        # A previously published all-missing snapshot keeps its original index.
+        legacy = dict(index, gap=False, gap_reason=None)
+        del legacy["deribit_tickers_empty"]
+        path = next((root / "minutes").glob("**/0800/index.jsonl"))
+        path.write_bytes(dumps(legacy))
+        self.assertEqual(read_minute(root, slot), (legacy, []))
+        self.assertEqual(read_ticker_samples(root, slot), snapshot)
         self.assertEqual(path.read_bytes(), dumps(legacy))
 
     async def test_refreshes_listings_reconnects_and_retires_at_0800(self):

@@ -146,7 +146,8 @@ def _read_minute(root, slot, files):
 
 
 def _empty_tickers(raw):
-    return json.loads(gzip.decompress(raw))["samples"] == {}
+    samples = json.loads(gzip.decompress(raw))["samples"]
+    return all(sample["status"] == "missing" and sample["raw_body"] is None for sample in samples.values())
 
 
 def read_ticker_samples(root, slot):
