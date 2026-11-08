@@ -1,13 +1,40 @@
 # Run the Deribit collector
 
-> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The minute-snapshot service is not built yet. Until it is, the runnable V2 paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
+> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The runnable V2 event paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
 
-This is the first runnable v2 path: public discovery → raw metadata → selected
+## Deribit REST minute grid
+
+Use a fresh data root dedicated to minute capture. A bounded run counts scheduled
+slots, including explicit gaps. Omit `--minutes` to keep the grid running.
+
+```sh
+.venv/bin/python -m data_collector minute-capture --data-root data/minute-deribit --minutes 1
+.venv/bin/python -m data_collector minute-read --data-root data/minute-deribit --slot 2026-11-08T07:21:00Z
+```
+
+For readback, use the UTC minute of your run. The grid dispatches the profile at
+:00 UTC, with the v1 REST transport pacing individual sends. The first run starts
+at the next boundary. A wakeup one second or more after a boundary records a
+gap. On restart the same root resumes its grid and indexes any elapsed slots
+without reissuing old requests. `--request-window` sets the request deadline in
+seconds after the boundary and defaults to 20.
+
+Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
+index lists all 11 expected requests and distinguishes `ok`, `error`,
+`timeout` and `missed`. A slot without an attempt is a gap. Readback verifies
+the index against the v1 response archive, which retains raw bytes and local
+send and receive times. `venue_server_epoch_us` is Deribit's `usOut` when
+available. Native market timestamps remain in the raw body.
+
+The profile uses `public/get_index_price` for the live BTC and ETH DVOL indexes,
+`btcdvol_usdc` and `ethdvol_usdc`.
+
+## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
+
+This was the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
 writer, lane, clock sampler, receiver and publication pipeline. The selected scope is defined in
 COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This command is a **partial pilot**, not a production service.
-
-## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 
 The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
 
