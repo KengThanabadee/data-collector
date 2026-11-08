@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import gzip
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -14,6 +15,9 @@ import tempfile
 import time
 
 from option_collector.common import dumps, mkdir, process_lock, read_json, sha, sync_dir, write_bytes, write_json
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 PERIOD = 60
@@ -104,8 +108,13 @@ class HourlyJournal:
 
     def _seal_prior_days(self, day):
         for directory in sorted((self.root / "hourly").glob("????-??-??")):
-            if directory.name < day and not _daily_paths(self.root, directory.name)[1].exists():
-                _seal(self.root, directory.name)
+            if directory.name >= day:
+                continue
+            try:
+                if not _daily_paths(self.root, directory.name)[1].exists():
+                    _seal(self.root, directory.name)
+            except Exception:
+                LOGGER.exception("Could not seal UTC minute day %s under %s", directory.name, self.root)
 
     def _open_hour(self, path):
         if self.path is None or self.path.parent != path.parent:
@@ -169,6 +178,7 @@ class HourlyJournal:
             *self.root.glob(f"bybit/reference-failures/*/{label}"),
             *self.root.glob(f"binance/reference/{label}"),
             *self.root.glob(f"binance/reference-failures/{label}"),
+            *self.root.glob(f"deribit-retirements/{_utc(slot):%Y-%m-%d}/*.json.gz"),
         ]
         hour = slot // 3600 * 3600
         for path in self.root.glob(f"bybit/selection/{hour}-*.json"):
@@ -410,8 +420,17 @@ def read_minute_files(root, slot):
     """Resolve committed minute files from staging or verified daily readback."""
     root = Path(root)
     path = minute_path(root, slot)
-    if (path / "index.jsonl").is_file():
-        return {name: (path / name).read_bytes() for name in MINUTE_FILES if (path / name).is_file()}
+    index = path / "index.jsonl"
+    if index.is_file():
+        files = {}
+        for name in MINUTE_FILES:
+            try:
+                files[name] = (path / name).read_bytes()
+            except FileNotFoundError:
+                continue
+        # Prune removes the index before any other staged file for this minute.
+        if index.is_file():
+            return files
     day = _utc(slot).date().isoformat()
     _, manifest = _daily_paths(root, day)
     if manifest.exists():

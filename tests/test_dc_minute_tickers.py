@@ -12,7 +12,7 @@ from aiohttp import web
 from data_collector.cli import main
 from data_collector.minute import capture_minutes, read_minute, read_ticker_samples
 from data_collector.minute_tickers import read_deribit_metadata
-from option_collector.common import body_bytes
+from option_collector.common import body_bytes, dumps
 from option_collector.config import Config
 from tests.test_dc_minute import REPLIES
 
@@ -37,10 +37,13 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.metadata_bodies = []
         self.requested = []
         self.retired = []
+        self.retirement_reply = "channels"
+        self.retirement_body = None
         self.connections = []
         self.reconnected = asyncio.Event()
         self.retirement_seen = asyncio.Event()
         self.lifecycle = False
+        self.metadata_throttled = False
         self.drop_first = True
         self.new_sent = set()
         self.new_seen = asyncio.Event()
@@ -62,6 +65,9 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         params = dict(request.query)
         if method == "get_instruments":
             self.metadata_reads += 1
+            if self.metadata_throttled:
+                return web.json_response({"jsonrpc": "2.0", "error": {"code": 10028}}, status=429,
+                                         headers={"Retry-After": "120"})
             rows = FIXTURE["initial"]
             if self.lifecycle and self.metadata_reads >= 2:
                 rows = [*rows, FIXTURE["new"]]
@@ -99,7 +105,13 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
             elif method == "public/unsubscribe":
                 channels = rpc["params"]["channels"]
                 self.retired.extend(channels)
-                await ws.send_json({"jsonrpc": "2.0", "id": rpc["id"], "result": channels})
+                response = {"jsonrpc": "2.0", "id": rpc["id"]}
+                if self.retirement_reply == "rejected":
+                    response["error"] = {"code": 11050, "message": "fixture rejection"}
+                else:
+                    response["result"] = channels if self.retirement_reply == "channels" else []
+                self.retirement_body = json.dumps(response, separators=(",", ":"))
+                await ws.send_str(self.retirement_body)
                 self.retirement_seen.set()
             elif method == "public/test":
                 (self.ready if connection == 1 else self.reconnected).set()
@@ -110,7 +122,7 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
     async def sleep(self, seconds):
         if seconds > 10:
             self.sleeps += 1
-            if self.sleeps == 1:
+            if self.sleeps == 1 and not self.metadata_throttled:
                 await asyncio.wait_for(self.ready.wait(), 5)
             elif self.lifecycle and self.sleeps == 2:
                 if self.drop_first:
@@ -120,6 +132,8 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
                     await asyncio.wait_for(self.new_seen.wait(), 5)
             elif self.lifecycle and self.sleeps == 3:
                 await asyncio.wait_for(self.retirement_seen.wait(), 5)
+                if self.retirement_reply == "rejected":
+                    await asyncio.wait_for(self.reconnected.wait(), 5)
         self.clock += seconds
         self.wall += seconds
         await asyncio.sleep(0)
@@ -158,6 +172,27 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
             self.assertLess(rows[name]["received_epoch_ms"], FIRST_SLOT * 1000)
             self.assertTrue(rows[name]["connection_id"])
 
+    async def test_empty_ticker_snapshot_with_no_rest_attempts_is_a_gap(self):
+        self.metadata_throttled = True
+        await self.capture(1)
+
+        root = self.config.data_root
+        index, records = read_minute(root, FIRST_SLOT)
+        self.assertEqual(records, [])
+        self.assertTrue(index["gap"])
+        self.assertEqual(index["gap_reason"], "no_requests_sent")
+        self.assertTrue(index["deribit_tickers_empty"])
+        self.assertEqual(set(index["requests"].values()), {"missed"})
+        self.assertEqual(read_ticker_samples(root, FIRST_SLOT)["samples"], {})
+
+        # This is the previously published representation of the same minute.
+        legacy = dict(index, gap=False, gap_reason=None)
+        del legacy["deribit_tickers_empty"]
+        path = next((root / "minutes").glob("**/0759/index.jsonl"))
+        path.write_bytes(dumps(legacy))
+        self.assertEqual(read_minute(root, FIRST_SLOT), (legacy, []))
+        self.assertEqual(path.read_bytes(), dumps(legacy))
+
     async def test_refreshes_listings_reconnects_and_retires_at_0800(self):
         self.lifecycle = True
         await self.capture(3)
@@ -170,6 +205,10 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(EXPIRING, expiry["samples"])
         self.assertNotIn(EXPIRING, after["samples"])
         self.assertEqual(self.retired, [f"ticker.{EXPIRING}.agg2"])
+        requested, outcome = self.archived_retirements()
+        self.assertEqual(requested["status"], "requested")
+        self.assertEqual(outcome["status"], "acknowledged")
+        self.assertEqual(body_bytes(outcome), self.retirement_body.encode())
         self.assertNotIn(NEW, before["samples"])
         self.assertEqual(expiry["samples"][NEW]["status"], "ok")
         self.assertEqual(expiry["samples"][NEW]["connection_id"], expiry["current_connection_id"])
@@ -185,6 +224,53 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body_bytes(read_deribit_metadata(self.config.data_root, 2)), self.metadata_bodies[1])
         with self.assertRaises(FileNotFoundError):
             read_deribit_metadata(self.config.data_root, 3)
+
+    def archived_retirements(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = main(["minute-read", "--data-root", str(self.config.data_root),
+                         "--slot", "2026-11-08T08:00:00Z"])
+        self.assertEqual(code, 0)
+        return json.loads(output.getvalue())["deribit_retirements"]
+
+    async def test_archives_empty_unsubscribe_ack_for_already_expired_channels(self):
+        self.lifecycle = True
+        self.drop_first = False
+        self.retirement_reply = "empty"
+        await self.capture(3)
+
+        requested, outcome = self.archived_retirements()
+        self.assertEqual(requested["status"], "requested")
+        self.assertEqual(outcome["status"], "already_expired")
+        self.assertEqual(requested["request"]["method"], "public/unsubscribe")
+        self.assertEqual(requested["request"]["params"]["channels"], [f"ticker.{EXPIRING}.agg2"])
+        self.assertEqual(outcome["request"], requested["request"])
+        self.assertEqual(body_bytes(outcome), self.retirement_body.encode())
+        self.assertEqual(outcome["instruments"][EXPIRING], {
+            "native_id": 726502, "created_ms": 1793779210000, "expires_ms": 1794124800000,
+        })
+        snapshot = read_ticker_samples(self.config.data_root, FIRST_SLOT + 60)
+        self.assertEqual(outcome["connection_id"], snapshot["current_connection_id"])
+        self.assertNotIn(EXPIRING, snapshot["samples"])
+        self.assertEqual(len(self.connections), 1)
+
+    async def test_archives_rejected_unsubscribe_and_recovers_on_new_connection(self):
+        self.lifecycle = True
+        self.drop_first = False
+        self.retirement_reply = "rejected"
+        await self.capture(3)
+
+        requested, outcome = self.archived_retirements()
+        self.assertEqual(requested["status"], "requested")
+        self.assertEqual(outcome["status"], "rejected")
+        self.assertEqual(body_bytes(outcome), self.retirement_body.encode())
+        self.assertEqual(outcome["connection_id"],
+                         read_ticker_samples(self.config.data_root, FIRST_SLOT + 60)["current_connection_id"])
+        recovered = read_ticker_samples(self.config.data_root, FIRST_SLOT + 120)
+        self.assertNotEqual(recovered["current_connection_id"], outcome["connection_id"])
+        self.assertNotIn(EXPIRING, recovered["samples"])
+        self.assertEqual(self.requested.count(f"ticker.{EXPIRING}.agg2"), 1)
+        self.assertIn(f"ticker.{EXPIRING}.agg2", self.retired)
 
     async def test_subscribes_new_listing_on_healthy_socket_before_next_cutoff(self):
         self.lifecycle = True

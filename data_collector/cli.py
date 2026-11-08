@@ -13,7 +13,7 @@ from .minute import capture_minutes, read_minute, read_ticker_samples
 from .minute_bybit import BASE_URLS as BYBIT_URLS, DEFAULT_COUNTS, DEFAULT_EXPIRIES
 from .minute_binance import BASE_URLS as BINANCE_URLS, DEFAULT_BOT_RESERVE, DEFAULT_IP_LIMIT, DEFAULT_RATE
 from .minute_storage import confirm_offsite_copy, prune_minute_day, seal_minute_day, verify_minute_day
-from .minute_tickers import WS_URLS
+from .minute_tickers import WS_URLS, read_deribit_retirements
 
 
 def main(argv=None):
@@ -81,6 +81,9 @@ def main(argv=None):
             result, code = {'index': index, 'records': records}, 0
             if 'deribit_tickers_sha256' in index:
                 result['deribit_tickers'] = read_ticker_samples(args.data_root.expanduser(), int(slot))
+            retirements = read_deribit_retirements(args.data_root.expanduser(), int(slot))
+            if retirements:
+                result['deribit_retirements'] = retirements
         elif args.command in archive_commands:
             root = args.data_root.expanduser().resolve()
             if args.command == 'minute-seal':

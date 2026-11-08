@@ -33,6 +33,7 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.bybit_calls = []
         self.depth_faults = False
         self.change_hour = False
+        self.fail_rollover_page = False
         self.late = 0
         app = web.Application()
         app.router.add_get("/public/{method}", self.deribit)
@@ -72,6 +73,8 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
                 if changed:
                     rows[0]["priceFilter"]["tickSize"] = "7.5"
                 if "cursor" in params:
+                    if self.fail_rollover_page and START + 60 <= self.wall < START + 120:
+                        return web.json_response({"retCode": 10001, "retMsg": "catalog page error", "result": {}})
                     value["result"].update(list=rows[4:], nextPageCursor="")
                 else:
                     value["result"].update(list=rows[:4], nextPageCursor="second%3D")
@@ -172,6 +175,31 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
         settled = read_bybit_reference(self.config.data_root, "settlement-BTC-USDT", START + 180)
         self.assertEqual(body_bytes(settled["responses"][0]), FIXTURE["delivery-btc"].encode())
         self.assertEqual(sum(method == "new-delivery-price" for method, _ in self.bybit_calls), 4)
+
+    async def test_failed_rollover_catalog_records_unavailable_depth_then_retries(self):
+        self.change_hour = True
+        self.fail_rollover_page = True
+        await self.capture(3)
+
+        rollover, records = read_minute(self.config.data_root, START + 60)
+        self.assertEqual(rollover["bybit_selection_unavailable"], ["BTC"])
+        self.assertEqual(rollover["bybit_selection"], {"ETH": [ETH_CALL]})
+        self.assertEqual(rollover["requests"]["bybit:option-tickers:BTC"], "ok")
+        self.assertEqual([row["logical_request_id"] for row in records
+                          if row["logical_request_id"].startswith("bybit:depth:")], [f"bybit:depth:{ETH_CALL}"])
+        failure = read_bybit_reference(self.config.data_root, "options-BTC", START + 60, failed=True)
+        self.assertEqual(failure["status"], "error")
+        self.assertEqual(len(failure["responses"]), 2)
+        with self.assertRaises(FileNotFoundError):
+            read_bybit_selection(self.config.data_root, START + 60, "BTC")
+
+        recovered, _ = read_minute(self.config.data_root, START + 120)
+        self.assertNotIn("bybit_selection_unavailable", recovered)
+        self.assertEqual(recovered["bybit_selection"]["BTC"], [
+            "BTC-9NOV26-75750-C-USDT", "BTC-9NOV26-75750-P-USDT",
+        ])
+        self.assertEqual(read_bybit_selection(self.config.data_root, START + 120, "BTC")["selected_slot_epoch"],
+                         START + 120)
 
     async def test_depth_outcomes_and_missed_grid_slot_remain_explicit(self):
         self.config = replace(self.config, attempt_seconds=.06)

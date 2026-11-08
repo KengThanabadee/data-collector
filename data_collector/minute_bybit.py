@@ -133,11 +133,13 @@ class BybitMinute:
                 result[base] = saved["symbols"]
         return result
 
-    def _failed_reference(self, name, slot, archive, status, previous):
+    def unavailable_depth(self, selection):
+        return [base for base in BASES if self.counts[base] and base not in selection]
+
+    def _failed_reference(self, name, slot, archive, status):
         path = self.root / "reference-failures" / name / f"{slot:012d}.json.gz"
         failure = dict(schema_version=1, captured_slot_utc=utc(slot), status=status, responses=archive.records)
         write_bytes(path, gzip.compress(dumps(failure), compresslevel=6, mtime=0))
-        return previous
 
     async def _refresh(self, name, method, params, slot, deadline, *, daily=False):
         period = slot // (DAY if daily else HOUR)
@@ -154,24 +156,24 @@ class BybitMinute:
         for page in range(100):
             record = await self.client.fetch(archive, f"bybit:{name}:{page}", method, params, deadline)
             if record is None:
-                return self._failed_reference(name, slot, archive, "missed", previous)
+                return self._failed_reference(name, slot, archive, "missed")
             if not record["ok"]:
                 status = "timeout" if record["transport_error"] == "TimeoutError" else "error"
-                return self._failed_reference(name, slot, archive, status, previous)
+                return self._failed_reference(name, slot, archive, status)
             result = _result(record)
             rows.extend(result["list"])
-            cursor = result.get("nextPageCursor") or ""
-            if not cursor:
+            cursor = result.get("nextPageCursor")
+            if cursor is None or cursor == "":
                 break
             if daily or not isinstance(cursor, str) or cursor in cursors:
-                return self._failed_reference(name, slot, archive, "error", previous)
+                return self._failed_reference(name, slot, archive, "error")
             cursors.add(cursor)
             params = dict(params, cursor=cursor)
         else:
-            return self._failed_reference(name, slot, archive, "error", previous)
+            return self._failed_reference(name, slot, archive, "error")
 
         if method == INSTRUMENTS and len({row["symbol"] for row in rows}) != len(rows):
-            return self._failed_reference(name, slot, archive, "error", previous)
+            return self._failed_reference(name, slot, archive, "error")
         digest = sha(dumps(sorted(dumps(row).decode() for row in rows)))
         if daily or previous is None or previous["content_sha256"] != digest:
             version = dict(schema_version=1, period=period, captured_slot_utc=utc(slot), status="ok",
@@ -230,6 +232,7 @@ class BybitMinute:
             jobs = bybit_requests(selection)
             if archive.context["bybit_selection"] != selection:
                 archive.update_context(bybit_selection=selection,
+                                       bybit_selection_unavailable=self.unavailable_depth(selection),
                                        required_jobs=[*deribit_jobs, *(job[0] for job in jobs), *following_jobs])
             for logical_id, method, params in jobs:
                 if method == DEPTH:

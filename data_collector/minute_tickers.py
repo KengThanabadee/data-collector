@@ -1,6 +1,6 @@
 """Deribit agg2 receive cache and append-only native metadata for the minute grid."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import gzip
 import json
 from pathlib import Path
@@ -28,6 +28,38 @@ class Instrument:
     native_id: int
     created_ms: int
     expires_ms: int
+
+
+@dataclass(frozen=True)
+class _Control:
+    request_id: int
+    method: str
+    changes: dict[str, Instrument]
+    started: float
+    deadline: float
+
+    @property
+    def request(self):
+        return dict(jsonrpc="2.0", id=self.request_id, method=self.method,
+                    params={"channels": list(map(_channel, self.changes))})
+
+
+def read_deribit_retirements(root, slot):
+    """Read immutable retirement controls initiated in this UTC minute."""
+    if type(slot) is not int or slot % 60:
+        raise ValueError("expected a UTC minute boundary in Unix seconds")
+    directory = Path(root) / "deribit-retirements" / utc(slot)[:10]
+    controls = []
+    for path in directory.glob(f"{slot:012d}-*.json.gz"):
+        event = json.loads(gzip.decompress(path.read_bytes()))
+        body = body_bytes(event)
+        if (event["schema_version"] != 1 or not slot <= event["started_epoch_ms"] / 1000 < slot + 60
+                or (sha(body) if body is not None else None) != event["body_sha256"]
+                or len(body or b"") != event["body_byte_count"]):
+            raise ValueError("Deribit retirement evidence differs")
+        controls.append(event)
+    return sorted(controls, key=lambda event: (event["observed_epoch_ms"], event["connection_id"],
+                                               event["request"]["id"], event["status"] != "requested"))
 
 
 def _catalog(record):
@@ -90,6 +122,7 @@ class _MetadataAttempt:
 class TickerSampler:
     def __init__(self, root, url, environment, *, wall):
         self.metadata_dir = Path(root) / "deribit-metadata"
+        self.retirement_dir = Path(root) / "deribit-retirements"
         self.url, self.environment, self.wall = url, environment, wall
         self.inventory, self.catalog, self.latest = {}, {}, {}
         self.version = None
@@ -190,12 +223,28 @@ class TickerSampler:
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
 
+    def _record_retirement(self, control, status, observed, response=None):
+        slot = int(control.started // 60) * 60
+        phase = "request" if status == "requested" else "outcome"
+        directory = self.retirement_dir / utc(slot)[:10]
+        path = directory / f"{slot:012d}-{self.connection}-{control.request_id:06d}-{phase}.json.gz"
+        record = dict(schema_version=1, environment=self.environment, connection_id=self.connection,
+                      request=control.request, instruments={name: asdict(listing)
+                                                           for name, listing in control.changes.items()},
+                      started_epoch_ms=control.started * 1000, observed_epoch_ms=observed * 1000,
+                      status=status, **body_fields(response))
+        try:
+            write_bytes(path, gzip.compress(dumps(record), compresslevel=6, mtime=0))
+        except OSError as exc:
+            raise RuntimeError("could not preserve Deribit retirement control") from exc
+
     async def _receive(self, socket):
         clock = asyncio.get_running_loop().time
         await socket.send_json(dict(jsonrpc="2.0", id=1, method="public/set_heartbeat", params={"interval": 10}))
         receive = asyncio.create_task(socket.receive())
         requested, active = {}, {}
         pending = None
+        failure = "disconnected"
         request_id, next_control, next_reconcile = 10, 0, 0
         try:
             while True:
@@ -212,34 +261,40 @@ class TickerSampler:
                     params = value.get("params")
                     if value.get("method") == "heartbeat" and isinstance(params, dict) and params.get("type") == "test_request":
                         await socket.send_json(dict(jsonrpc="2.0", id=2, method="public/test"))
-                    elif pending is not None and value.get("id") == pending[0]:
-                        _, method, changes, _ = pending
-                        channels = value.get("result")
-                        if (not isinstance(channels, list) or any(not isinstance(channel, str) for channel in channels)
-                                or sorted(channels) != sorted(map(_channel, changes))):
-                            raise ValueError("Deribit ticker subscription acknowledgement differs")
-                        if method == "public/subscribe":
+                    elif pending is not None and value.get("id") == pending.request_id:
+                        control, pending = pending, None
+                        changes = control.changes
+                        if control.method == "public/subscribe":
+                            channels = value.get("result")
+                            if (value.get("error") is not None or not isinstance(channels, list)
+                                    or any(not isinstance(channel, str) for channel in channels)
+                                    or sorted(channels) != sorted(map(_channel, changes))):
+                                raise ValueError("Deribit ticker subscription acknowledgement differs")
                             active.update(changes)
                             self.acknowledged.update({name: (listing, received * 1000)
                                                       for name, listing in changes.items()})
                         else:
+                            status = _retirement_status(control, value)
+                            self._record_retirement(control, status, received, message.data.encode("utf-8"))
+                            if status not in ("acknowledged", "already_expired"):
+                                raise ValueError("Deribit ticker retirement acknowledgement differs")
                             for name in changes:
                                 active.pop(name)
                                 requested.pop(name)
                                 self.acknowledged.pop(name, None)
-                        pending = None
                     elif value.get("method") == "subscription" and isinstance(params, dict):
                         self._ticker(params, message.data, received, requested, active)
                     receive = asyncio.create_task(socket.receive())
 
                 now = clock()
-                if pending is not None and now >= pending[3]:
+                if pending is not None and now >= pending.deadline:
+                    failure = "timeout"
                     raise TimeoutError("Deribit ticker subscription acknowledgement timed out")
                 if pending is not None or now < max(next_control, next_reconcile):
                     continue
                 next_reconcile = now + .25
-                wall_ms = self.wall() * 1000
-                desired = {name: key for name, key in self.inventory.items() if key.expires_ms > wall_ms}
+                started = self.wall()
+                desired = {name: key for name, key in self.inventory.items() if key.expires_ms > started * 1000}
                 removals = [name for name in active if active[name] != desired.get(name)][:BATCH_SIZE]
                 additions = [name for name in desired if name not in active][:BATCH_SIZE]
                 if removals:
@@ -251,14 +306,23 @@ class TickerSampler:
                     requested.update(changes)
                 else:
                     continue
-                pending = request_id, method, changes, now + SOCKET_TIMEOUT
+                control = _Control(request_id, method, changes, started, now + SOCKET_TIMEOUT)
+                if method == "public/unsubscribe":
+                    self._record_retirement(control, "requested", started)
+                pending = control
                 next_control = now + CONTROL_INTERVAL
-                await socket.send_json(dict(jsonrpc="2.0", id=request_id, method=method,
-                                            params={"channels": list(map(_channel, changes))}))
+                failure = "send_error"
+                await socket.send_json(control.request)
+                failure = "disconnected"
                 request_id += 1
+        except asyncio.CancelledError:
+            failure = "interrupted"
+            raise
         finally:
             receive.cancel()
             await asyncio.gather(receive, return_exceptions=True)
+            if pending is not None and pending.method == "public/unsubscribe":
+                self._record_retirement(pending, failure, self.wall())
 
     def _ticker(self, params, text, received, requested, active):
         data = params.get("data")
@@ -275,3 +339,20 @@ class TickerSampler:
 
 def _channel(name):
     return f"ticker.{name}.agg2"
+
+
+def _retirement_status(control, reply):
+    if reply.get("error") is not None:
+        return "rejected"
+    channels = reply.get("result")
+    if not isinstance(channels, list) or any(not isinstance(channel, str) for channel in channels):
+        return "invalid_ack"
+    acknowledged = set(channels)
+    expected = {_channel(name) for name in control.changes}
+    # Deribit may already have removed expired channels. An omission for a
+    # listing that had not expired when we sent the request is still a failure.
+    required = {_channel(name) for name, listing in control.changes.items()
+                if listing.expires_ms > control.started * 1000}
+    if len(acknowledged) != len(channels) or not required <= acknowledged <= expected:
+        return "invalid_ack"
+    return "acknowledged" if acknowledged else "already_expired"

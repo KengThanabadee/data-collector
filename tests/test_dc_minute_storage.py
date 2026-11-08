@@ -89,6 +89,27 @@ class MinuteStorageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(read_minute(self.root, FIRST), before)
         self.assertEqual(prune_minute_day(self.root, DAY, now=TODAY), 0)
 
+    async def test_minute_read_uses_verified_seal_when_prune_removes_staged_files(self):
+        await self.capture(2)
+        before = read_minute(self.root, FIRST)
+        seal_minute_day(self.root, DAY)
+        staged_index = next((self.root / "minutes").glob("**/2358/index.jsonl"))
+        is_file = Path.is_file
+        pruned = False
+
+        def interleave_prune(path):
+            nonlocal pruned
+            present = is_file(path)
+            if path == staged_index and present and not pruned:
+                pruned = True
+                self.assertGreater(prune_minute_day(self.root, DAY, now=TODAY + 3 * 86400), 0)
+            return present
+
+        with patch.object(Path, "is_file", interleave_prune):
+            self.assertEqual(read_minute(self.root, FIRST), before)
+        self.assertTrue(pruned)
+        self.assertFalse(staged_index.exists())
+
     async def test_interrupted_publication_and_manifest_mismatch_preserve_local_evidence(self):
         await self.capture(2)
         hourly = self.hourly.read_bytes()
@@ -123,6 +144,26 @@ class MinuteStorageTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "open"):
             seal_minute_day(self.root, "2026-11-09")
         self.assertEqual(self.calls, 33)
+
+    async def test_failed_background_seal_preserves_evidence_and_continues_across_restarts(self):
+        await self.capture(2)
+        broken_journal = self.hourly.read_bytes() + b'{"torn":'
+        self.hourly.write_bytes(broken_journal)
+        wal = self.wal.read_bytes()
+
+        with self.assertLogs("data_collector.minute_storage", level="ERROR") as errors:
+            await self.capture(2)
+            await self.capture(1)
+
+        self.assertEqual(len(errors.records), 2)
+        self.assertTrue(all(DAY in entry.message for entry in errors.records))
+        for slot in (TODAY, TODAY + 60, TODAY + 120):
+            self.assertEqual(len(read_minute(self.root, slot)[1]), 11)
+        self.assertEqual(self.hourly.read_bytes(), broken_journal)
+        self.assertEqual(self.wal.read_bytes(), wal)
+        self.assertFalse(self.manifest.exists())
+        with self.assertRaisesRegex(ValueError, "incomplete hourly journal"):
+            seal_minute_day(self.root, DAY)
 
     async def test_replays_cursor_without_resending_and_keeps_torn_journal_bytes(self):
         await self.capture(1)

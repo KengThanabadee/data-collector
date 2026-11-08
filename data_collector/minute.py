@@ -17,7 +17,7 @@ from option_collector.transport import Client
 
 from .minute_storage import HourlyJournal, minute_path, read_minute_files
 from .minute_tickers import TickerSampler
-from .minute_bybit import DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests, read_bybit_selection
+from .minute_bybit import BASES, DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests, read_bybit_selection
 from .minute_binance import DEFAULT_BOT_RESERVE, DEFAULT_IP_LIMIT, DEFAULT_RATE, BinanceMinute, binance_requests
 
 
@@ -62,7 +62,8 @@ def _plan(selection, symbols=None):
     return jobs
 
 
-def _index(slot, records, *, reason=None, ticker_hash=None, selection=None, symbols=None, weight=None):
+def _index(slot, records, *, reason=None, ticker_hash=None, ticker_empty=False, selection=None,
+           unavailable=None, symbols=None, weight=None):
     expected = {logical_id: (method, params) for logical_id, method, params in _plan(selection, symbols)}
     statuses = dict.fromkeys(expected, "missed")
     for record in records:
@@ -77,13 +78,19 @@ def _index(slot, records, *, reason=None, ticker_hash=None, selection=None, symb
             statuses[logical_id] = "timeout"
         else:
             statuses[logical_id] = "error"
-    gap = not records and ticker_hash is None
+    gap = not records and (ticker_hash is None or ticker_empty)
     index = dict(schema_version=1, scheduled_slot_utc=utc(slot), gap=gap,
                  gap_reason=(reason or "no_requests_sent") if gap else None, requests=statuses)
     if ticker_hash is not None:
         index["deribit_tickers_sha256"] = ticker_hash
+        if ticker_empty:
+            index["deribit_tickers_empty"] = True
     if selection is not None:
         index["bybit_selection"] = selection
+    if unavailable:
+        if selection is None or unavailable != [base for base in BASES if base in unavailable and base not in selection]:
+            raise ValueError("invalid unavailable Bybit depth selection")
+        index["bybit_selection_unavailable"] = unavailable
     if symbols is not None:
         index["binance_symbols"] = symbols
     if weight is not None:
@@ -104,6 +111,7 @@ def _read_minute(root, slot, files):
     index = json.loads(data)
     records = []
     selection = index.get("bybit_selection")
+    unavailable = index.get("bybit_selection_unavailable", [])
     symbols = index.get("binance_symbols")
     weight = index.get("binance_weight")
     if selection is not None:
@@ -111,6 +119,7 @@ def _read_minute(root, slot, files):
             if read_bybit_selection(root, slot, base)["symbols"] != selected:
                 raise ValueError("minute depth plan differs from the Bybit hourly selection")
     ticker_hash = index.get("deribit_tickers_sha256")
+    ticker_empty = index.get("deribit_tickers_empty", False)
     if ticker_hash is not None and (TICKER_ARCHIVE not in files or sha(files[TICKER_ARCHIVE]) != ticker_hash):
         raise ValueError("minute ticker archive checksum differs")
     if "manifest.json" in files:
@@ -119,6 +128,7 @@ def _read_minute(root, slot, files):
         context = json.loads(files["context.json"])
         if (manifest["scheduled_slot_utc"] != utc(slot) or manifest["job_kind"] != "minute"
                 or context.get("bybit_selection") != selection or context.get("binance_symbols") != symbols
+                or context.get("bybit_selection_unavailable", []) != unavailable
                 or context.get("binance_weight") != weight
                 or manifest["expected_jobs"] != [logical_id for logical_id, _, _ in _plan(selection, symbols)]):
             raise ValueError("minute archive identity mismatch")
@@ -127,10 +137,16 @@ def _read_minute(root, slot, files):
         reason = index.get("gap_reason")
         if ticker_hash is None and reason not in ("missed_boundary", "interrupted"):
             raise ValueError("minute response archive is missing")
-    if data != dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash, selection=selection,
-                            symbols=symbols, weight=weight)):
+    if ticker_empty and (records or ticker_hash is None or not _empty_tickers(files[TICKER_ARCHIVE])):
+        raise ValueError("empty ticker gap differs from archived data")
+    if data != dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash, ticker_empty=ticker_empty,
+                            selection=selection, unavailable=unavailable, symbols=symbols, weight=weight)):
         raise ValueError("minute index does not match archived responses")
     return index, records
+
+
+def _empty_tickers(raw):
+    return json.loads(gzip.decompress(raw))["samples"] == {}
 
 
 def read_ticker_samples(root, slot):
@@ -234,18 +250,22 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
                     records, reason = await _capture_slot(config, client, slot, destination,
                                                           request_window, wall, clock, sleep, sampler, bybit, binance)
                     ticker_path = path / TICKER_ARCHIVE
-                    ticker_hash = sha(ticker_path.read_bytes()) if ticker_path.exists() else None
+                    tickers = ticker_path.read_bytes() if ticker_path.exists() else None
+                    ticker_hash = sha(tickers) if tickers is not None else None
+                    ticker_empty = not records and tickers is not None and _empty_tickers(tickers)
                     saved_context = read_json(path / "context.json")
                     if saved_context is not None:
                         selection = saved_context.get("bybit_selection")
+                        unavailable = saved_context.get("bybit_selection_unavailable")
                         symbols = saved_context.get("binance_symbols")
                         weight = saved_context.get("binance_weight")
                     else:
                         selection = bybit.selection(slot) if bybit is not None else None
+                        unavailable = bybit.unavailable_depth(selection) if bybit is not None else None
                         symbols = binance.symbols if binance is not None else None
                         weight = None
-                    index = _index(slot, records, reason=reason, ticker_hash=ticker_hash, selection=selection,
-                                   symbols=symbols, weight=weight)
+                    index = _index(slot, records, reason=reason, ticker_hash=ticker_hash, ticker_empty=ticker_empty,
+                                   selection=selection, unavailable=unavailable, symbols=symbols, weight=weight)
                     write_bytes(index_path, dumps(index))
                 journal.append(slot, deribit_version=sampler.version if sampler is not None else None)
                 state["next_slot"] = slot + PERIOD
@@ -294,6 +314,7 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
         capture_context.update(binance_symbols=symbols, binance_universe=binance.universe)
     if selection is not None:
         capture_context["bybit_selection"] = selection
+        capture_context["bybit_selection_unavailable"] = bybit.unavailable_depth(selection)
     files = capture_context["code"]["files"]
     files["data_collector/minute.py"] = sha(Path(__file__).read_bytes())
     if sampler is not None:
