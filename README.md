@@ -81,12 +81,14 @@ Check a configuration (this works on macOS):
 .venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
 ```
 
-Live capture runs on Linux with chrony. Copy a config, pick `production` or `testnet`, set a fresh `data_root`, then:
+Live capture runs on Linux with chrony. For the continuous event streams, copy
+`config/v2-binance.toml` or `config/v2-bybit-options.toml` to `my-events.toml`
+and set a fresh `data_root`. Start `capture` directly with the copied config
+and use the printed run directory as `RUN_ROOT`.
 
 ```sh
-.venv/bin/python -m data_collector discover   --config my-config.toml
-.venv/bin/python -m data_collector capture    --config my-config.toml
-.venv/bin/python -m data_collector verify-run <printed-root> --export out.jsonl
+.venv/bin/python -m data_collector capture --config my-events.toml
+.venv/bin/python -m data_collector verify-run RUN_ROOT --export out.jsonl
 ```
 
 [docs/v2/RUNNING.md](docs/v2/RUNNING.md) covers configs for each venue, disk requirements and running in a Lima VM.

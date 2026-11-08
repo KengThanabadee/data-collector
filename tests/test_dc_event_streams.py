@@ -26,6 +26,7 @@ class BybitSession:
     def __init__(self):
         self.sockets = []
         self.option_ack_topics = ['publicTrade.ETH', 'publicTrade.BTC']
+        self.linear_control = None
 
     async def __aenter__(self):
         return self
@@ -42,6 +43,8 @@ class BybitSession:
             socket.sent.append(value)
             if url.endswith('/linear'):
                 socket.put(b'{"success":true,"ret_msg":"","conn_id":"linear-test","req_id":"","op":"subscribe"}')
+                if self.linear_control is not None:
+                    socket.put(self.linear_control)
                 socket.put(LIQUIDATION)
             else:
                 socket.put(canonical(dict(success=True, type='COMMAND_RESP', conn_id='option-test',
@@ -79,7 +82,13 @@ class BybitEventTests(unittest.IsolatedAsyncioTestCase):
         })
         bodies = {record.body for record in self.records(result) if record.kind == 'ws_message'}
         self.assertLessEqual({LIQUIDATION, OPTION_TRADE}, bodies)
-        verified = verify_run(result['root'])
+        export = self.root.parent / 'events.jsonl'
+        verified = verify_run(result['root'], export=export)
+        expected = [record.to_bytes() for record in self.records(result)]
+        self.assertEqual(export.read_bytes().splitlines(), expected)
+        with self.assertRaises(FileExistsError):
+            verify_run(result['root'], export=export)
+        self.assertEqual(export.read_bytes().splitlines(), expected)
         self.assertTrue(verified['feed_plan_initialization_verified'])
         self.assertTrue(verified['liquidation_pushes_observed'])
         self.assertEqual(verified['topics_seen'], ['allLiquidation.ETHUSDT', 'publicTrade.BTC'])
@@ -96,6 +105,23 @@ class BybitEventTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(verified['archive_verified'])
         self.assertFalse(verified['feed_plan_initialization_verified'])
         self.assertIn(OPTION_TRADE, [record.body for record in self.records(result) if record.kind == 'ws_message'])
+
+    async def test_failed_verification_leaves_no_export_and_retains_the_native_burst(self):
+        shipped = load(Path(__file__).parents[1] / 'config/v2-bybit-options.toml')
+        self.config = replace(shipped, data_root=self.root)
+        self.session = BybitSession()
+        self.session.linear_control = b'{"op":"heartbeat","success":true,"conn_id":"linear-test"}'
+        result = await asyncio.wait_for(self.capture(), 5)
+        self.assertEqual(result['status'], 'failed', result)
+        linear_messages = [record.body for record in self.records(result) if record.kind == 'ws_message'
+                           and record.receipt.connection_id.startswith('linear-')]
+        self.assertEqual(linear_messages[-2:], [self.session.linear_control, LIQUIDATION])
+
+        export = self.root.parent / 'events.jsonl'
+        before = set(export.parent.iterdir())
+        with self.assertRaisesRegex(ValueError, 'unplanned Bybit linear'):
+            verify_run(result['root'], export=export)
+        self.assertEqual(set(export.parent.iterdir()), before)
 
     async def test_transport_loss_retains_received_payload_and_reopens_configured_route(self):
         shipped = load(Path(__file__).parents[1] / 'config/v2-bybit-options.toml')

@@ -14,7 +14,7 @@ from .binance_budget import Budget
 from .bybit_options import IDLE_SECONDS, PING_SECONDS, TRADES, route as bybit_option_route
 from .contracts import canonical,digest,strict_json,integer
 from .continuous import _routing_json
-from .journal import _publish_bytes
+from .journal import _publish_bytes, sync_directory
 from .rawrun import RawOwner,verified_records
 
 PROFILE='binance-um-top20/1'
@@ -348,7 +348,9 @@ def verify(root,report,*,export=None):
     by_route={p['id']:p for p in routes};states={};requests={};metadata_responses={}
     count=frames=byte_count=versions=rejected=throttled=connections=initialized=socket_events=0
     topics_seen=set();ready=False;ended=False;first=None
-    output=None if export is None else Path(export).open('xb')
+    target=None if export is None else Path(export)
+    staged=None if target is None else target.with_name('.dc-export-'+uuid.uuid4().hex)
+    output=None if staged is None else staged.open('xb')
     try:
         for record in verified_records(root,report):
             count+=1
@@ -420,8 +422,16 @@ def verify(root,report,*,export=None):
                 raise ValueError('complete event capture lacks terminal gap records')
             if not event_streams and canonical(first)!=(root/'universe.json').read_bytes():
                 raise ValueError('initial universe differs')
+        if output is not None:
+            output.flush()
+            os.fsync(output.fileno())
+            output.close()
+            os.link(staged,target)  # Publish without replacing an existing export.
+            sync_directory(target.parent)
         return dict(archive_verified=True,records=count,ws_messages=frames,metadata_versions_verified=versions,
             feed_plan_initialization_verified=complete,capture_status=report['status'],topics_seen=sorted(topics_seen),
             liquidation_pushes_observed=any(t==LIQUIDATIONS or t.startswith('allLiquidation.') for t in topics_seen))
     finally:
-        if output is not None:output.close()
+        if output is not None:
+            try:output.close()
+            finally:staged.unlink(missing_ok=True)
