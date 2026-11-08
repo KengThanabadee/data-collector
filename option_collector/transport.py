@@ -11,14 +11,47 @@ from .schema import validate, quality
 
 ALLOWED = {"public/" + x for x in ("get_instruments", "get_book_summary_by_currency", "get_index_price", "get_order_book", "get_delivery_prices")}
 MINUTE_ALLOWED = ALLOWED | {"public/ticker"}
+BYBIT_ALLOWED = {"v5/market/" + name for name in (
+    "tickers", "orderbook", "instruments-info", "risk-limit", "new-delivery-price",
+)}
+
+
+def _bybit_result(method, params, result):
+    if not isinstance(result, dict):
+        raise ValueError("invalid Bybit result")
+    if method == "v5/market/orderbook":
+        if (result.get("s") != params["symbol"] or type(result.get("ts")) is not int
+                or any(not isinstance(result.get(side), list) for side in ("b", "a"))):
+            raise ValueError("Bybit order book identity or shape differs")
+        return
+    rows = result.get("list")
+    if result.get("category") != params["category"] or not isinstance(rows, list):
+        raise ValueError("Bybit response category or shape differs")
+    if method != "v5/market/new-delivery-price" and not rows:
+        raise ValueError("empty Bybit response")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("invalid Bybit response row")
+        symbol = row.get("symbol")
+        if ("symbol" in params and symbol != params["symbol"]
+                or "baseCoin" in params and method != "v5/market/new-delivery-price"
+                and (not isinstance(symbol, str) or not symbol.startswith(params["baseCoin"] + "-"))):
+            raise ValueError("Bybit response symbol differs")
+
+
+def _rate_limited(record):
+    error = record["api_error"]
+    return record["http_status"] == 429 or isinstance(error, dict) and (
+        error.get("code") == 10028 or error.get("retCode") in (10006, 10429)
+    )
 
 
 class Gate:
-    def __init__(self, config, *, clock=time.monotonic, wall=time.time, sleep=asyncio.sleep):
+    def __init__(self, config, *, clock=time.monotonic, wall=time.time, sleep=asyncio.sleep, venue="deribit"):
         self.config, self.clock, self.wall, self.sleep = config, clock, wall, sleep
         self.lock = asyncio.Lock()
         self.next_request = self.next_discovery = 0.0
-        self.path = config.data_root / "state" / "cooldown.json"
+        self.path = config.data_root / "state" / ("cooldown-bybit.json" if venue == "bybit" else "cooldown.json")
         state = read_json(self.path, {})
         self.cooldown = self.clock() + max(0, state.get("until_epoch", 0) - self.wall())
 
@@ -52,10 +85,14 @@ def retry_after(value, now):
 
 
 class Client:
-    def __init__(self, config, gate=None, *, clock=time.monotonic, wall=time.time, sleep=asyncio.sleep):
+    def __init__(self, config, gate=None, *, clock=time.monotonic, wall=time.time, sleep=asyncio.sleep,
+                 bybit_base_url=None):
         self.config = config
         self.clock, self.wall, self.sleep = clock, wall, sleep
-        self.gate = gate or Gate(config, clock=clock, wall=wall, sleep=sleep)
+        self.bybit = bybit_base_url is not None
+        self.base_url = bybit_base_url if self.bybit else config.base_url
+        self.gate = gate or Gate(config, clock=clock, wall=wall, sleep=sleep,
+                                venue="bybit" if self.bybit else "deribit")
         self.semaphore = asyncio.Semaphore(config.workers)
 
     async def __aenter__(self):
@@ -69,7 +106,8 @@ class Client:
 
     async def fetch(self, archive, logical_id, method, params, deadline, *, send_window=None):
         minute = archive.context["job_kind"] == "minute"
-        if method not in (MINUTE_ALLOWED if minute else ALLOWED):
+        allowed = BYBIT_ALLOWED if self.bybit and minute else MINUTE_ALLOWED if minute else ALLOWED
+        if method not in allowed or self.bybit and not minute:
             raise ValueError("method not allowed")
         async with self.semaphore:
             previous=[r for r in archive.records if r["logical_request_id"]==logical_id]
@@ -87,16 +125,19 @@ class Client:
                     return None
                 rec = {k: archive.context[k] for k in ("schema_version", "run_id", "job_kind", "environment", "currency", "scheduled_slot_utc")}
                 rec.update(logical_request_id=logical_id, attempt=attempt, method=method, parameters=params,
-                           effective_url=self.config.base_url + method, instrument_name=params.get("instrument_name"),
+                           effective_url=self.base_url + method, instrument_name=params.get("instrument_name"),
                            request_started_utc=utc(sent), request_started_epoch_ms=sent*1000,
                            http_status=None, response_headers={}, api_error=None, transport_error=None,
                            validation_error=None, body_complete=False, ok=False, quality_flags=[])
-                if minute:
+                if self.bybit:
+                    rec.update(venue="bybit", currency=params.get("baseCoin"), instrument_name=params.get("symbol"),
+                               venue_server_epoch_ms=None)
+                elif minute:
                     rec["venue_server_epoch_us"] = None
                 body, received, retryable, cancelled = None, None, False, False
                 try:
                     async with asyncio.timeout(min(self.config.attempt_seconds, deadline-start)):
-                        async with self.session.get(self.config.base_url + method, params={k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items()}, allow_redirects=False) as response:
+                        async with self.session.get(self.base_url + method, params={k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items()}, allow_redirects=False) as response:
                             rec["http_status"] = response.status
                             rec["response_headers"] = {k.lower(): v for k,v in response.headers.items() if k.lower() in ("date", "content-type", "content-encoding", "retry-after")}
                             body = b""
@@ -116,19 +157,30 @@ class Client:
                         raise ValueError("unexpected content encoding; raw bytes retained")
                     value = json.loads(body, parse_constant=lambda x: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
                     if not isinstance(value, dict):
-                        raise ValueError("invalid JSON-RPC response")
-                    if minute and type(value.get("usOut")) is int:
-                        rec["venue_server_epoch_us"] = value["usOut"]
-                    rec["api_error"] = value.get("error")
-                    throttled = rec["http_status"] == 429 or isinstance(rec["api_error"], dict) and rec["api_error"].get("code") == 10028
-                    retryable |= throttled
-                    if value.get("testnet") is not None and value["testnet"] != (self.config.environment == "testnet"):
-                        raise ValueError("environment mismatch")
-                    if rec["http_status"] == 200 and rec["api_error"] is None and "result" in value:
-                        validate(method, params, value["result"])
-                        rec["ok"] = True
-                        if method == "public/get_order_book":
-                            rec["quality_flags"] = quality(value["result"], params["depth"])
+                        raise ValueError("invalid REST response object")
+                    if self.bybit:
+                        if type(value.get("time")) is int:
+                            rec["venue_server_epoch_ms"] = value["time"]
+                        code = value.get("retCode")
+                        if type(code) is not int:
+                            raise ValueError("missing Bybit result code")
+                        if code != 0:
+                            rec["api_error"] = {key: value[key] for key in ("retCode", "retMsg") if key in value}
+                        elif rec["http_status"] == 200:
+                            _bybit_result(method, params, value.get("result"))
+                            rec["ok"] = True
+                    else:
+                        if minute and type(value.get("usOut")) is int:
+                            rec["venue_server_epoch_us"] = value["usOut"]
+                        rec["api_error"] = value.get("error")
+                        if value.get("testnet") is not None and value["testnet"] != (self.config.environment == "testnet"):
+                            raise ValueError("environment mismatch")
+                        if rec["http_status"] == 200 and rec["api_error"] is None and "result" in value:
+                            validate(method, params, value["result"])
+                            rec["ok"] = True
+                            if method == "public/get_order_book":
+                                rec["quality_flags"] = quality(value["result"], params["depth"])
+                    retryable |= _rate_limited(rec)
                 except asyncio.CancelledError:
                     rec["transport_error"], cancelled = "cancelled", True
                 except (TimeoutError, aiohttp.ClientError) as exc:
@@ -154,7 +206,7 @@ class Client:
                 record = archive.append(rec)
                 if cancelled:
                     raise asyncio.CancelledError
-                throttle = rec["http_status"] == 429 or isinstance(rec["api_error"],dict) and rec["api_error"].get("code") == 10028
+                throttle = _rate_limited(rec)
                 delay = max(2**(attempt-1)+random.uniform(0,.25), retry_after(rec["response_headers"].get("retry-after"), finished))
                 if throttle:
                     self.gate.throttle(delay)

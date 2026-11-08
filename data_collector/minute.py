@@ -16,6 +16,7 @@ from option_collector.common import dumps, process_lock, read_json, sha, utc, wr
 from option_collector.transport import Client
 
 from .minute_tickers import TickerSampler
+from .minute_bybit import DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests, read_bybit_selection
 
 
 PERIOD = 60
@@ -50,8 +51,12 @@ def _destination(slot):
     return Path("minutes") / datetime.fromtimestamp(slot, timezone.utc).strftime("%Y/%m/%d/%H%M")
 
 
-def _index(slot, records, *, reason=None, ticker_hash=None):
-    expected = {logical_id: (method, params) for logical_id, method, params in _requests()}
+def _plan(selection):
+    return _requests() + (bybit_requests(selection) if selection is not None else [])
+
+
+def _index(slot, records, *, reason=None, ticker_hash=None, selection=None):
+    expected = {logical_id: (method, params) for logical_id, method, params in _plan(selection)}
     statuses = dict.fromkeys(expected, "missed")
     for record in records:
         logical_id = record["logical_request_id"]
@@ -70,6 +75,8 @@ def _index(slot, records, *, reason=None, ticker_hash=None):
                  gap_reason=(reason or "no_requests_sent") if gap else None, requests=statuses)
     if ticker_hash is not None:
         index["deribit_tickers_sha256"] = ticker_hash
+    if selection is not None:
+        index["bybit_selection"] = selection
     return index
 
 
@@ -79,20 +86,27 @@ def read_minute(root, slot):
     data = (path / "index.jsonl").read_bytes()
     index = json.loads(data)
     records = []
+    selection = index.get("bybit_selection")
+    if selection is not None:
+        for base, symbols in selection.items():
+            if read_bybit_selection(root, slot, base)["symbols"] != symbols:
+                raise ValueError("minute depth plan differs from the Bybit hourly selection")
     ticker_hash = index.get("deribit_tickers_sha256")
     if ticker_hash is not None and sha((path / TICKER_ARCHIVE).read_bytes()) != ticker_hash:
         raise ValueError("minute ticker archive checksum differs")
     if (path / "manifest.json").exists():
         manifest, records = read_archive(path, include_incomplete=True)
+        context_selection = read_json(path / "context.json").get("bybit_selection")
         if (manifest["scheduled_slot_utc"] != utc(slot) or manifest["job_kind"] != "minute"
-                or manifest["expected_jobs"] != [logical_id for logical_id, _, _ in _requests()]):
+                or context_selection != selection
+                or manifest["expected_jobs"] != [logical_id for logical_id, _, _ in _plan(selection)]):
             raise ValueError("minute archive identity mismatch")
         reason = "interrupted" if manifest["status"] == "interrupted" else None
     else:
         reason = index.get("gap_reason")
         if ticker_hash is None and reason not in ("missed_boundary", "interrupted"):
             raise ValueError("minute response archive is missing")
-    if data != dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash)):
+    if data != dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash, selection=selection)):
         raise ValueError("minute index does not match archived responses")
     return index, records
 
@@ -131,8 +145,18 @@ async def _sampler_session(client, config, url, slot, window, wall, clock):
             running.cancel()
 
 
-async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_url=None, wall=time.time,
-                          clock=time.monotonic, sleep=asyncio.sleep):
+@asynccontextmanager
+async def _bybit_session(config, url, counts, expiries, wall, clock, sleep):
+    if url is None:
+        yield None
+        return
+    async with Client(config, clock=clock, wall=wall, sleep=sleep, bybit_base_url=url.rstrip("/") + "/") as client:
+        yield BybitMinute(config, client, counts=counts, expiries=expiries)
+
+
+async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_url=None, bybit_base_url=None,
+                          bybit_depth=DEFAULT_COUNTS, bybit_expiries=DEFAULT_EXPIRIES, wall=time.time, clock=time.monotonic,
+                          sleep=asyncio.sleep):
     """Run the UTC grid. An optional limit counts gaps as well as captured slots."""
     config.validate()
     if not START_GRACE < request_window < PERIOD:
@@ -156,6 +180,7 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
         async with (
             Client(config, clock=clock, wall=wall, sleep=sleep) as client,
             _sampler_session(client, config, ticker_ws_url, state["next_slot"], request_window, wall, clock) as sampler,
+            _bybit_session(config, bybit_base_url, bybit_depth, bybit_expiries, wall, clock, sleep) as bybit,
         ):
             while minutes is None or count < minutes:
                 slot = state["next_slot"]
@@ -169,17 +194,23 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
                     read_minute(root, slot)
                 else:
                     records, reason = await _capture_slot(config, client, slot, destination,
-                                                          request_window, wall, clock, sleep, sampler)
+                                                          request_window, wall, clock, sleep, sampler, bybit)
                     ticker_path = path / TICKER_ARCHIVE
                     ticker_hash = sha(ticker_path.read_bytes()) if ticker_path.exists() else None
-                    write_bytes(index_path, dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash)))
+                    saved_context = read_json(path / "context.json")
+                    if saved_context is not None:
+                        selection = saved_context.get("bybit_selection")
+                    else:
+                        selection = bybit.selection(slot) if bybit is not None else None
+                    index = _index(slot, records, reason=reason, ticker_hash=ticker_hash, selection=selection)
+                    write_bytes(index_path, dumps(index))
                 state["next_slot"] = slot + PERIOD
                 write_json(state_path, state, replace=True)
                 count += 1
     return count
 
 
-async def _capture_slot(config, client, slot, destination, request_window, wall, clock, sleep, sampler):
+async def _capture_slot(config, client, slot, destination, request_window, wall, clock, sleep, sampler, bybit):
     root = config.data_root
     run_id = str(slot)
     work = root / "work" / run_id / "deribit"
@@ -208,21 +239,30 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
             samples = sampler.snapshot(slot)
             write_bytes(ticker_path, gzip.compress(dumps(samples), compresslevel=6, mtime=0))
         sampler.schedule(slot + PERIOD)
+    selection = bybit.selection(slot) if bybit is not None else None
     requests = _requests()
     capture_context = context(config, "deribit", "minute", utc(slot), run_id)
     capture_context.update(destination=str(destination), started_utc=utc(now),
                            request_window_seconds=request_window,
-                           required_jobs=[logical_id for logical_id, _, _ in requests])
+                           required_jobs=[logical_id for logical_id, _, _ in _plan(selection)])
+    if selection is not None:
+        capture_context["bybit_selection"] = selection
     files = capture_context["code"]["files"]
     files["data_collector/minute.py"] = sha(Path(__file__).read_bytes())
     if sampler is not None:
         files["data_collector/minute_tickers.py"] = sha(Path(__file__).with_name("minute_tickers.py").read_bytes())
+    if bybit is not None:
+        files["data_collector/minute_bybit.py"] = sha(Path(__file__).with_name("minute_bybit.py").read_bytes())
     capture_context["code"]["source_sha256"] = sha(dumps(files))
     archive = Archive(root, capture_context)
     async with asyncio.TaskGroup() as tasks:
+        send_window = (slot, slot + request_window)
+        if bybit is not None:
+            tasks.create_task(bybit.capture(archive, slot, deadline, send_window,
+                                           [logical_id for logical_id, _, _ in requests]))
         for logical_id, method, params in requests:
             tasks.create_task(client.fetch(archive, logical_id, method, params, deadline,
-                                           send_window=(slot, slot + request_window)))
+                                           send_window=send_window))
         if sampler is not None:
             tasks.create_task(sampler.refresh(client, deadline))
     archive.finalize()

@@ -2,14 +2,14 @@
 
 > **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The runnable V2 event paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
 
-## Deribit minute grid
+## Deribit and Bybit minute grid
 
 Use a fresh data root dedicated to minute capture. A bounded run counts scheduled
 slots, including explicit gaps. Omit `--minutes` to keep the grid running.
 
 ```sh
-.venv/bin/python -m data_collector minute-capture --data-root data/minute-deribit --minutes 1
-.venv/bin/python -m data_collector minute-read --data-root data/minute-deribit --slot 2026-11-08T07:21:00Z
+.venv/bin/python -m data_collector minute-capture --data-root data/minute-grid --minutes 1
+.venv/bin/python -m data_collector minute-read --data-root data/minute-grid --slot 2026-11-08T07:21:00Z
 ```
 
 For readback, use the UTC minute of your run. The grid dispatches the profile at
@@ -20,10 +20,11 @@ without reissuing old requests. `--request-window` sets the request deadline in
 seconds after the boundary and defaults to 20.
 
 Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
-index lists all 11 expected requests and distinguishes `ok`, `error`,
-`timeout` and `missed`. A slot without a REST attempt or ticker snapshot is a gap. Readback verifies
-the index against the v1 response archive, which retains raw bytes and local
-send and receive times. `venue_server_epoch_us` is Deribit's `usOut` when
+index lists the expected requests and distinguishes `ok`, `error`, `timeout`
+and `missed`. A slot without a REST attempt or ticker snapshot is a gap.
+Readback verifies the index against the v1 response archive, which retains raw
+bytes and local send and receive times. Deribit `usOut` is stored as
+`venue_server_epoch_us` and Bybit `time` as `venue_server_epoch_ms` when
 available. Native market timestamps remain in the raw body.
 
 The profile uses `public/get_index_price` for the live BTC and ETH DVOL indexes,
@@ -44,6 +45,29 @@ outcome. Changed replies are kept as native response envelopes under
 `deribit-metadata/`. The sampler reconciles new listings on the current
 connection and retires listings at their native expiry, including options
 expiring at 08:00 UTC.
+
+The Bybit profile requests BTC and ETH option ticker lists, BTCUSDT and ETHUSDT
+perp tickers, and option depth at 25 levels. Use `--deribit-only` to skip
+Bybit. Depth defaults to 50 options per base from the two nearest active
+expiries. Adjust the defaults with `--bybit-depth-btc`,
+`--bybit-depth-eth` and `--bybit-expiries`.
+
+The first successful selection in each UTC hour uses the median available
+option ticker index for that base. It ranks strikes by distance to that index
+and breaks ties by expiry then symbol. When a selection is due, its ticker and
+metadata must arrive before depth requests can start. The minute index lists
+the selected symbols for each base with a selection. The hourly evidence under
+`bybit/selection/` records the index, expiries, selected symbols, and source
+checksums.
+
+Hourly reference checks preserve changed option and hedge-perp instruments
+and risk tiers under `bybit/reference/`. Failed checks keep their outcomes and
+available native bytes in `bybit/reference-failures/`. The first successful daily settlement
+read at or after 08:02 UTC keeps each BTC and ETH USDT and USDC reply as returned.
+`read_bybit_selection(root, slot, base)` and
+`read_bybit_reference(root, name, slot)` in `data_collector.minute_bybit`
+read the stored evidence by UTC Unix slot. Pass `failed=True` to read a failed
+reference check.
 
 ## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 
