@@ -2,7 +2,7 @@
 
 > **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The runnable V2 event paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
 
-## Deribit and Bybit minute grid
+## Shared minute grid
 
 Use a fresh data root dedicated to minute capture. A bounded run counts scheduled
 slots, including explicit gaps. Omit `--minutes` to keep the grid running.
@@ -25,7 +25,9 @@ and `missed`. A slot without a REST attempt or ticker snapshot is a gap.
 Readback verifies the index against the v1 response archive, which retains raw
 bytes and local send and receive times. Deribit `usOut` is stored as
 `venue_server_epoch_us` and Bybit `time` as `venue_server_epoch_ms` when
-available. Native market timestamps remain in the raw body.
+available. Binance depth `E` and open-interest `time` are stored as
+`venue_event_epoch_ms` when available. Native market timestamps remain in the
+raw body.
 
 The profile uses `public/get_index_price` for the live BTC and ETH DVOL indexes,
 `btcdvol_usdc` and `ethdvol_usdc`.
@@ -48,7 +50,7 @@ expiring at 08:00 UTC.
 
 The Bybit profile requests BTC and ETH option ticker lists, BTCUSDT and ETHUSDT
 perp tickers, and option depth at 25 levels. Use `--deribit-only` to skip
-Bybit. Depth defaults to 50 options per base from the two nearest active
+Bybit and Binance. Depth defaults to 50 options per base from the two nearest active
 expiries. Adjust the defaults with `--bybit-depth-btc`,
 `--bybit-depth-eth` and `--bybit-expiries`.
 
@@ -68,6 +70,27 @@ read at or after 08:02 UTC keeps each BTC and ETH USDT and USDC reply as returne
 `read_bybit_reference(root, name, slot)` in `data_collector.minute_bybit`
 read the stored evidence by UTC Unix slot. Pass `failed=True` to read a failed
 reference check.
+
+Binance requests USDⓈ-M depth at 20 levels and current open interest for each
+configured symbol. The packaged [ranked universe](../../data_collector/binance-top-100.json)
+preserves the build-time top 100 USDT perpetuals, ranking rule, retrieval time,
+and source checksums. Use `--binance-symbols BTCUSDT,ETHUSDT` to override the
+list or `--no-binance` to skip the profile.
+
+The guard defaults to an IP limit of 2,400 weight per minute and reserves 300
+for the trading bot. At each boundary it sends one weight-1 open-interest
+probe. Further admissions use the highest observed `x-mbx-used-weight-1m`
+value and reserve weight for requests still in flight or without a confirmed
+header. A missing probe header blocks the rest of that minute. The index lists
+guard skips as `missed` and records their reasons under `binance_weight`.
+Use `--binance-ip-limit`, `--binance-bot-reserve`, and `--binance-rate` to
+configure the budget and request pace.
+
+Hourly `exchangeInfo` checks share the same weight guard. Changed native
+responses and failed checks are stored under `binance/reference/` and
+`binance/reference-failures/`. Use
+`read_binance_reference(root, slot, failed=False)` in
+`data_collector.minute_binance` to read them by UTC Unix slot.
 
 ## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 

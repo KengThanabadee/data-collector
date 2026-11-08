@@ -11,6 +11,7 @@ from .app import run, verify_run
 from .config import load
 from .minute import capture_minutes, read_minute, read_ticker_samples
 from .minute_bybit import BASE_URLS as BYBIT_URLS, DEFAULT_COUNTS, DEFAULT_EXPIRIES
+from .minute_binance import BASE_URLS as BINANCE_URLS, DEFAULT_BOT_RESERVE, DEFAULT_IP_LIMIT, DEFAULT_RATE
 from .minute_tickers import WS_URLS
 
 
@@ -22,10 +23,15 @@ def main(argv=None):
     check = commands.add_parser('verify-run')
     check.add_argument('root')
     check.add_argument('--export',help='create a new lossless raw-envelope JSONL file')
-    minute_capture = commands.add_parser('minute-capture', help='capture the Deribit and Bybit minute grid')
+    minute_capture = commands.add_parser('minute-capture', help='capture the shared market-data minute grid')
     minute_capture.add_argument('--data-root', type=Path, required=True)
     minute_capture.add_argument('--environment', choices=('production', 'testnet'), default='production')
-    minute_capture.add_argument('--deribit-only', action='store_true', help='skip the Bybit REST profile')
+    minute_capture.add_argument('--deribit-only', action='store_true', help='skip the Bybit and Binance REST profiles')
+    minute_capture.add_argument('--no-binance', action='store_true', help='skip the Binance REST profile')
+    minute_capture.add_argument('--binance-symbols', help='comma-separated override for the fixed Binance universe')
+    minute_capture.add_argument('--binance-ip-limit', type=int, default=DEFAULT_IP_LIMIT)
+    minute_capture.add_argument('--binance-bot-reserve', type=int, default=DEFAULT_BOT_RESERVE)
+    minute_capture.add_argument('--binance-rate', type=float, default=DEFAULT_RATE)
     minute_capture.add_argument('--bybit-depth-btc', type=int, default=DEFAULT_COUNTS[0])
     minute_capture.add_argument('--bybit-depth-eth', type=int, default=DEFAULT_COUNTS[1])
     minute_capture.add_argument('--bybit-expiries', type=int, default=DEFAULT_EXPIRIES)
@@ -44,10 +50,14 @@ def main(argv=None):
             config = RestConfig(data_root=args.data_root.expanduser().resolve(), environment=args.environment, attempts=1)
             ticker_url = None if args.rest_only else WS_URLS[args.environment]
             bybit_url = None if args.deribit_only else BYBIT_URLS[args.environment]
+            binance_url = None if args.deribit_only or args.no_binance else BINANCE_URLS[args.environment]
+            symbols = None if args.binance_symbols is None else [value.strip() for value in args.binance_symbols.split(',')]
             count = asyncio.run(capture_minutes(
                 config, minutes=args.minutes, request_window=args.request_window, ticker_ws_url=ticker_url,
                 bybit_base_url=bybit_url, bybit_depth=(args.bybit_depth_btc, args.bybit_depth_eth),
-                bybit_expiries=args.bybit_expiries,
+                bybit_expiries=args.bybit_expiries, binance_base_url=binance_url, binance_symbols=symbols,
+                binance_ip_limit=args.binance_ip_limit, binance_bot_reserve=args.binance_bot_reserve,
+                binance_rate=args.binance_rate,
             ))
             result, code = {'minutes_processed': count}, 0
         elif args.command == 'minute-read':

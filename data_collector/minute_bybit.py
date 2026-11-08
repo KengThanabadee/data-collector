@@ -182,7 +182,7 @@ class BybitMinute:
         self.checked[name] = period
         return self.reference_heads[name]
 
-    async def capture(self, archive, slot, deadline, send_window, deribit_jobs):
+    async def capture(self, archive, slot, deadline, send_window, deribit_jobs, *, following_jobs=()):
         selection = self.selection(slot)
         base_tasks = {}
         # Place grid requests in the venue quota queue before hourly reference reads.
@@ -230,7 +230,7 @@ class BybitMinute:
             jobs = bybit_requests(selection)
             if archive.context["bybit_selection"] != selection:
                 archive.update_context(bybit_selection=selection,
-                                       required_jobs=[*deribit_jobs, *(job[0] for job in jobs)])
+                                       required_jobs=[*deribit_jobs, *(job[0] for job in jobs), *following_jobs])
             for logical_id, method, params in jobs:
                 if method == DEPTH:
                     group.create_task(self.client.fetch(archive, logical_id, method, params, deadline,
