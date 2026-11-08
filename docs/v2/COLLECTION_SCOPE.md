@@ -23,7 +23,7 @@ All requests fire at :00 UTC. Each response keeps its raw bytes, its send and re
 
 | Venue | Data | Source |
 |---|---|---|
-| Deribit | Ticker for every BTC/ETH option and dated future | WS sampler (below) |
+| Deribit | Ticker for every BTC/ETH inverse option and dated future | WS sampler (below) |
 | Deribit | Futures book summary, BTC and ETH | REST |
 | Deribit | Indexes `btc_usd`, `eth_usd`, `usdt_usd`, `btc_usdt`, `eth_usdt` | REST |
 | Deribit | DVOL, BTC and ETH | REST |
@@ -37,7 +37,7 @@ All requests fire at :00 UTC. Each response keeps its raw bytes, its send and re
 
 About 313 REST requests per minute: Binance about 200, Bybit about 103, Deribit about 10.
 
-**Deribit WS sampler.** One subscription per instrument to `ticker.<name>.agg2`. At each minute the sampler writes the last raw value received for every instrument, with its venue timestamp, receive time and connection ID. A value received before the current connection's subscribe ACK is marked stale. An instrument with no value since it was subscribed is written as missing. The sampler receives about 1 MB/s.
+**Deribit WS sampler.** Subscribe to `ticker.<name>.agg2` for every BTC/ETH inverse option and dated future. At each minute the sampler writes the last raw value received for every instrument, with its venue timestamp, receive time and connection ID. A value received before the current connection's subscribe ACK is marked stale. An instrument with no value since it was subscribed is written as missing. The sampler receives about 1 MB/s.
 
 ## Recorded continuously (event streams)
 
@@ -121,7 +121,9 @@ One run of at least an hour that spans 08:00 UTC. Until a VPS is chosen, run it 
 - VPS, decided last: Ubuntu 24.04, chrony, a reproducible install so the host can change within an hour, an external dead-man's switch to Keng's phone, and a nightly offsite backup with a monthly restore test. Candidates: Oracle Free (unconfirmed), Contabo, Vultr Tokyo.
 - Trading-bot host: a separate paid VPS with a reserved IP and a watchdog that flattens positions, decided later.
 - Bybit API trading from a foreign server with a Thai-KYC account (Keng expects it works; unverified), and the Thai tax and legal view.
-- The list of about 100 Binance symbols, and the rule that picks about 100 near-ATM short-dated Bybit options.
+- Bybit depth selection for production. Ship configurable defaults of 50 BTC and 50 ETH options from the two nearest expiries, using the strikes nearest the corresponding index. Re-select hourly and record each selection.
+- Deribit new-listing deadline. By default, check metadata every minute and subscribe newly discovered instruments before the next minute.
+- Binance symbol universe for production. Default to a fixed config list of the top 100 USDT perps by 24-hour volume at build time.
 
 ## Affected elsewhere
 

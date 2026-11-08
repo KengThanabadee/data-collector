@@ -1,4 +1,4 @@
-# Data Collector (DC) — plan
+# Data Collector (DC) — status and evidence
 
 V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
@@ -11,27 +11,9 @@ Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2
 - Not built: the minute-snapshot service, the Deribit `ticker.<name>.agg2` sampler, the Binance weight guard, daily zstd sealing and the minute acceptance run.
 - Historical 100 ms measurements (not acceptance of the new scope): the Deribit all-options hour produced 7.15 GB/hour of native payload, about 160 GiB/day; a ten-minute Deribit probe crossed 08:00 UTC with 118 retirements and zero rejected subscriptions.
 
-## Next
+## Active work
 
-Goal: build the minute-snapshot service on a new branch, from V1's REST transport and archive, with V2 kept for the three event streams.
-
-```
-Goal: Record every feed with no free history on one 1-minute grid shared by Deribit, Bybit and Binance, plus three small event streams, at about 0.2–0.55 GB/day, replacing the 100 ms capture.
-Done when: the build steps below are committed on a new branch and the one-hour run across 08:00 UTC in COLLECTION_SCOPE.md passes, with bytes per day, peak RSS and CPU, and Binance weight recorded; PLANS.md and README.md describe the new path.
-Out of scope: choosing or setting up a VPS (decided last); trading-bot changes (bot.convert needs a minute-snapshot reader, which trading-bot builds); derived Parquet layers; Bybit option depth beyond about 100 options; any 100 ms stream.
-When unsure: pick the simplest option that keeps raw bytes and explicit gaps, add one line to PLANS.md Notes, continue.
-```
-
-1. Minute-snapshot service from V1's REST transport and archive: all requests fire at :00 UTC and store raw bytes with send, receive and venue server times. Each minute writes one index line listing every expected request as ok, error, timeout or missed; a missed minute is a recorded gap, never backfilled.
-2. Deribit: WS sampler on `ticker.<name>.agg2` for every BTC/ETH option and dated future, writing the last raw value per instrument each minute with venue timestamp, receive time and connection ID, marked stale if received before the current connection's subscribe ACK; futures book summary; indexes `btc_usd`, `eth_usd`, `usdt_usd`, `btc_usdt`, `eth_usdt`; DVOL; BTC/ETH-PERPETUAL ticker.
-3. Bybit: option tickers per coin; order book limit 25 for about 100 near-ATM short-dated options; BTC/ETH perp ticker.
-4. Binance USDⓈ-M: depth limit 20 and open interest for about 100 symbols, guarded on `x-mbx-used-weight-1m`.
-5. Metadata stored on change for all venues; Bybit risk-limit tiers on change; Bybit option settlement from `/v5/market/new-delivery-price` daily. The Deribit sampler subscribes new listings from the metadata and retires options expiring at 08:00 UTC.
-6. Event streams on V2: Binance `!forceOrder@arr` (`/market`), Bybit `allLiquidation` for the hedge perps, Bybit option `publicTrade`. Remove the not_enabled 100 ms subscriptions from the shipped V2 configs.
-7. Storage: hourly journal, daily zstd seal with manifest; the journal and WAL are deleted only after the sealed file reads back and matches the manifest; the last 2 days of journals stay until an offsite copy is confirmed.
-8. Acceptance: one run of at least an hour spanning 08:00 UTC in `dc-acceptance`: minute completeness with gaps recorded, new listings subscribed, expired options retired. Record bytes per day, peak RSS and CPU, and Binance weight used.
-
-The VPS is decided last and is out of scope for this goal.
+The minute-collection spec and tickets are in [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1). Use `minute-grid` as the integration branch. The [collection scope](docs/v2/COLLECTION_SCOPE.md) defines capture and acceptance.
 
 ## Notes
 

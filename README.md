@@ -4,7 +4,7 @@ A raw-first market-data recorder for crypto options and perpetuals on Deribit, B
 
 The goal is an archive of data **that has no free history**, recorded on one 1-minute grid shared by all three venues, plus three small event streams. Anything a venue already offers as history (trades, bars, funding, perp order books) is downloaded later and left out of live capture.
 
-> **Status:** the collection scope changed on 8 November 2026 from 100 ms streams to a 1-minute grid. The minute-snapshot service is not built yet; the next goal builds it on a new branch from v1's REST transport and archive, with v2 kept for the event streams. The 100 ms v2 capture below passed hour-long runs on a Linux VM and is kept as history. See [PLANS.md](PLANS.md) for current status.
+> **Status:** the collection scope changed on 8 November 2026 from 100 ms streams to a 1-minute grid. The minute-snapshot service is not built yet; the implementation uses v1's REST transport and archive, with v2 kept for the event streams. The 100 ms v2 capture below passed hour-long runs on a Linux VM and is kept as history. See [PLANS.md](PLANS.md) for current status.
 
 ## What it captures
 
@@ -110,13 +110,12 @@ Live capture runs on Linux with chrony. Copy a config, pick `production` or `tes
 - [docs/v2/RUNNING.md](docs/v2/RUNNING.md): how to run and verify a capture
 - [docs/v2/ACCEPTANCE.md](docs/v2/ACCEPTANCE.md): production acceptance gates
 - [docs/v2/SNAPSHOTS.md](docs/v2/SNAPSHOTS.md): snapshot, replay and validity-correction rules
-- [PLANS.md](PLANS.md): current status and next steps; [docs/v2/history/](docs/v2/history/) holds the earlier development log
+- [PLANS.md](PLANS.md): current status and measured evidence. The [history directory](docs/v2/history/) holds earlier scope and run records
 - v1: [docs/SPEC_V1.md](docs/SPEC_V1.md), [docs/OPERATIONS.md](docs/OPERATIONS.md)
 - Research: [docs/RESEARCH_DATA_SUFFICIENCY.md](docs/RESEARCH_DATA_SUFFICIENCY.md), [docs/EXPERIMENT_REPORT.md](docs/EXPERIMENT_REPORT.md)
 
 ## Roadmap
 
-1. Build the minute-snapshot service on a new branch: the 1-minute grid for all three venues, the Deribit ticker sampler, the Binance weight guard, the three event streams on v2, and daily zstd sealing.
-2. Pass one run of at least an hour spanning 08:00 UTC, with every minute recorded or written as a gap, new listings subscribed and expired options retired.
-3. Choose a VPS (decided last), then deploy with offsite backup.
-4. Add derived layers when a research use needs them.
+1. Build and verify the minute-collection profile on `minute-grid`. See [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1) for the spec and tickets.
+2. Choose a VPS (decided last), then deploy with offsite backup.
+3. Add derived layers when a research use needs them.

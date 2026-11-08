@@ -8,7 +8,7 @@
 - `config/` and `deploy/`: local/VPS configuration and Linux service templates.
 - `experiments/`: bounded probes and research scripts. Generated captures belong in ignored `data/` or `experiments/results/`.
 - `SPEC.md` and `docs/v2/`: authoritative v2 contracts and acceptance gates. Preserve `docs/SPEC_V1.md` and v1 compatibility.
-- `PLANS.md`: current status, next steps and one-line notes. `docs/agents/`: task brief format and review prompt. `docs/v2/history/` holds the archived chunk log from October 2026 for looking up past decisions.
+- `PLANS.md` records readiness and measured evidence. `docs/agents/` configures the engineering skills. `docs/v2/history/` archives earlier scope and run evidence.
 
 ## Build, Test, and Development Commands
 
@@ -40,20 +40,38 @@ Name tests `test_*.py` and methods `test_<behavior>`. Use synthetic data, tempor
 
 Write imperative subjects that name the behavior change, such as `Reconnect Deribit book sessions after connection loss`; no Conventional Commits prefix is required. PRs should explain the problem, behavior, validation, remaining limitations, and relevant spec/issue links.
 
-Implement bounded chunks that each keep a runnable end-to-end path working. Obtain one fresh agent review per chunk using the prompt in `docs/agents/REVIEW.md`, scoped to defects that can realistically lose, corrupt or mislabel captured data, or break the runnable path. Fix those; re-review only when a fix is non-trivial. Git history is the review record: put the review outcome in the commit message and add one line per chunk to `PLANS.md`. Commit only approved versions; keep unfinished work separate.
+Implement bounded vertical slices that each keep a runnable end-to-end path working.
 
-Handle an edge case only when it is realistic: observed in live capture or logs, documented by the venue as normal behavior, or a common operational failure (disconnect, reconnect, process crash/restart, disk full, rate limit, malformed message). Record hypothetical scenarios that need unlikely combinations of failures as one line in `PLANS.md` and move on. A review finding below this bar is a note, not a blocker or a new chunk. Choose the simplest design that works for the venues and feeds being captured now.
+Review for realistic failures that can lose, corrupt or mislabel data or break a runnable path. Treat events observed in capture or logs, documented venue behavior, and common operational failures as realistic. Track unlikely combinations as issue notes. Choose the simplest design that works for the selected venues and feeds.
 
 ## Scope & Delivery
 
-- Keep the full SPEC.md venue and product scope as the capture target: the archive is meant for future research ideas. Grow it raw-first: add venues and feeds as raw capture with gap records, starting with Deribit options. Build derived layers (snapshots, validity corrections, replay proofs) when a concrete research use needs them.
+- Follow [the collection scope](docs/v2/COLLECTION_SCOPE.md) for the current capture target. Grow it raw-first with explicit gap records. Build derived layers when a concrete research use needs them.
 - Make limits configurable, with defaults sized for real use. The collector runs continuously, so duration, frame and byte limits default to unbounded or to values measured from live data.
-- Start every goal from a brief in the format of `docs/agents/BRIEF.md`.
-- Work autonomously toward the goal; the user is usually away. When a choice is unclear, pick the simplest option consistent with SPEC.md, record it as one line in `PLANS.md`, and continue.
 - Live runs on the Lima VM `dc-acceptance` (6 CPU, 6 GiB): when the run ends or stalls, check `limactl list` and run `limactl stop dc-acceptance` if it is idle. The disk is kept, and `limactl start` restores it in under a minute.
-- Measure progress by what the user can run. When three consecutive chunks have not improved it, re-plan: take the shortest path to the goal's runnable result and move the remaining ideas to one-line notes in `PLANS.md`.
 - State each limitation once, in the document where it belongs. Write plain sentences with normal spacing, such as `at most 120 seconds` and `16 MiB`.
 - Count tests as passing only when they finish without errors or warnings, including `ResourceWarning`.
+
+## Agent skills
+
+### Issue tracker
+
+Use GitHub Issues for feature specs, implementation tickets and dependencies. See [issue tracker](docs/agents/issue-tracker.md).
+
+### Triage labels
+
+Use the five default roles. See [triage labels](docs/agents/triage-labels.md).
+
+### Domain docs
+
+Use a single glossary and ADR directory. See [domain docs](docs/agents/domain.md).
+
+### Delivery
+
+- Use `grill-with-docs` for unresolved design decisions, `to-spec` for the agreed feature spec and `to-tickets` for runnable vertical slices with explicit blockers.
+- Use `implement` for one slice and `implement-spec` for a ticket graph. Reuse the integration branch named in the spec. Use TDD at existing public seams and link commits and PRs to the relevant issues.
+- Review the branch against its base with `code-review`. The Standards review applies the data integrity and runnable-path rules above. The Spec review uses the originating issue and the contracts it references. Resolve findings that block the agreed behavior before merging.
+- Keep current readiness and measured evidence in `PLANS.md`. Track work and planning decisions in GitHub Issues. Record durable domain decisions in ADRs.
 
 ## Data & Configuration Safety
 
