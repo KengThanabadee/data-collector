@@ -10,6 +10,7 @@ import aiohttp
 
 from data_collector.app import run,verify_run
 from data_collector.binance_capture import plans,validate_event,LIQUIDATIONS
+from data_collector.config import load
 from data_collector.contracts import canonical,strict_json
 from data_collector.rawrun import RawOwner
 from data_collector.segments import iter_segment_records
@@ -84,6 +85,22 @@ class BinanceCaptureTests(unittest.IsolatedAsyncioTestCase):
         report=Path(result['root'])/'result.json';value=strict_json(report.read_bytes())
         value['plans'][0]['topics'].pop();report.write_bytes(canonical(value))
         with self.assertRaisesRegex(ValueError,'plan differs'):verify_run(result['root'])
+
+    async def test_shipped_event_capture_subscribes_only_market_liquidations(self):
+        self.setup_capture()
+        shipped = load(Path(__file__).parents[1] / 'config/v2-binance.toml')
+        self.config = replace(shipped, data_root=self.root, duration_seconds=1)
+        result = await self.capture()
+        self.assertEqual(result['status'], 'raw_capture_complete', result)
+        self.assertEqual(self.session.calls, [])
+        [(url, socket)] = self.session.sockets
+        self.assertEqual(url, 'wss://fstream.binance.com/market/stream')
+        self.assertEqual(socket.sent, [{'method': 'SUBSCRIBE', 'params': ['!forceOrder@arr'], 'id': 1}])
+        bodies = [record.body for record in self.records(result) if record.kind == 'ws_message']
+        self.assertIn(FIXTURE['samples']['!forceOrder@arr'].encode(), bodies)
+        verified = verify_run(result['root'])
+        self.assertTrue(verified['feed_plan_initialization_verified'])
+        self.assertEqual(verified['topics_seen'], ['!forceOrder@arr'])
 
     async def test_missing_configured_symbol_stops_before_subscription(self):
         self.setup_capture();self.session.body=canonical(dict(symbols=FIXTURE['metadata']['symbols'][:1]))

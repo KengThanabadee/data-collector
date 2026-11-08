@@ -1,4 +1,4 @@
-"""Selected USDⓈ-M raw streams; books are native top-20 replacements."""
+"""Selected WebSocket events and the historical Binance top-20 profile."""
 import asyncio
 import os
 from pathlib import Path
@@ -11,12 +11,14 @@ import aiohttp
 
 from .binance import ENDPOINTS,fetch,_native_values
 from .binance_budget import Budget
+from .bybit_options import IDLE_SECONDS, PING_SECONDS, TRADES, route as bybit_option_route
 from .contracts import canonical,digest,strict_json,integer
 from .continuous import _routing_json
 from .journal import _publish_bytes
 from .rawrun import RawOwner,verified_records
 
 PROFILE='binance-um-top20/1'
+EVENT_PROFILE='minute-grid-events/1'
 LIQUIDATIONS='!forceOrder@arr'
 METADATA_INTERVAL_SECONDS=60
 
@@ -58,6 +60,55 @@ def plans(symbols):
             ('market',[s.lower()+'@aggTrade' for s in symbols]+[LIQUIDATIONS]))]
 
 
+def capture_plans(config):
+    if not config.get('event_streams', False):
+        return plans(config['binance_symbols'])
+    if config['venue']=='binance':
+        return [dict(id='market', url='wss://fstream.binance.com/market/stream', topics=[LIQUIDATIONS])]
+    return [dict(id=route, url=f"wss://{config['bybit_ws_host']}/v5/public/{route}", topics=topics)
+        for route,topics in (
+            ('linear',['allLiquidation.'+symbol for symbol in config['bybit_liquidation_symbols']]),
+            ('option',list(TRADES)))]
+
+
+def subscription(plan):
+    if plan['id'] in ('linear','option'):
+        return dict(op='subscribe',args=plan['topics'])
+    return dict(method='SUBSCRIBE',params=plan['topics'],id=1)
+
+
+def classify_message(value, plan):
+    """Classify native pushes and connection controls without changing the payload."""
+    route = plan['id']
+    if route=='option':
+        kind,payload=bybit_option_route(value)
+        if kind=='ack':
+            ok,topics=payload
+            return ('ack' if ok and sorted(topics)==sorted(plan['topics']) else 'rejected'),None
+        if kind=='trade' and payload in plan['topics']:
+            return 'event',payload
+        if kind=='pong':return kind,None
+        raise ValueError('unplanned Bybit option topic')
+    if route=='linear':
+        if value.get('op')=='pong' or (value.get('op')=='ping'
+                and value.get('ret_msg')=='pong' and value.get('success') is True):
+            return 'pong',None
+        if value.get('op')=='subscribe':
+            return ('ack' if value.get('success') is True else 'rejected'),None
+        topic=value.get('topic');rows=value.get('data')
+        if (topic not in plan['topics'] or not isinstance(rows,list) or not rows
+                or any(not isinstance(row,dict) or row.get('s')!=topic.split('.',1)[1] for row in rows)):
+            raise ValueError('unplanned Bybit linear liquidation or native symbol differs')
+        return 'event',topic
+    if 'code' in value:return 'rejected',None
+    if value.get('id')==1 and 'result' in value:
+        if value['result'] is not None:raise ValueError('unexpected subscription ACK')
+        return 'ack',None
+    data=value.get('data',value)
+    if isinstance(data,dict) and data.get('e')=='serverShutdown':return 'shutdown',None
+    return 'event',validate_event(value,plan)
+
+
 def required(plan):
     # Trades/liquidations may be quiet; their ACK is required, a made-up push is not.
     return set(plan['topics']) if plan['id']=='public' else set()
@@ -96,9 +147,11 @@ async def capture(config,*,session_factory,observer,clock_read=None,clock_wait=N
     from .app import _bind_root,_drain
     lock=_bind_root(config);root=config.data_root/'runs'/uuid.uuid4().hex
     owner=RawOwner(root,config,observer,batch_size=512,clock_read=clock_read,clock_wait=clock_wait)
-    routes=plans(config.binance_symbols);stopped=asyncio.Event();tasks=[];started=None;failure=None
+    routes=capture_plans(strict_json(config.to_bytes()))
+    stopped=asyncio.Event();tasks=[];started=None;failure=None
     initialized=set();topics_seen=set();current=None
-    report=dict(schema='dc.binance-selected/1',profile=PROFILE,venue='binance',environment=config.environment,
+    report=dict(schema='dc.event-streams/1' if config.event_streams else 'dc.binance-selected/1',
+        profile=EVENT_PROFILE if config.event_streams else PROFILE,venue=config.venue,environment=config.environment,
         status='failed',plans=routes,frames=0,bytes=0,connections=0,initialized_connections=0,
         rejected_subscriptions=0,throttled_subscriptions=0,metadata_versions=0,socket_events=0)
 
@@ -113,6 +166,12 @@ async def capture(config,*,session_factory,observer,clock_read=None,clock_wait=N
 
     async def control(event,*,connection='controls',**fields):
         return await owner.save(canonical(dict(event=event,**fields)),'capture_control','control',connection=connection)
+
+    async def publish_ready():
+        nonlocal started
+        if started is None and initialized=={p['id'] for p in routes}:
+            started=time.monotonic();await control('capture_ready')
+            _publish_bytes(root/'ready.json',canonical(dict(utc_ns=observer()[0],channels=sum(len(p['topics']) for p in routes))))
 
     async def metadata(session):
         nonlocal current
@@ -136,67 +195,85 @@ async def capture(config,*,session_factory,observer,clock_read=None,clock_wait=N
     async def route(session,plan):
         delay=1
         while not stopping():
-            if not await budget.connection(stopping):return
+            if budget is not None and not await budget.connection(stopping):return
             connection=plan['id']+'-'+uuid.uuid4().hex
             await control('gap_start',connection=connection,route=plan['id'],reason='connection_start')
             ws=None
             try:
                 async with asyncio.timeout(config.timeout_seconds):
-                    ws=await session.ws_connect(plan['url'],compress=15,autoping=True,heartbeat=30,
+                    ws=await session.ws_connect(plan['url'],compress=15,autoping=True,
+                        heartbeat=30 if config.venue=='binance' else None,
                         max_msg_size=2*1024*1024,timeout=aiohttp.ClientWSTimeout(ws_close=5))
                 report['connections']+=1
-                payload=canonical(dict(method='SUBSCRIBE',params=plan['topics'],id=1))
-                await owner.save(payload,'SUBSCRIBE','control',connection=connection,fields=dict(route=plan['id']))
-                await asyncio.wait_for(ws.send_str(payload.decode()),config.timeout_seconds)
-                acked=False;seen=set();connected=time.monotonic();complete=False
+                async def send(value, channel):
+                    payload=canonical(value)
+                    await owner.save(payload,channel,'control',connection=connection,fields=dict(route=plan['id']))
+                    await asyncio.wait_for(ws.send_str(payload.decode()),config.timeout_seconds)
+
+                await send(subscription(plan),'SUBSCRIBE')
+                acked=False;seen=set();connected=last_received=time.monotonic();complete=False
+                next_ping=connected+PING_SECONDS
                 while not stopping():
                     owner.check()
                     if not acked and time.monotonic()-connected>config.timeout_seconds:raise TimeoutError('subscription ACK timeout')
-                    if not complete and time.monotonic()-connected>config.bootstrap_timeout_seconds:raise TimeoutError('Binance route bootstrap timeout')
-                    if acked and required(plan)<=seen and not complete:
-                        await control('gap_end',connection=connection,route=plan['id'])
-                        complete=True;delay=1;initialized.add(plan['id']);report['initialized_connections']+=1
+                    if not complete and time.monotonic()-connected>config.bootstrap_timeout_seconds:raise TimeoutError(f'{plan["id"]} route bootstrap timeout')
+                    if config.venue=='bybit':
+                        now=time.monotonic()
+                        if now-last_received>IDLE_SECONDS:raise TimeoutError('Bybit socket idle timeout')
+                        if now>=next_ping:
+                            await send(dict(op='ping'),'ping');next_ping=now+PING_SECONDS
                     try:message=await asyncio.wait_for(ws.receive(),.25)
                     except TimeoutError:continue
-                    deliveries=[];native_bytes=0;deadline=time.monotonic()+.05;closed=None
+                    deliveries=[];native_bytes=0;deadline=time.monotonic()+.05;closed=None;receive_error=None
                     while True:
                         if message.type not in (aiohttp.WSMsgType.TEXT,aiohttp.WSMsgType.BINARY):
                             closed=dict(type=int(message.type),data=str(message.data)[:1024],reason=str(message.extra)[:1024]);break
                         body=message.data.encode() if isinstance(message.data,str) else message.data
                         record,future=owner.admit(body,'multiplex','ws_message',connection=connection,fields=dict(route=plan['id']))
                         deliveries.append((body,record,future));native_bytes+=len(body)
+                        last_received=time.monotonic()
                         if len(deliveries)>=512 or native_bytes>=1024*1024 or time.monotonic()>=deadline:break
                         try:message=await asyncio.wait_for(ws.receive(),max(.0001,deadline-time.monotonic()))
                         except TimeoutError:break
+                        except (aiohttp.ClientError,OSError) as exc:receive_error=exc;break
                     acks=await asyncio.gather(*(future for _,_,future in deliveries))
                     for (_,record,_),ack in zip(deliveries,acks):owner.check_ack(record,ack)
                     report['frames']+=len(deliveries);report['bytes']+=native_bytes
-                    for body,record,_ in deliveries:
+                    for body,_,_ in deliveries:
                         value=_routing_json(body)
-                        if 'code' in value:
+                        kind,topic=classify_message(value,plan)
+                        if kind=='rejected':
                             report['rejected_subscriptions']+=1
-                            report['throttled_subscriptions']+=int(value['code'] in (-1003,-1008))
-                            raise ValueError('Binance subscription rejected')
-                        if value.get('id')==1 and 'result' in value:
-                            if value['result'] is not None or acked:raise ValueError('unexpected subscription ACK')
-                            acked=True;continue
-                        data=value.get('data',value)
-                        if isinstance(data,dict) and data.get('e')=='serverShutdown':raise ConnectionError('venue serverShutdown')
-                        topic=validate_event(value,plan);topics_seen.add(topic)
-                        if acked:seen.add(topic)
-                    if config.max_frames and report['frames']>=config.max_frames:stopped.set();report['stop_reason']='max_frames'
-                    if config.max_bytes and report['bytes']>=config.max_bytes:stopped.set();report['stop_reason']='max_bytes'
+                            report['throttled_subscriptions']+=int(value.get('code') in (-1003,-1008))
+                            receive_error=ValueError(config.venue+' subscription rejected')
+                        elif kind=='ack':
+                            if acked:raise ValueError('unexpected subscription ACK')
+                            acked=True
+                        elif kind=='shutdown' and receive_error is None:receive_error=ConnectionError('venue serverShutdown')
+                        elif kind=='event':
+                            topics_seen.add(topic)
+                            if acked:seen.add(topic)
                     if closed is not None:
                         await control('socket_event',connection=connection,route=plan['id'],**closed)
-                        report['socket_events']+=1;raise ConnectionError('socket closed')
+                        report['socket_events']+=1
+                        if receive_error is None:receive_error=ConnectionError('socket closed')
+                    if receive_error is None and acked and required(plan)<=seen and not complete:
+                        await control('gap_end',connection=connection,route=plan['id'])
+                        complete=True;delay=1;initialized.add(plan['id']);report['initialized_connections']+=1
+                        await publish_ready()
+                    if config.max_frames and report['frames']>=config.max_frames:stopped.set();report['stop_reason']='max_frames'
+                    if config.max_bytes and report['bytes']>=config.max_bytes:stopped.set();report['stop_reason']='max_bytes'
+                    if receive_error is not None:raise receive_error
             except (aiohttp.ClientError,OSError,TimeoutError) as exc:
                 owner.check();await control('transport_error',connection=connection,route=plan['id'],reason=type(exc).__name__)
             finally:
                 initialized.discard(plan['id'])
-                if ws is not None:
-                    try:await asyncio.wait_for(ws.close(),5)
-                    except (aiohttp.ClientError,OSError,TimeoutError):pass
-                await control('gap_start',connection=connection,route=plan['id'],reason='connection_end')
+                try:await control('gap_start',connection=connection,route=plan['id'],reason='connection_end')
+                finally:
+                    if ws is not None:
+                        try:await asyncio.wait_for(ws.close(),5)
+                        except TimeoutError:ws._response.close()  # pinned aiohttp connection cleanup
+                        except (aiohttp.ClientError,OSError):pass
             if not stopping():await wait(random.uniform(.8,1)*delay);delay=min(60,delay*2)
 
     async def audits(session):
@@ -208,27 +285,24 @@ async def capture(config,*,session_factory,observer,clock_read=None,clock_wait=N
                 await wait(delay);delay=min(60,delay*2)
 
     async def own():
-        nonlocal started,budget
+        nonlocal budget
         await owner.start();await owner.aligned(stopping)
         if stopping():return
-        budget=Budget(root/'budget.json',observer()[2])
+        if config.venue=='binance':budget=Budget(root/'budget.json',observer()[2])
         async with session_factory() as session:
             deadline=time.monotonic()+config.bootstrap_timeout_seconds
             delay=1
-            while not stopping() and not await metadata(session):
+            while not config.event_streams and not stopping() and not await metadata(session):
                 if time.monotonic()>=deadline:raise TimeoutError('initial metadata deadline')
                 await wait(delay);delay=min(60,delay*2)
             if stopping():return
             tasks.extend(asyncio.create_task(route(session,p)) for p in routes)
-            tasks.append(asyncio.create_task(audits(session)))
+            if not config.event_streams:tasks.append(asyncio.create_task(audits(session)))
             while not stopping():
                 owner.check()
                 for task in tasks:
                     if task.done():task.result();raise ValueError('raw acquisition task ended')
-                if started is None and initialized=={p['id'] for p in routes}:
-                    started=time.monotonic();await control('capture_ready')
-                    _publish_bytes(root/'ready.json',canonical(dict(utc_ns=observer()[0],channels=sum(len(p['topics']) for p in routes))))
-                if started is None and time.monotonic()>=deadline:raise TimeoutError('Binance initialization deadline')
+                if started is None and time.monotonic()>=deadline:raise TimeoutError(f'{config.venue} initialization deadline')
                 if started is not None and config.duration_seconds and time.monotonic()-started>=config.duration_seconds:
                     report['stop_reason']='duration';stopped.set();break
                 disk=shutil.disk_usage(root)
@@ -265,8 +339,12 @@ async def capture(config,*,session_factory,observer,clock_read=None,clock_wait=N
 
 
 def verify(root,report,*,export=None):
-    root=Path(root);config=strict_json((root/'config.json').read_bytes());routes=plans(config['binance_symbols'])
-    if report['profile']!=PROFILE or report['plans']!=routes:raise ValueError('capture plan differs from config')
+    root=Path(root);config=strict_json((root/'config.json').read_bytes());routes=capture_plans(config)
+    event_streams=config.get('event_streams', False)
+    if (report['schema']!=('dc.event-streams/1' if event_streams else 'dc.binance-selected/1')
+            or report['profile']!=(EVENT_PROFILE if event_streams else PROFILE) or report['plans']!=routes
+            or (report['venue'],report['environment'])!=(config['venue'],config['environment'])):
+        raise ValueError('capture plan differs from config')
     by_route={p['id']:p for p in routes};states={};requests={};metadata_responses={}
     count=frames=byte_count=versions=rejected=throttled=connections=initialized=socket_events=0
     topics_seen=set();ready=False;ended=False;first=None
@@ -315,31 +393,35 @@ def verify(root,report,*,export=None):
                 elif event=='socket_event':socket_events+=1
             elif record.channel=='SUBSCRIBE':
                 state=states[connection];plan=by_route[state['route']]
-                if state['requested'] or strict_json(record.body)!=dict(method='SUBSCRIBE',params=plan['topics'],id=1):
+                if state['requested'] or strict_json(record.body)!=subscription(plan):
                     raise ValueError('subscription request differs from plan')
                 state['requested']=True;connections+=1
             elif record.kind=='ws_message':
                 frames+=1;byte_count+=len(record.body);state=states[connection];plan=by_route[state['route']]
                 if not state['requested'] or state['closed'] or fields.get('route')!=state['route']:raise ValueError('message outside live route')
                 value=_routing_json(record.body)
-                if 'code' in value:
-                    rejected+=1;throttled+=int(value['code'] in (-1003,-1008));continue
-                if value.get('id')==1 and 'result' in value:
-                    if value['result'] is not None or state['ack']:raise ValueError('invalid subscription ACK')
-                    state['ack']=True;continue
-                data=value.get('data',value)
-                if isinstance(data,dict) and data.get('e')=='serverShutdown':continue
-                topic=validate_event(value,plan);topics_seen.add(topic)
-                if state['ack']:state['seen'].add(topic)
+                kind,topic=classify_message(value,plan)
+                if kind=='rejected':
+                    rejected+=1;throttled+=int(value.get('code') in (-1003,-1008))
+                elif kind=='ack':
+                    if state['ack']:raise ValueError('invalid subscription ACK')
+                    state['ack']=True
+                elif kind=='event':
+                    topics_seen.add(topic)
+                    if state['ack']:state['seen'].add(topic)
         actual=dict(frames=frames,bytes=byte_count,metadata_versions=versions,rejected_subscriptions=rejected,
             throttled_subscriptions=throttled,connections=connections,initialized_connections=initialized,socket_events=socket_events)
         if any(report[k]!=v for k,v in actual.items()) or report['topics_seen']!=sorted(topics_seen):raise ValueError('capture counters differ from raw')
         complete=report['status']=='raw_capture_complete'
         if complete:
-            if not ready or not ended or first is None or rejected:raise ValueError('complete capture lacks initialization/metadata or has rejected subscriptions')
-            if canonical(first)!=(root/'universe.json').read_bytes():raise ValueError('initial universe differs')
+            if not ready or not ended or rejected or (not event_streams and first is None):
+                raise ValueError('complete capture lacks initialization/metadata or has rejected subscriptions')
+            if event_streams and any(not state['closed'] for state in states.values()):
+                raise ValueError('complete event capture lacks terminal gap records')
+            if not event_streams and canonical(first)!=(root/'universe.json').read_bytes():
+                raise ValueError('initial universe differs')
         return dict(archive_verified=True,records=count,ws_messages=frames,metadata_versions_verified=versions,
             feed_plan_initialization_verified=complete,capture_status=report['status'],topics_seen=sorted(topics_seen),
-            liquidation_pushes_observed=LIQUIDATIONS in topics_seen)
+            liquidation_pushes_observed=any(t==LIQUIDATIONS or t.startswith('allLiquidation.') for t in topics_seen))
     finally:
         if output is not None:output.close()

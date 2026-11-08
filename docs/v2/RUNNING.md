@@ -1,6 +1,6 @@
 # Run the Deribit collector
 
-> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The minute-snapshot service is not built yet. Until it is, the runnable V2 paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
+> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The shipped [continuous event profiles](#continuous-event-streams) use the V2 WebSocket archive. The minute-snapshot service is separate.
 
 This is the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
@@ -135,7 +135,36 @@ The bounded historical snapshot path still uses `capture_mode = "snapshots"`,
 at most 120 seconds and 64 frames, with explicit symbols and its original
 snapshot/replay semantics. It is separate from the selected live raw profile.
 
-## Current boundary
+## Continuous event streams
+
+Copy the shipped configs, choose a fresh writable Linux `data_root` for each,
+and run the commands as separate collector processes. Both use `event_streams = true`.
+
+```sh
+.venv/bin/python -m data_collector capture --config config/v2-binance.toml
+.venv/bin/python -m data_collector capture --config config/v2-bybit-options.toml
+.venv/bin/python -m data_collector verify-run RUN_ROOT
+```
+
+The Binance config opens `/market/stream` for `!forceOrder@arr`. All native
+liquidation rows stay in the raw archive, including rows outside configured
+minute-grid symbols and any COIN-M rows from the shared stream. The native
+`st` and `ps` fields are retained. Binance sends at most one liquidation per
+symbol per second. The Bybit config opens `/v5/public/linear` for
+`allLiquidation.<symbol>` and `/v5/public/option` for `publicTrade.BTC` and
+`publicTrade.ETH`. Set `bybit_liquidation_symbols` to the native linear symbols
+of the hedge perps. The default is `BTCUSDT` and `ETHUSDT`.
+
+Each run records subscription requests, ACKs, exact inbound messages and
+transport gaps. The duration starts after every route acknowledges its
+subscriptions. `verify-run` checks the stored plan and ACKs against the raw
+archive and reports the observed push topics in `topics_seen`. A quiet topic
+can be subscribed successfully without appearing in that list. Reconnects
+repeat the subscription and leave explicit gaps. The event profiles make no
+REST requests, so minute metadata collection and the Binance REST weight
+budget are handled by the minute service.
+
+## Historical Binance discovery and 100 ms capture
 
 Binance discovery is available with
 `python -m data_collector discover --config config/v2-binance.toml`, using an
@@ -143,18 +172,9 @@ explicit writable Linux data root. It archives spot, UM and CM exchangeInfo,
 requests spot `showPermissionSets=false`, and verifies the BTC/ETH projection
 against those exact responses. Non-trading rows remain visible as disabled.
 Spot listing incarnation is null because exchangeInfo does not supply it.
-Binance continuous capture uses the 31 October USDⓈ-M profile. Under the
-8 November scope only its `!forceOrder@arr` feed stays selected; bookTicker,
-depth20@100ms and aggTrade are not_enabled and move to the minute REST depth read:
-
-```sh
-.venv/bin/python -m data_collector capture --config config/v2-binance.toml
-.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
-```
-
-Set `binance_symbols = ["BTCUSDT", "ETHUSDT"]` to the complete desired native list;
-a missing or non-trading configured symbol fails startup. The profile always
-subscribes bookTicker and depth20@100ms on `/public`, aggTrade and the all-symbol
+The 31 October USDⓈ-M capture profile used `binance_symbols` for a fixed
+native list. A missing or non-trading configured symbol failed startup. The
+historical profile subscribes bookTicker and depth20@100ms on `/public`, aggTrade and the all-symbol
 `!forceOrder@arr` feed on `/market`. The feed plan is archived explicitly;
 `raw_feeds`, `raw_processes` and the Deribit selection settings do not choose
 Binance feeds or workers. No spot/COIN-M subscription, REST seed or reference
@@ -196,16 +216,7 @@ Observed acceptance runs and their evidence locations are recorded in
 
 ## Bybit option raw capture (31 October profile)
 
-Use the single-process sharded profile with a writable Linux data root and the
-Linux Python 3.12 environment:
-
-```sh
-.venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
-.venv/bin/python -m data_collector capture --config config/v2-bybit-options.toml
-.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
-```
-
-It selects BTC/ETH option `tickers.<symbol>` and `publicTrade.BTC/ETH`, including
+The single-process sharded profile selected BTC/ETH option `tickers.<symbol>` and `publicTrade.BTC/ETH`, including
 PreLaunch instruments from a complete unfiltered paginated discovery walk every
 60 seconds. Each full HTTP response and poll result is archived append-only in
 `metadata/`; changed metadata and expiry produce referenced universe versions.
@@ -241,9 +252,8 @@ evidence and its limits. Under the 8 November scope only `publicTrade.BTC/ETH` s
 `tickers.<symbol>` WebSocket is not_enabled and moves to the minute REST read.
 The home connection could not keep up with the full ticker feed in the experiment.
 
-Public origins are configured independently with `bybit_rest_host` and
-`bybit_ws_host`; values are bare DNS hostnames. The selected production profile
-uses these overrides on the acceptance network:
+The historical Bybit profile used independent `bybit_rest_host` and
+`bybit_ws_host` overrides on the acceptance network:
 
 ```toml
 bybit_rest_host = "api.bytick.com"

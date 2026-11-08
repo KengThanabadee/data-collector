@@ -49,16 +49,23 @@ class DiscoveryConfig:
     discovery_interval_seconds: int = 60
     shard_arg_chars: int = 14000
     shard_max_args: int = 1000
+    event_streams: bool = False
+    bybit_liquidation_symbols: tuple[str, ...] = ('BTCUSDT', 'ETHUSDT')
 
     def __post_init__(self):
         if self.schema != SCHEMA or self.venue not in ("deribit","binance","bybit"):
             raise ValueError("supported v2 discovery schema/venue required")
         if self.environment not in ("production", "testnet"):
             raise ValueError("explicit production or testnet environment required")
+        if type(self.event_streams) is not bool or (self.event_streams and (
+                self.venue not in ('binance','bybit') or self.environment!='production'
+                or self.capture_mode!='raw' or self.all_options or self.all_futures or self.symbols
+                or self.rediscover_options or self.raw_processes!=1)):
+            raise ValueError('event_streams requires production single-process Binance or Bybit raw capture')
         if self.venue=='bybit':
             for name,default in (('bybit_rest_host','api.bybit.com'),('bybit_ws_host','stream.bybit.com')):
                 if getattr(self,name) is None:object.__setattr__(self,name,default)
-            if (self.environment!='production' or self.capture_mode!='raw' or not self.all_options
+            if not self.event_streams and (self.environment!='production' or self.capture_mode!='raw' or not self.all_options
                     or not self.rediscover_options or self.raw_processes!=1 or self.symbols
                     or self.option_partition_count!=1 or self.option_partition_index!=0
                     or self.raw_feeds!=('ticker','trades')):
@@ -82,6 +89,11 @@ class DiscoveryConfig:
                 or any(not isinstance(v,str) or re.fullmatch(r'[A-Z0-9_]{1,40}',v) is None for v in self.binance_symbols)):
             raise ValueError('distinct native Binance symbols required')
         if len(self.binance_symbols)*2>256:raise ValueError('Binance configured list exceeds route limit')
+        hedge_symbols = self.bybit_liquidation_symbols
+        if (type(hedge_symbols) is not tuple or not 1<=len(hedge_symbols)<=100
+                or any(not isinstance(v,str) or re.fullmatch(r'[A-Z0-9]{1,40}',v) is None for v in hedge_symbols)
+                or len(set(hedge_symbols))!=len(hedge_symbols)):
+            raise ValueError('one to 100 distinct native Bybit linear symbols required')
         if not isinstance(self.data_root, Path) or not self.data_root.is_absolute():
             raise ValueError("absolute data_root required")
         for name, maximum in (("max_response_bytes", 16 * 1024 * 1024),
@@ -178,7 +190,7 @@ def load(path):
         if name in values:
             text(values[name],name)
             values[name]=(path.parent/Path(values[name]).expanduser()).resolve()
-    for name in ('raw_feeds','binance_symbols'):
+    for name in ('raw_feeds','binance_symbols','bybit_liquidation_symbols'):
         if name in values:
             if not isinstance(values[name],list):raise ValueError(name+' array required')
             values[name]=tuple(values[name])
