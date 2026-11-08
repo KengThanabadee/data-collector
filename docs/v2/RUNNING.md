@@ -1,11 +1,13 @@
 # Run the Deribit collector
 
+> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The minute-snapshot service is not built yet. Until it is, the runnable V2 paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
+
 This is the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
 writer, lane, clock sampler, receiver and publication pipeline. The selected scope is defined in
 COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This command is a **partial pilot**, not a production service.
 
-## Current inverse-option profile
+## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 
 The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
 
@@ -48,8 +50,8 @@ ACK. Reconnect opens an explicit coverage gap and repeats initialization;
 stopping in a later gap does not erase earlier proven coverage of that same
 incarnation. New options still require their own ACK and first pushes.
 
-Bybit transport is described below; its intended-host live capacity and the
-cross-venue expiry-window run remain pending. Old archive formats remain verifiable, while new CLI futures capture
+Bybit transport is described below. The cross-venue expiry-window run of the
+31 October scope will not be run; the 8 November acceptance replaces it. Old archive formats remain verifiable, while new CLI futures capture
 is not_enabled because its history is downloadable. No multi-owner raw export
 is enabled for this path. A verified failed prefix is integrity evidence, not a
 passed capture.
@@ -120,7 +122,8 @@ as false; that does not pass capture acceptance.
 ### Export for other repositories
 
 `python -m data_collector verify-run RUN_ROOT --export FILE` is the interface
-other repositories use to read a capture (trading-bot's `bot.convert` calls it).
+other repositories use to read a V2 capture (trading-bot's `bot.convert` calls it).
+The minute snapshots will need their own reader, which trading-bot builds.
 It verifies the run as above and writes the raw envelopes losslessly as JSONL to
 `FILE`, which must not already exist. It prints the result JSON on stdout, which
 includes `archive_verified`, and exits nonzero when verification fails.
@@ -140,7 +143,9 @@ explicit writable Linux data root. It archives spot, UM and CM exchangeInfo,
 requests spot `showPermissionSets=false`, and verifies the BTC/ETH projection
 against those exact responses. Non-trading rows remain visible as disabled.
 Spot listing incarnation is null because exchangeInfo does not supply it.
-Binance continuous capture uses the selected USDⓈ-M profile:
+Binance continuous capture uses the 31 October USDⓈ-M profile. Under the
+8 November scope only its `!forceOrder@arr` feed stays selected; bookTicker,
+depth20@100ms and aggTrade are not_enabled and move to the minute REST depth read:
 
 ```sh
 .venv/bin/python -m data_collector capture --config config/v2-binance.toml
@@ -189,7 +194,7 @@ still allow 10,000 segments; configured unbounded limits do not remove that guar
 Observed acceptance runs and their evidence locations are recorded in
 [PLANS.md](../../PLANS.md).
 
-## Bybit option raw capture
+## Bybit option raw capture (31 October profile)
 
 Use the single-process sharded profile with a writable Linux data root and the
 Linux Python 3.12 environment:
@@ -232,8 +237,9 @@ The independent [cap probe readback](bybit-cap-evidence.json) found no rejection
 in its tested 22,887-character cases; sharding still follows the documented caps.
 [Official source hashes](bybit-source-evidence.json), recorded-reply fixtures and
 the [corrected historical experiment](history/BYBIT_EXPERIMENT_A.md) retain the
-evidence and its limits. Bybit live capacity and combined expiry-window runs
-await the VPS because the home connection could not keep up with the experiment.
+evidence and its limits. Under the 8 November scope only `publicTrade.BTC/ETH` stays selected; the
+`tickers.<symbol>` WebSocket is not_enabled and moves to the minute REST read.
+The home connection could not keep up with the full ticker feed in the experiment.
 
 Public origins are configured independently with `bybit_rest_host` and
 `bybit_ws_host`; values are bare DNS hostnames. The selected production profile
