@@ -1,6 +1,6 @@
 # Collection scope
 
-Decided by Keng on 8 November 2026. This file is the contract for the current collection goal. It replaces the 31 October 100 ms scope, which is kept unchanged in [history/COLLECTION_SCOPE_2026-10-31.md](history/COLLECTION_SCOPE_2026-10-31.md). The minute-snapshot service that implements it is not built yet; see [PLANS.md](../../PLANS.md).
+Decided by Keng on 8 November 2026. This file is the contract for the current collection goal. It replaces the 31 October 100 ms scope, which is kept unchanged in [history/COLLECTION_SCOPE_2026-10-31.md](history/COLLECTION_SCOPE_2026-10-31.md). See the [runbook](RUNNING.md#shared-minute-grid) for the minute service and [PLANS.md](../../PLANS.md) for observed readiness.
 
 ## Principle
 

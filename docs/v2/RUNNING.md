@@ -21,7 +21,7 @@ seconds after the boundary and defaults to 20.
 
 Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
 index lists the expected requests and distinguishes `ok`, `error`, `timeout`
-and `missed`. A slot without a REST attempt or ticker snapshot is a gap.
+and `missed`. A slot without a REST attempt or native ticker body is a gap. The index identifies each enabled Bybit depth selection that is unavailable.
 Readback verifies the index against the v1 response archive, which retains raw
 bytes and local send and receive times. Deribit `usOut` is stored as
 `venue_server_epoch_us` and Bybit `time` as `venue_server_epoch_ms` when
@@ -46,7 +46,7 @@ the most recent valid metadata version and reports the last discovery
 outcome. Changed replies are kept as native response envelopes under
 `deribit-metadata/`. The sampler reconciles new listings on the current
 connection and retires listings at their native expiry, including options
-expiring at 08:00 UTC.
+expiring at 08:00 UTC. `minute-read` returns retirement requests and native outcomes in `deribit_retirements` for the minute in which the requests began.
 
 The Bybit profile requests BTC and ETH option ticker lists, BTCUSDT and ETHUSDT
 perp tickers, and option depth at 25 levels. Use `--deribit-only` to skip

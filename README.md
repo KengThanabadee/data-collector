@@ -4,11 +4,11 @@ A raw-first market-data recorder for crypto options and perpetuals on Deribit, B
 
 The goal is an archive of data **that has no free history**, recorded on one 1-minute grid shared by all three venues, plus three small event streams. Anything a venue already offers as history (trades, bars, funding, perp order books) is downloaded later and left out of live capture.
 
-> **Status:** the collection scope changed on 8 November 2026 from 100 ms streams to a 1-minute grid. The minute-snapshot service is not built yet; the implementation uses v1's REST transport and archive, with v2 kept for the event streams. The 100 ms v2 capture below passed hour-long runs on a Linux VM and is kept as history. See [PLANS.md](PLANS.md) for current status.
+> **Status:** the shared minute grid and the three continuous event streams are runnable on `minute-grid`. See [PLANS.md](PLANS.md) for live evidence and acceptance status.
 
 ## What it captures
 
-Every minute at :00 UTC (planned):
+Every minute at :00 UTC:
 
 | Venue | Data |
 |---|---|
@@ -72,7 +72,7 @@ Requires Python 3.12. No API keys are needed; every feed is public.
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m unittest discover -s tests        # 755 tests, about 5 minutes, loopback only
+.venv/bin/python -W error -m unittest discover -s tests
 ```
 
 Check a configuration (this works on macOS):
@@ -81,7 +81,13 @@ Check a configuration (this works on macOS):
 .venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
 ```
 
-Live capture runs on Linux with chrony. For the continuous event streams, copy
+Live capture runs on Linux with chrony. Start the minute collector with its own fresh data root.
+
+```sh
+.venv/bin/python -m data_collector minute-capture --data-root data/minute-grid --minutes 1
+```
+
+For the continuous event streams, copy
 `config/v2-binance.toml` or `config/v2-bybit-options.toml` to `my-events.toml`
 and set a fresh `data_root`. Start `capture` directly with the copied config
 and use the printed run directory as `RUN_ROOT`.
@@ -118,6 +124,6 @@ and use the printed run directory as `RUN_ROOT`.
 
 ## Roadmap
 
-1. Build and verify the minute-collection profile on `minute-grid`. See [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1) for the spec and tickets.
+1. Verify the combined profile across 08:00 UTC on `minute-grid`. See [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1) for the spec and tickets.
 2. Choose a VPS (decided last), then deploy with offsite backup.
 3. Add derived layers when a research use needs them.

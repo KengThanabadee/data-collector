@@ -1,6 +1,6 @@
 # Data Collector (DC) — Specification v2
 
-Contract baseline: 23 October 2026; collection scope updated 8 November 2026, Asia/Bangkok. Raw v2 capture has measured historical 100 ms runs; the current 1-minute collection profile is not built and production readiness remains unverified. The [reviewed handoff snapshot](docs/v2/HANDOFF_BASELINE.md) is historical. This specification does not deploy a service or change the v1 program.
+Contract baseline: 23 October 2026; collection scope updated 8 November 2026, Asia/Bangkok. The current 1-minute profile is runnable on the integration branch. [PLANS.md](PLANS.md) records current evidence and the separate production gates. The [reviewed handoff snapshot](docs/v2/HANDOFF_BASELINE.md) is historical. This specification does not deploy a service or change the v1 program.
 
 ## 1. Outcome and scope
 
