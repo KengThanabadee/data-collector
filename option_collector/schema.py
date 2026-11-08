@@ -54,6 +54,10 @@ def validate(method, params, result):
     elif method == "public/get_index_price":
         if not isinstance(result, dict) or not isinstance(result.get("index_price"), (int, float)) or result["index_price"] <= 0:
             raise ValueError("invalid index")
+    elif method == "public/ticker":
+        if (not isinstance(result, dict) or result.get("instrument_name") != params["instrument_name"]
+                or type(result.get("timestamp")) is not int):
+            raise ValueError("ticker identity/timestamp mismatch")
     elif method == "public/get_delivery_prices":
         if not isinstance(result, dict) or not isinstance(result.get("records_total"), int) or result["records_total"] < 0 or not isinstance(result.get("data"), list):
             raise ValueError("invalid delivery page")
@@ -108,6 +112,8 @@ def coverage(context, records):
             discovery = next((r for r in records if r["record_id"] == successes.get("metadata:option")), None)
             if discovery is None or universe(payload(discovery)["result"], context["currency"])[0] != context["universe"]:
                 raise ValueError("frozen universe differs from raw discovery")
+    elif context["job_kind"] == "minute":
+        trusted = True
     else:
         trusted = context.get("pagination_complete", False)
         if trusted:

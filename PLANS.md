@@ -8,7 +8,12 @@ Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). Its REST transport and archive are the base for the minute-snapshot service.
 - V2: raw WebSocket capture with WAL, immutable segments, changing-universe verification and per-venue adapters. Steps 1–4 of the 100 ms plan are committed: rediscovery, Deribit top-20 options, Binance USDⓈ-M feeds with liquidations, and Bybit option tickers/publicTrade (755 tests). Only the event streams stay in scope: Binance `!forceOrder@arr` and Bybit option `publicTrade` already run inside the V2 Binance and Bybit configs; Bybit `allLiquidation` is not built.
-- Not built: the minute-snapshot service, the Deribit `ticker.<name>.agg2` sampler, the Binance weight guard, daily zstd sealing and the minute acceptance run.
+- Minute grid: the Deribit REST profile captures and reads back 11 requests per UTC minute through the v1 transport and archive. Recorded-reply tests exercise byte and timestamp fidelity, per-request outcomes, missed slots, clock steps and interrupted-run recovery.
+- The Deribit `ticker.<name>.agg2` sampler reads back native ticker frames and changed metadata on the same grid. Recorded-reply tests covered subscription ACKs, reconnects, new listings on a healthy connection and retirement at 08:00 UTC.
+- Bybit REST minutes include BTC/ETH option and hedge-perp tickers and configurable depth at 25 levels. Recorded-reply tests cover hourly reselection, changed paginated metadata and risk tiers, daily settlement and per-request outcomes. The depth selection rule remains open for production review.
+- Binance USDⓈ-M REST minutes include depth at 20 levels, open interest, and changed instrument metadata. Recorded-reply tests cover the fixed build-time universe, per-IP weight admission and explicit guard skips. The production symbol universe remains open.
+- Hourly minute journals and daily zstd sealing now verify readback before cleanup. Temporary-archive tests cover interrupted publication and torn appends, manifest conflicts, and protection of the last two completed UTC days until offsite confirmation.
+- Pending: the remaining event capture work and the minute acceptance run.
 - Historical 100 ms measurements (not acceptance of the new scope): the Deribit all-options hour produced 7.15 GB/hour of native payload, about 160 GiB/day; a ten-minute Deribit probe crossed 08:00 UTC with 118 retirements and zero rejected subscriptions.
 
 ## Active work
