@@ -2,7 +2,7 @@
 
 > **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history; do not start new captures with them. The runnable V2 event paths that stay in scope are the Binance all-symbol `!forceOrder@arr` feed and Bybit option `publicTrade`, which still run inside the shipped Binance and Bybit configs; Bybit `allLiquidation` is not implemented yet.
 
-## Deribit REST minute grid
+## Deribit minute grid
 
 Use a fresh data root dedicated to minute capture. A bounded run counts scheduled
 slots, including explicit gaps. Omit `--minutes` to keep the grid running.
@@ -21,13 +21,29 @@ seconds after the boundary and defaults to 20.
 
 Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
 index lists all 11 expected requests and distinguishes `ok`, `error`,
-`timeout` and `missed`. A slot without an attempt is a gap. Readback verifies
+`timeout` and `missed`. A slot without a REST attempt or ticker snapshot is a gap. Readback verifies
 the index against the v1 response archive, which retains raw bytes and local
 send and receive times. `venue_server_epoch_us` is Deribit's `usOut` when
 available. Native market timestamps remain in the raw body.
 
 The profile uses `public/get_index_price` for the live BTC and ETH DVOL indexes,
 `btcdvol_usdc` and `ethdvol_usdc`.
+
+The CLI enables the Deribit `ticker.<name>.agg2` sampler by default. Add
+`--rest-only` to run just the REST profile. At each cutoff, `minute-read`
+returns the last ticker per BTC/ETH inverse option or dated future in
+`deribit_tickers`. Each entry contains its native frame, venue and local
+receipt timestamps, and connection ID. The snapshot also carries the current
+connection and each instrument's subscription ACK time when available.
+A frame from an earlier connection or one received before its ACK is
+`stale`. An instrument without a frame is `missing`.
+
+Discovery runs at startup and once per captured minute. The snapshot names
+the most recent valid metadata version and reports the last discovery
+outcome. Changed replies are kept as native response envelopes under
+`deribit-metadata/`. The sampler reconciles new listings on the current
+connection and retires listings at their native expiry, including options
+expiring at 08:00 UTC.
 
 ## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 
