@@ -92,6 +92,40 @@ responses and failed checks are stored under `binance/reference/` and
 `read_binance_reference(root, slot, failed=False)` in
 `data_collector.minute_binance` to read them by UTC Unix slot.
 
+### Daily archive and retention
+
+Install the `zstd` command on the capture host. Each committed minute is
+appended and synced to `hourly/YYYY-MM-DD/HH.jsonl` before the grid advances.
+The collector seals closed UTC days in the background when the grid moves to
+the next date. If a bounded run ends on the last slot of a day, use
+`minute-seal` to seal it explicitly. The seal is one
+`daily/YYYY-MM-DD.jsonl.zst` file and a manifest with the compressed and decoded
+SHA-256 checksums, minute range and counts, and hourly checksums.
+
+```sh
+.venv/bin/python -m data_collector minute-seal --data-root data/minute-grid --day 2026-11-08
+.venv/bin/python -m data_collector minute-verify-day --data-root data/minute-grid --day 2026-11-08
+```
+
+Sealing keeps the hourly journals and per-minute WAL. To prune, stop the
+writer and run `minute-prune` for a sealed day. Pruning verifies the full
+compressed and decoded archive and checks the local minute files, journals and
+WAL against it before removing those redundant copies. `minute-read` then
+reads the minute from the verified seal. The prior two completed UTC days
+require a matching offsite checksum before pruning. Older sealed days are
+eligible after local verification. Reference revisions remain available
+through their dedicated readers.
+
+```sh
+.venv/bin/python -m data_collector minute-confirm-offsite --data-root data/minute-grid --day 2026-11-08 --sha256 "$OFFSITE_ARCHIVE_SHA256"
+.venv/bin/python -m data_collector minute-prune --data-root data/minute-grid --day 2026-11-08
+```
+
+Supply the SHA-256 calculated from the copied zstd file at the offsite
+destination. The confirmation records that digest against the local manifest.
+The pilot provides the verification and retention commands. An operator
+provides the offsite copy and its digest.
+
 ## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
 
 This was the first runnable v2 path: public discovery → raw metadata → selected

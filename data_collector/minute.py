@@ -2,7 +2,6 @@
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
 import gzip
 import json
 import math
@@ -11,11 +10,12 @@ import time
 
 import aiohttp
 
-from option_collector.archive import Archive, read_archive
+from option_collector.archive import Archive, read_archive, verify_parts
 from option_collector.collector import context
 from option_collector.common import dumps, process_lock, read_json, sha, utc, write_bytes, write_json
 from option_collector.transport import Client
 
+from .minute_storage import HourlyJournal, minute_path, read_minute_files
 from .minute_tickers import TickerSampler
 from .minute_bybit import DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests, read_bybit_selection
 from .minute_binance import DEFAULT_BOT_RESERVE, DEFAULT_IP_LIMIT, DEFAULT_RATE, BinanceMinute, binance_requests
@@ -50,7 +50,7 @@ def _requests():
 def _destination(slot):
     if type(slot) is not int or slot % PERIOD:
         raise ValueError("expected a UTC minute boundary in Unix seconds")
-    return Path("minutes") / datetime.fromtimestamp(slot, timezone.utc).strftime("%Y/%m/%d/%H%M")
+    return minute_path(Path(), slot)
 
 
 def _plan(selection, symbols=None):
@@ -95,8 +95,12 @@ def _index(slot, records, *, reason=None, ticker_hash=None, selection=None, symb
 
 def read_minute(root, slot):
     """Read one minute's index and lossless v1 response envelopes."""
-    path = Path(root) / _destination(slot)
-    data = (path / "index.jsonl").read_bytes()
+    _destination(slot)
+    return _read_minute(root, slot, read_minute_files(root, slot))
+
+
+def _read_minute(root, slot, files):
+    data = files["index.jsonl"]
     index = json.loads(data)
     records = []
     selection = index.get("bybit_selection")
@@ -107,11 +111,12 @@ def read_minute(root, slot):
             if read_bybit_selection(root, slot, base)["symbols"] != selected:
                 raise ValueError("minute depth plan differs from the Bybit hourly selection")
     ticker_hash = index.get("deribit_tickers_sha256")
-    if ticker_hash is not None and sha((path / TICKER_ARCHIVE).read_bytes()) != ticker_hash:
+    if ticker_hash is not None and (TICKER_ARCHIVE not in files or sha(files[TICKER_ARCHIVE]) != ticker_hash):
         raise ValueError("minute ticker archive checksum differs")
-    if (path / "manifest.json").exists():
-        manifest, records = read_archive(path, include_incomplete=True)
-        context = read_json(path / "context.json")
+    if "manifest.json" in files:
+        manifest, records = verify_parts(json.loads(files["manifest.json"]), files["context.json"],
+                                         files["responses.jsonl.gz"], files.get("truncated-tail.bin", b""))
+        context = json.loads(files["context.json"])
         if (manifest["scheduled_slot_utc"] != utc(slot) or manifest["job_kind"] != "minute"
                 or context.get("bybit_selection") != selection or context.get("binance_symbols") != symbols
                 or context.get("binance_weight") != weight
@@ -130,14 +135,12 @@ def read_minute(root, slot):
 
 def read_ticker_samples(root, slot):
     """Read the ticker snapshot referenced by a verified minute index."""
-    index, _ = read_minute(root, slot)
+    _destination(slot)
+    files = read_minute_files(root, slot)
+    index, _ = _read_minute(root, slot, files)
     if "deribit_tickers_sha256" not in index:
         return None
-    path = Path(root) / _destination(slot) / TICKER_ARCHIVE
-    data = path.read_bytes()
-    if sha(data) != index["deribit_tickers_sha256"]:
-        raise ValueError("minute ticker archive checksum differs")
-    snapshot = json.loads(gzip.decompress(data))
+    snapshot = json.loads(gzip.decompress(files[TICKER_ARCHIVE]))
     if snapshot["scheduled_slot_utc"] != utc(slot):
         raise ValueError("ticker snapshot belongs to another minute")
     return snapshot
@@ -209,6 +212,7 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
 
         count = 0
         async with (
+            HourlyJournal(root) as journal,
             Client(config, clock=clock, wall=wall, sleep=sleep) as client,
             _sampler_session(client, config, ticker_ws_url, state["next_slot"], request_window, wall, clock) as sampler,
             _bybit_session(config, bybit_base_url, bybit_depth, bybit_expiries, wall, clock, sleep) as bybit,
@@ -217,6 +221,7 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
         ):
             while minutes is None or count < minutes:
                 slot = state["next_slot"]
+                await journal.seal_due(slot)
                 destination = _destination(slot)
                 if sampler is not None:
                     sampler.schedule(slot)
@@ -242,6 +247,7 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
                     index = _index(slot, records, reason=reason, ticker_hash=ticker_hash, selection=selection,
                                    symbols=symbols, weight=weight)
                     write_bytes(index_path, dumps(index))
+                journal.append(slot, deribit_version=sampler.version if sampler is not None else None)
                 state["next_slot"] = slot + PERIOD
                 write_json(state_path, state, replace=True)
                 count += 1
