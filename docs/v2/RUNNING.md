@@ -21,7 +21,10 @@ seconds after the boundary and defaults to 20.
 
 Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
 index lists the expected requests and distinguishes `ok`, `error`, `timeout`
-and `missed`. A slot without a REST attempt or native ticker body is a gap. The index identifies each enabled Bybit depth selection that is unavailable.
+and `missed`. In version 2 of the index, a slot without a native REST body or
+ticker body is a gap even when requests were attempted. The index still lists
+those request outcomes and identifies unavailable Bybit depth selections.
+Readers preserve version 1 indexes as recorded.
 Readback verifies the index against the v1 response archive, which retains raw
 bytes and local send and receive times. Deribit `usOut` is stored as
 `venue_server_epoch_us` and Bybit `time` as `venue_server_epoch_ms` when
@@ -44,7 +47,10 @@ A frame from an earlier connection or one received before its ACK is
 Discovery runs at startup and once per captured minute. The snapshot names
 the most recent valid metadata version and reports the last discovery
 outcome. Changed replies are kept as native response envelopes under
-`deribit-metadata/`. The sampler reconciles new listings on the current
+`deribit-metadata/`. Failed discovery attempts retain their native bytes and
+available timestamps under `deribit-metadata-failures/`. Use
+`read_deribit_metadata_failures(root, slot)` in `data_collector.minute_tickers`
+to read them by UTC Unix slot. The sampler reconciles new listings on the current
 connection and retires listings at their native expiry, including options
 expiring at 08:00 UTC. `minute-read` returns retirement requests and native outcomes in `deribit_retirements` for the minute in which the requests began.
 
@@ -101,6 +107,11 @@ the next date. If a bounded run ends on the last slot of a day, use
 `minute-seal` to seal it explicitly. The seal is one
 `daily/YYYY-MM-DD.jsonl.zst` file and a manifest with the compressed and decoded
 SHA-256 checksums, minute range and counts, and hourly checksums.
+The seal includes Deribit retirement outcomes and failed discovery replies that
+arrive after the last journal append. Their checksum is recorded separately so
+the original hourly journals can still be verified byte for byte.
+When recovering an archive published by an older sealer that stopped before
+writing its manifest, the manifest carries those references with their checksum.
 
 ```sh
 .venv/bin/python -m data_collector minute-seal --data-root data/minute-grid --day 2026-11-08
@@ -110,8 +121,9 @@ SHA-256 checksums, minute range and counts, and hourly checksums.
 Sealing keeps the hourly journals and per-minute WAL. To prune, stop the
 writer and run `minute-prune` for a sealed day. Pruning verifies the full
 compressed and decoded archive and checks the local minute files, journals and
-WAL against it before removing those redundant copies. `minute-read` then
-reads the minute from the verified seal. The prior two completed UTC days
+WAL against it before removing those redundant copies. `minute-read` can read
+minutes, Bybit selections and Deribit retirements from the verified seal and
+manifest in a fresh root. The prior two completed UTC days
 require a matching offsite checksum before pruning. Older sealed days are
 eligible after local verification. Reference revisions remain available
 through their dedicated readers.
@@ -121,8 +133,9 @@ through their dedicated readers.
 .venv/bin/python -m data_collector minute-prune --data-root data/minute-grid --day 2026-11-08
 ```
 
-Supply the SHA-256 calculated from the copied zstd file at the offsite
-destination. The confirmation records that digest against the local manifest.
+Copy both the zstd file and its manifest to the offsite destination. Supply the
+SHA-256 calculated from the copied zstd file. The confirmation records that
+digest against the local manifest.
 The pilot provides the verification and retention commands. An operator
 provides the offsite copy and its digest.
 

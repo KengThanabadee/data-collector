@@ -7,6 +7,10 @@ from pathlib import Path
 from statistics import median
 
 from option_collector.common import body_bytes, dumps, read_json, sha, utc, write_bytes, write_json
+from option_collector.transport import valid_bybit_cursor
+
+from .minute_reference import ReferenceAttempts, read_reference, reference_json
+from .minute_storage import read_sealed_references
 
 
 BASES = ("BTC", "ETH")
@@ -27,16 +31,22 @@ REFERENCE_NAMES = {
 }
 
 
-def _selection_path(root, slot, base):
-    return root / "selection" / f"{slot // HOUR * HOUR}-{base}.json"
+def bybit_selection_key(slot, base):
+    return f"bybit/selection/{slot // HOUR * HOUR}-{base}.json"
 
 
-def read_bybit_selection(root, slot, base):
+def read_bybit_selection(root, slot, base, *, archived=None):
     """Return the immutable hourly depth selection available at this minute."""
     if base not in BASES:
         raise ValueError("invalid Bybit selection base")
-    path = _selection_path(Path(root) / "bybit", slot, base)
-    saved = read_json(path)
+    key = bybit_selection_key(slot, base)
+    path = Path(root) / key
+    if archived is None:
+        saved = read_json(path)
+        if saved is None:
+            archived = read_sealed_references(root, slot, key).get(key)
+    if archived is not None:
+        saved = json.loads(archived)
     if saved is None or saved["selected_slot_epoch"] > slot:
         raise FileNotFoundError(path)
     return saved
@@ -47,7 +57,18 @@ def read_bybit_reference(root, name, slot, *, failed=False):
     if name not in REFERENCE_NAMES or type(slot) is not int or slot % 60:
         raise ValueError("invalid Bybit reference name or slot")
     family = "reference-failures" if failed else "reference"
-    return _read_reference(Path(root) / "bybit" / family / name / f"{slot:012d}.json.gz")
+    return read_reference(Path(root) / "bybit" / family / name / f"{slot:012d}.json.gz")
+
+
+def publish_bybit_selections(root, slot, selections):
+    """Materialize selections after their minute WAL context is durable."""
+    for base, selection in selections.items():
+        path = Path(root) / bybit_selection_key(slot, base)
+        existing = read_json(path)
+        if existing is None:
+            write_json(path, selection)
+        elif existing != selection:
+            raise ValueError("Bybit selection differs from committed minute context")
 
 
 def bybit_requests(selection):
@@ -64,7 +85,7 @@ def bybit_requests(selection):
 
 
 def _result(record):
-    return json.loads(body_bytes(record), parse_float=str)["result"]
+    return json.loads(body_bytes(record), parse_float=Decimal)["result"]
 
 
 def _price(value):
@@ -93,25 +114,12 @@ def _rank(rows, ticker, slot, limit, expiry_count):
     return dict(index_price=str(index), expiries_epoch_ms=expiries, symbols=symbols)
 
 
-class _ReferenceAttempts:
-    def __init__(self, config, slot):
-        self.context = dict(schema_version=1, run_id=f"bybit-reference-{slot}", job_kind="minute",
-                            environment=config.environment, currency="bybit", scheduled_slot_utc=utc(slot))
-        self.records = []
-
-    def append(self, record):
-        self.records.append(record)
-        return record
+def _reference_rows(reference):
+    return [row for response in reference["responses"] if response["ok"] for row in _result(response)["list"]]
 
 
-def _read_reference(path):
-    record = json.loads(gzip.decompress(path.read_bytes()))
-    for attempt in record["responses"]:
-        body = body_bytes(attempt)
-        if ((sha(body) if body is not None else None) != attempt["body_sha256"]
-                or len(body or b"") != attempt["body_byte_count"]):
-            raise ValueError("Bybit reference response checksum differs")
-    return record
+def _reference_digest(rows):
+    return sha(dumps(sorted((reference_json(row) + b"\n").decode() for row in rows)))
 
 
 class BybitMinute:
@@ -128,7 +136,7 @@ class BybitMinute:
     def selection(self, slot):
         result = {}
         for base in BASES:
-            saved = read_json(_selection_path(self.root, slot, base))
+            saved = read_json(self.config.data_root / bybit_selection_key(slot, base))
             if saved is not None and saved["selected_slot_epoch"] <= slot:
                 result[base] = saved["symbols"]
         return result
@@ -146,12 +154,12 @@ class BybitMinute:
         directory = self.root / "reference" / name
         if name not in self.reference_heads:
             latest = max(directory.glob("*.json.gz"), default=None)
-            self.reference_heads[name] = _read_reference(latest) if latest else None
+            self.reference_heads[name] = read_reference(latest) if latest else None
         previous = self.reference_heads[name]
         if self.checked.get(name) == period or daily and previous and previous["period"] == period:
             return previous
 
-        archive = _ReferenceAttempts(self.config, slot)
+        archive = ReferenceAttempts(self.config.environment, "bybit", slot)
         rows, cursors = [], set()
         for page in range(100):
             record = await self.client.fetch(archive, f"bybit:{name}:{page}", method, params, deadline)
@@ -165,7 +173,7 @@ class BybitMinute:
             cursor = result.get("nextPageCursor")
             if cursor is None or cursor == "":
                 break
-            if daily or not isinstance(cursor, str) or cursor in cursors:
+            if daily or not valid_bybit_cursor(cursor) or cursor in cursors:
                 return self._failed_reference(name, slot, archive, "error")
             cursors.add(cursor)
             params = dict(params, cursor=cursor)
@@ -174,8 +182,8 @@ class BybitMinute:
 
         if method == INSTRUMENTS and len({row["symbol"] for row in rows}) != len(rows):
             return self._failed_reference(name, slot, archive, "error")
-        digest = sha(dumps(sorted(dumps(row).decode() for row in rows)))
-        if daily or previous is None or previous["content_sha256"] != digest:
+        digest = _reference_digest(rows)
+        if daily or previous is None or _reference_digest(_reference_rows(previous)) != digest:
             version = dict(schema_version=1, period=period, captured_slot_utc=utc(slot), status="ok",
                            content_sha256=digest, responses=archive.records)
             path = directory / f"{slot:012d}.json.gz"
@@ -212,6 +220,7 @@ class BybitMinute:
                         ))
 
             # Freeze the selection in the minute's durable context before admitting depth.
+            new_selections = {}
             for base in BASES:
                 if base in selection:
                     continue
@@ -219,21 +228,23 @@ class BybitMinute:
                 metadata = await options[base]
                 if ticker is None or not ticker["ok"] or metadata is None:
                     continue
-                rows = [row for page in metadata["responses"] if page["ok"] for row in _result(page)["list"]]
-                ranked = _rank(rows, ticker, slot, self.counts[base], self.expiries)
+                ranked = _rank(_reference_rows(metadata), ticker, slot, self.counts[base], self.expiries)
                 if ranked is None:
                     continue
-                saved = dict(schema_version=1, base=base, selected_slot_epoch=slot, limit=self.counts[base],
-                             expiry_count=self.expiries, ticker_body_sha256=ticker["body_sha256"],
-                             metadata_sha256=metadata["content_sha256"], **ranked)
-                write_json(_selection_path(self.root, slot, base), saved)
+                new_selections[base] = dict(
+                    schema_version=1, base=base, selected_slot_epoch=slot, limit=self.counts[base],
+                    expiry_count=self.expiries, ticker_body_sha256=ticker["body_sha256"],
+                    metadata_sha256=metadata["content_sha256"], **ranked,
+                )
                 selection[base] = ranked["symbols"]
 
             jobs = bybit_requests(selection)
-            if archive.context["bybit_selection"] != selection:
+            if new_selections:
                 archive.update_context(bybit_selection=selection,
+                                       bybit_new_selections=new_selections,
                                        bybit_selection_unavailable=self.unavailable_depth(selection),
                                        required_jobs=[*deribit_jobs, *(job[0] for job in jobs), *following_jobs])
+                publish_bybit_selections(self.config.data_root, slot, new_selections)
             for logical_id, method, params in jobs:
                 if method == DEPTH:
                     group.create_task(self.client.fetch(archive, logical_id, method, params, deadline,

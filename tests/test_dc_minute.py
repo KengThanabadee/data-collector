@@ -12,7 +12,7 @@ from aiohttp import web
 
 from data_collector.cli import main
 from data_collector.minute import capture_minutes, read_minute
-from option_collector.common import body_bytes
+from option_collector.common import body_bytes, dumps
 from option_collector.config import Config
 
 
@@ -55,6 +55,7 @@ class DeribitMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.clock = Clock()
         self.requests = []
         self.fail_futures = False
+        self.disconnect_requests = False
         self.block_futures = None
         self.futures_blocked = asyncio.Event()
         app = web.Application()
@@ -71,6 +72,9 @@ class DeribitMinuteTests(unittest.IsolatedAsyncioTestCase):
         method = request.match_info["method"]
         params = dict(request.query)
         self.requests.append((method, params))
+        if self.disconnect_requests:
+            request.transport.abort()
+            return web.Response()
         if method == "get_book_summary_by_currency":
             if self.block_futures is not None and params["currency"] == "ETH":
                 self.futures_blocked.set()
@@ -178,6 +182,21 @@ class DeribitMinuteTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(index["gap"])
             self.assertEqual(records, [])
         self.assertFalse(read_minute(self.config.data_root, SLOT + 300)[0]["gap"])
+
+    async def test_bodyless_transport_errors_make_a_gap_and_keep_legacy_indexes_readable(self):
+        self.disconnect_requests = True
+        await self.capture(minutes=1)
+        index, records = read_minute(self.config.data_root, SLOT)
+        self.assertTrue(index["gap"])
+        self.assertEqual(index["gap_reason"], "no_market_payloads")
+        self.assertEqual(list(index["requests"].values()), ["error"] * 11)
+        self.assertEqual(len(records), 11)
+        self.assertTrue(all(body_bytes(record) is None for record in records))
+
+        legacy = dict(index, schema_version=1, gap=False, gap_reason=None)
+        path = next(self.config.data_root.glob("minutes/**/index.jsonl"))
+        path.write_bytes(dumps(legacy))
+        self.assertEqual(read_minute(self.config.data_root, SLOT), (legacy, records))
 
     async def test_forward_clock_step_does_not_send_for_an_expired_minute(self):
         self.clock.jump_next_request = 90

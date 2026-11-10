@@ -17,7 +17,8 @@ from option_collector.transport import Client
 
 from .minute_storage import HourlyJournal, minute_path, read_minute_files
 from .minute_tickers import TickerSampler
-from .minute_bybit import BASES, DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests, read_bybit_selection
+from .minute_bybit import (BASES, DEFAULT_COUNTS, DEFAULT_EXPIRIES, BybitMinute, bybit_requests,
+                           bybit_selection_key, publish_bybit_selections, read_bybit_selection)
 from .minute_binance import DEFAULT_BOT_RESERVE, DEFAULT_IP_LIMIT, DEFAULT_RATE, BinanceMinute, binance_requests
 
 
@@ -62,8 +63,12 @@ def _plan(selection, symbols=None):
     return jobs
 
 
+def _has_rest_payload(records, schema_version):
+    return bool(records) if schema_version == 1 else any(record["body_byte_count"] for record in records)
+
+
 def _index(slot, records, *, reason=None, ticker_hash=None, ticker_empty=False, selection=None,
-           unavailable=None, symbols=None, weight=None):
+           unavailable=None, symbols=None, weight=None, schema_version=2):
     expected = {logical_id: (method, params) for logical_id, method, params in _plan(selection, symbols)}
     statuses = dict.fromkeys(expected, "missed")
     for record in records:
@@ -78,9 +83,10 @@ def _index(slot, records, *, reason=None, ticker_hash=None, ticker_empty=False, 
             statuses[logical_id] = "timeout"
         else:
             statuses[logical_id] = "error"
-    gap = not records and (ticker_hash is None or ticker_empty)
-    index = dict(schema_version=1, scheduled_slot_utc=utc(slot), gap=gap,
-                 gap_reason=(reason or "no_requests_sent") if gap else None, requests=statuses)
+    gap = not _has_rest_payload(records, schema_version) and (ticker_hash is None or ticker_empty)
+    index = dict(schema_version=schema_version, scheduled_slot_utc=utc(slot), gap=gap,
+                 gap_reason=(reason or ("no_market_payloads" if records else "no_requests_sent")) if gap else None,
+                 requests=statuses)
     if ticker_hash is not None:
         index["deribit_tickers_sha256"] = ticker_hash
         if ticker_empty:
@@ -103,12 +109,19 @@ def _index(slot, records, *, reason=None, ticker_hash=None, ticker_empty=False, 
 def read_minute(root, slot):
     """Read one minute's index and lossless v1 response envelopes."""
     _destination(slot)
-    return _read_minute(root, slot, read_minute_files(root, slot))
+    return _read_minute(root, slot, _read_files(root, slot))
+
+
+def _read_files(root, slot):
+    return read_minute_files(root, slot, reference_keys=tuple(bybit_selection_key(slot, base) for base in BASES))
 
 
 def _read_minute(root, slot, files):
     data = files["index.jsonl"]
     index = json.loads(data)
+    schema_version = index.get("schema_version")
+    if type(schema_version) is not int or schema_version not in (1, 2):
+        raise ValueError("unsupported minute index schema")
     records = []
     selection = index.get("bybit_selection")
     unavailable = index.get("bybit_selection_unavailable", [])
@@ -116,7 +129,8 @@ def _read_minute(root, slot, files):
     weight = index.get("binance_weight")
     if selection is not None:
         for base, selected in selection.items():
-            if read_bybit_selection(root, slot, base)["symbols"] != selected:
+            archived = files.get(bybit_selection_key(slot, base))
+            if read_bybit_selection(root, slot, base, archived=archived)["symbols"] != selected:
                 raise ValueError("minute depth plan differs from the Bybit hourly selection")
     ticker_hash = index.get("deribit_tickers_sha256")
     ticker_empty = index.get("deribit_tickers_empty", False)
@@ -137,10 +151,12 @@ def _read_minute(root, slot, files):
         reason = index.get("gap_reason")
         if ticker_hash is None and reason not in ("missed_boundary", "interrupted"):
             raise ValueError("minute response archive is missing")
-    if ticker_empty and (records or ticker_hash is None or not _empty_tickers(files[TICKER_ARCHIVE])):
+    if ticker_empty and (_has_rest_payload(records, schema_version) or ticker_hash is None
+                         or not _empty_tickers(files[TICKER_ARCHIVE])):
         raise ValueError("empty ticker gap differs from archived data")
     if data != dumps(_index(slot, records, reason=reason, ticker_hash=ticker_hash, ticker_empty=ticker_empty,
-                            selection=selection, unavailable=unavailable, symbols=symbols, weight=weight)):
+                            selection=selection, unavailable=unavailable, symbols=symbols, weight=weight,
+                            schema_version=schema_version)):
         raise ValueError("minute index does not match archived responses")
     return index, records
 
@@ -153,7 +169,7 @@ def _empty_tickers(raw):
 def read_ticker_samples(root, slot):
     """Read the ticker snapshot referenced by a verified minute index."""
     _destination(slot)
-    files = read_minute_files(root, slot)
+    files = _read_files(root, slot)
     index, _ = _read_minute(root, slot, files)
     if "deribit_tickers_sha256" not in index:
         return None
@@ -176,7 +192,8 @@ async def _sampler_session(client, config, url, slot, window, wall, clock):
     ):
         running = tasks.create_task(sampler.run(socket_session))
         try:
-            await sampler.refresh(client, clock() + window)
+            startup_slot = max(slot, math.ceil(wall() / PERIOD) * PERIOD)
+            await sampler.refresh(client, startup_slot, clock() + window)
             yield sampler
         finally:
             running.cancel()
@@ -238,7 +255,6 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
         ):
             while minutes is None or count < minutes:
                 slot = state["next_slot"]
-                await journal.seal_due(slot)
                 destination = _destination(slot)
                 if sampler is not None:
                     sampler.schedule(slot)
@@ -253,7 +269,8 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
                     ticker_path = path / TICKER_ARCHIVE
                     tickers = ticker_path.read_bytes() if ticker_path.exists() else None
                     ticker_hash = sha(tickers) if tickers is not None else None
-                    ticker_empty = not records and tickers is not None and _empty_tickers(tickers)
+                    ticker_empty = (tickers is not None and not _has_rest_payload(records, 2)
+                                    and _empty_tickers(tickers))
                     saved_context = read_json(path / "context.json")
                     if saved_context is not None:
                         selection = saved_context.get("bybit_selection")
@@ -271,6 +288,7 @@ async def capture_minutes(config, *, minutes=None, request_window=20, ticker_ws_
                 journal.append(slot, deribit_version=sampler.version if sampler is not None else None)
                 state["next_slot"] = slot + PERIOD
                 write_json(state_path, state, replace=True)
+                await journal.seal_due(slot, sampler.retirements_idle if sampler is not None else None)
                 count += 1
     return count
 
@@ -283,7 +301,9 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
 
     if (work / "context.json").exists() and ((work / "journal.jsonl").exists()
                                            or (path / "manifest.json").exists()):
-        Archive(root, {}, existing=work).finalize(interrupted=True)
+        archive = Archive(root, {}, existing=work)
+        publish_bybit_selections(root, slot, archive.context.get("bybit_new_selections", {}))
+        archive.finalize(interrupted=True)
     if (path / "manifest.json").exists():
         manifest, records = read_archive(path, include_incomplete=True)
         return records, "interrupted" if manifest["status"] == "interrupted" else None
@@ -318,6 +338,8 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
         capture_context["bybit_selection_unavailable"] = bybit.unavailable_depth(selection)
     files = capture_context["code"]["files"]
     files["data_collector/minute.py"] = sha(Path(__file__).read_bytes())
+    if sampler is not None or bybit is not None or binance is not None:
+        files["data_collector/minute_reference.py"] = sha(Path(__file__).with_name("minute_reference.py").read_bytes())
     if sampler is not None:
         files["data_collector/minute_tickers.py"] = sha(Path(__file__).with_name("minute_tickers.py").read_bytes())
     if bybit is not None:
@@ -338,6 +360,6 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
             tasks.create_task(client.fetch(archive, logical_id, method, params, deadline,
                                            send_window=send_window))
         if sampler is not None:
-            tasks.create_task(sampler.refresh(client, deadline))
+            tasks.create_task(sampler.refresh(client, slot, deadline))
     archive.finalize()
     return archive.records, None

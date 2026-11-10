@@ -1,11 +1,14 @@
 """Fixed USDⓈ-M minute universe, IP weight admission, and native metadata history."""
 import asyncio
+from decimal import Decimal
 import gzip
 import json
 from pathlib import Path
 
 from option_collector.common import body_bytes, dumps, sha, utc, write_bytes
 from option_collector.transport import WEIGHT_HEADER
+
+from .minute_reference import ReferenceAttempts, read_reference, reference_json
 
 
 BASE_URLS = {"production": "https://fapi.binance.com/", "testnet": "https://demo-fapi.binance.com/"}
@@ -86,35 +89,14 @@ class _WeightGuard:
                     skipped={key: reason for key, reason in self.skipped.items() if key != REFERENCE_ID})
 
 
-class _ReferenceAttempt:
-    def __init__(self, environment, slot):
-        self.context = dict(schema_version=1, run_id=f"binance-reference-{slot}", job_kind="minute",
-                            environment=environment, currency="binance", scheduled_slot_utc=utc(slot))
-        self.records = []
-
-    def append(self, record):
-        self.records.append(record)
-        return record
-
-
 def _metadata_digest(response):
-    value = json.loads(body_bytes(response), parse_float=str)
+    value = json.loads(body_bytes(response), parse_float=Decimal)
     value.pop("serverTime", None)  # Venue documentation directs users to the dedicated time endpoint.
     value["symbols"].sort(key=lambda row: row["symbol"])
     assets = value.get("assets")
     if isinstance(assets, list) and all(isinstance(row, dict) for row in assets):
         assets.sort(key=lambda row: str(row.get("asset", "")))
-    return sha(dumps(value))
-
-
-def _read_reference(path):
-    entry = json.loads(gzip.decompress(path.read_bytes()))
-    for response in entry["responses"]:
-        raw = body_bytes(response)
-        if ((sha(raw) if raw is not None else None) != response["body_sha256"]
-                or len(raw or b"") != response["body_byte_count"]):
-            raise ValueError("Binance reference response checksum differs")
-    return entry
+    return sha(reference_json(value) + b"\n")
 
 
 def read_binance_reference(root, slot, *, failed=False):
@@ -122,7 +104,7 @@ def read_binance_reference(root, slot, *, failed=False):
     if type(slot) is not int or slot % 60:
         raise ValueError("expected a UTC minute boundary")
     directory = "reference-failures" if failed else "reference"
-    return _read_reference(Path(root) / "binance" / directory / f"{slot:012d}.json.gz")
+    return read_reference(Path(root) / "binance" / directory / f"{slot:012d}.json.gz")
 
 
 class BinanceMinute:
@@ -140,7 +122,7 @@ class BinanceMinute:
             raise ValueError("Binance weight limit must exceed the nonnegative bot reserve")
         self.ip_limit, self.bot_reserve = ip_limit, bot_reserve
         latest = max((self.root / "reference").glob("*.json.gz"), default=None)
-        self.head = _read_reference(latest)["content_sha256"] if latest else None
+        self.head = _metadata_digest(read_reference(latest)["responses"][-1]) if latest else None
         self.checked_hour = None
 
     async def capture(self, archive, slot, deadline, send_window):
@@ -160,7 +142,7 @@ class BinanceMinute:
         archive.update_context(binance_weight=guard.report())
 
     async def _refresh(self, slot, deadline, send_window, guard):
-        archive = _ReferenceAttempt(self.environment, slot)
+        archive = ReferenceAttempts(self.environment, "binance", slot)
         record = await self.client.fetch(archive, REFERENCE_ID, EXCHANGE_INFO, {}, deadline,
                                          send_window=send_window, weight_guard=guard)
         if record is None or not record["ok"]:

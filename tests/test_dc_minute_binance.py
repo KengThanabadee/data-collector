@@ -8,8 +8,8 @@ from unittest.mock import patch
 from aiohttp import web
 
 from data_collector.minute import capture_minutes, read_minute
-from data_collector.minute_binance import read_binance_reference, read_default_binance_universe
-from option_collector.common import body_bytes
+from data_collector.minute_binance import _metadata_digest, read_binance_reference, read_default_binance_universe
+from option_collector.common import body_bytes, body_fields
 from option_collector.config import Config
 from tests.test_dc_minute import REPLIES
 from tests.test_dc_minute_bybit import FIXTURE as BYBIT_FIXTURE
@@ -18,6 +18,15 @@ from tests.test_dc_minute_bybit import FIXTURE as BYBIT_FIXTURE
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dc_binance_minute_rest.json").read_bytes())
 SLOT = 1794124740
 MARKETS = ("BTCUSDT", "ETHUSDT")
+
+
+class BinanceMetadataTests(unittest.TestCase):
+    def test_revision_digest_distinguishes_precise_numbers_and_strings(self):
+        def digest(value):
+            return _metadata_digest(body_fields(b'{"symbols":[{"symbol":"BTCUSDT","filter":' + value + b'}]}'))
+
+        self.assertNotEqual(digest(b"0.1"), digest(b'"0.1"'))
+        self.assertNotEqual(digest(b"0.100000000000000000001"), digest(b"0.100000000000000000002"))
 
 
 class BinanceMinuteTests(unittest.IsolatedAsyncioTestCase):

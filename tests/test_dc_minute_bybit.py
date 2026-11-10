@@ -1,7 +1,9 @@
 import asyncio
 import json
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,7 +12,8 @@ from aiohttp import web
 
 from data_collector.minute import capture_minutes, read_minute
 from data_collector.minute_bybit import read_bybit_reference, read_bybit_selection
-from option_collector.common import body_bytes
+from data_collector.minute_storage import seal_minute_day
+from option_collector.common import body_bytes, read_json
 from option_collector.config import Config
 from tests.test_dc_minute import REPLIES
 
@@ -34,6 +37,7 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.depth_faults = False
         self.change_hour = False
         self.fail_rollover_page = False
+        self.reference_type_change = False
         self.late = 0
         app = web.Application()
         app.router.add_get("/public/{method}", self.deribit)
@@ -73,11 +77,17 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
                 if changed:
                     rows[0]["priceFilter"]["tickSize"] = "7.5"
                 if "cursor" in params:
+                    if "cursor=second%3D" not in request.rel_url.raw_query_string.split("&"):
+                        return web.json_response({"retCode": 10001, "retMsg": "cursor differs"})
                     if self.fail_rollover_page and START + 60 <= self.wall < START + 120:
                         return web.json_response({"retCode": 10001, "retMsg": "catalog page error", "result": {}})
                     value["result"].update(list=rows[4:], nextPageCursor="")
                 else:
                     value["result"].update(list=rows[:4], nextPageCursor="second%3D")
+                body = json.dumps(value)
+            if self.reference_type_change and base == "btc":
+                value = json.loads(body)
+                value["result"]["list"][0]["fixtureValue"] = 0.1 if self.wall < START + 60 else "0.1"
                 body = json.dumps(value)
         elif method == "tickers":
             body = FIXTURE["perp-btc"].replace("BTCUSDT", symbol)
@@ -200,6 +210,48 @@ class BybitMinuteTests(unittest.IsolatedAsyncioTestCase):
         ])
         self.assertEqual(read_bybit_selection(self.config.data_root, START + 120, "BTC")["selected_slot_epoch"],
                          START + 120)
+
+    async def test_recovery_materializes_selection_from_wal_before_readback(self):
+        root = self.config.data_root
+
+        def stop_after_plan(*_):
+            context = read_json(root / "work" / str(START) / "deribit" / "context.json")
+            self.assertEqual(context["bybit_selection"], {"BTC": [BTC_CALL, BTC_PUT], "ETH": [ETH_CALL]})
+            self.assertFalse((root / "bybit" / "selection").exists())
+            raise OSError("interrupted before publishing selection")
+
+        with patch("data_collector.minute_bybit.publish_bybit_selections", side_effect=stop_after_plan):
+            with self.assertRaises(ExceptionGroup):
+                await self.capture(1)
+        await self.capture(1)
+        index, _ = read_minute(root, START)
+        for base, symbols in index["bybit_selection"].items():
+            self.assertEqual(read_bybit_selection(root, START, base)["symbols"], symbols)
+            for symbol in symbols:
+                self.assertEqual(index["requests"][f"bybit:depth:{symbol}"], "missed")
+        self.assertEqual(index["bybit_selection"]["BTC"], [BTC_CALL, BTC_PUT])
+        self.assertFalse(self.depth)
+
+    async def test_sealed_copy_reads_bybit_selection_from_an_earlier_minute(self):
+        first = int(datetime(2026, 11, 8, 23, 58, tzinfo=timezone.utc).timestamp())
+        self.wall = first - 10
+        await self.capture(2)
+        root = self.config.data_root
+        seal_minute_day(root, "2026-11-08")
+        restored = root / "restored"
+        shutil.copytree(root / "daily", restored / "daily")
+        slot = first + 60
+        self.assertEqual(read_minute(restored, slot), read_minute(root, slot))
+        self.assertEqual(read_bybit_selection(restored, slot, "BTC")["selected_slot_epoch"], first)
+
+    async def test_reference_revision_preserves_change_from_number_to_string(self):
+        self.reference_type_change = True
+        await self.capture(2)
+        initial = read_bybit_reference(self.config.data_root, "options-BTC", START)
+        changed = read_bybit_reference(self.config.data_root, "options-BTC", START + 60)
+        self.assertNotEqual(initial["content_sha256"], changed["content_sha256"])
+        self.assertIn(b'"fixtureValue": 0.1', body_bytes(initial["responses"][-1]))
+        self.assertIn(b'"fixtureValue": "0.1"', body_bytes(changed["responses"][-1]))
 
     async def test_depth_outcomes_and_missed_grid_slot_remain_explicit(self):
         self.config = replace(self.config, attempt_seconds=.06)

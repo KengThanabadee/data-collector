@@ -3,8 +3,11 @@ import asyncio
 from email.utils import parsedate_to_datetime
 import json
 import random
+import re
 import time
+from urllib.parse import urlencode
 import aiohttp
+from yarl import URL
 
 from .common import body_fields, read_json, utc, write_json
 from .schema import validate, quality
@@ -18,6 +21,11 @@ BYBIT_ALLOWED = {"v5/market/" + name for name in (
 
 BINANCE_ALLOWED = {"fapi/v1/" + name for name in ("depth", "openInterest", "exchangeInfo")}
 WEIGHT_HEADER = "x-mbx-used-weight-1m"
+
+
+def valid_bybit_cursor(cursor):
+    return (isinstance(cursor, str) and 0 < len(cursor) <= 4096
+            and re.fullmatch(r"(?:[A-Za-z0-9._~!$'()*+,;=:@/-]|%[0-9A-Fa-f]{2})+", cursor) is not None)
 
 
 def _binance_result(method, params, value):
@@ -146,6 +154,15 @@ class Client:
         }[self.venue]
         if method not in allowed:
             raise ValueError("method not allowed")
+        url = self.base_url + method
+        query = {k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items()}
+        if self.venue == "bybit" and "cursor" in query:
+            cursor = query.pop("cursor")
+            if not valid_bybit_cursor(cursor):
+                raise ValueError("invalid native Bybit cursor")
+            # The cursor is already escaped by the venue. Encode the other fields only.
+            url = URL(f"{url}?{urlencode(query)}&cursor={cursor}", encoded=True)
+            query = None
         async with self.semaphore:
             previous=[r for r in archive.records if r["logical_request_id"]==logical_id]
             if previous and (previous[-1]["ok"] or len(previous)>=self.config.attempts):
@@ -181,7 +198,7 @@ class Client:
                 body, received, retryable, cancelled = None, None, False, False
                 try:
                     async with asyncio.timeout(min(self.config.attempt_seconds, deadline-start)):
-                        async with self.session.get(self.base_url + method, params={k: str(v).lower() if isinstance(v, bool) else v for k, v in params.items()}, allow_redirects=False) as response:
+                        async with self.session.get(url, params=query, allow_redirects=False) as response:
                             rec["http_status"] = response.status
                             rec["response_headers"] = {k.lower(): v for k,v in response.headers.items() if k.lower() in ("date", "content-type", "content-encoding", "retry-after", WEIGHT_HEADER)}
                             body = b""

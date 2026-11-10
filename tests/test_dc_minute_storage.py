@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,9 +11,13 @@ from aiohttp import web
 
 from data_collector.minute import capture_minutes, read_minute
 from data_collector.minute_storage import (
-    confirm_offsite_copy, prune_minute_day, seal_minute_day, verify_minute_day,
+    HourlyJournal, _compress, confirm_offsite_copy, prune_minute_day, seal_minute_day, verify_minute_day,
 )
-from option_collector.common import dumps
+from data_collector.minute_reference import ReferenceAttempts
+from data_collector.minute_tickers import (
+    Instrument, TickerSampler, _Control, read_deribit_metadata_failures, read_deribit_retirements,
+)
+from option_collector.common import body_fields, dumps
 from option_collector.config import Config
 from tests.test_dc_minute import REPLIES
 
@@ -144,6 +149,63 @@ class MinuteStorageTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "open"):
             seal_minute_day(self.root, "2026-11-09")
         self.assertEqual(self.calls, 33)
+
+    async def test_seal_preserves_deribit_evidence_written_after_the_last_journal_entry(self):
+        await self.capture(1)
+        slot = FIRST + 60
+        sampler = TickerSampler(self.root, "ws://unused", "production", wall=lambda: self.wall)
+        sampler.connection = "fixture-connection"
+        listing = Instrument(1, FIRST * 1000, slot * 1000)
+        control = _Control(10, "public/unsubscribe", {"BTC-9NOV26-76000-C": listing}, slot + 1, 0)
+        sampler._record_retirement(control, "requested", slot + 1)
+        await self.capture(1)
+        hourly = self.hourly.read_bytes()
+
+        # Rollover can begin while the prior-day unsubscribe is still in flight.
+        async with HourlyJournal(self.root) as journal:
+            sampler.retirements_idle.clear()
+            try:
+                await journal.seal_due(TODAY, sampler.retirements_idle)
+                await asyncio.sleep(0)
+                self.assertFalse(journal.seal_task.done())
+                self.assertFalse(self.manifest.exists())
+                sampler._record_retirement(control, "acknowledged", slot + 8, b'{"id":10}')
+                attempt = ReferenceAttempts("production", "deribit", slot)
+                reply = dict(http_status=429, **body_fields(b'{"error":{"code":10028}}'))
+                sampler._write_metadata_failure(attempt, slot, "error", [reply])
+            finally:
+                sampler.retirements_idle.set()
+
+        self.assertEqual(self.hourly.read_bytes(), hourly)
+        manifest = verify_minute_day(self.root, DAY)
+        self.assertEqual(manifest["schema_version"], 2)
+        self.assertIn("late_references_sha256", manifest)
+        restored = self.root / "restored"
+        shutil.copytree(self.root / "daily", restored / "daily")
+        controls = read_deribit_retirements(restored, slot)
+        self.assertEqual([control["status"] for control in controls], ["requested", "acknowledged"])
+        self.assertEqual(read_deribit_metadata_failures(restored, slot)[0]["responses"], [reply])
+        self.assertEqual(read_minute(restored, slot), read_minute(self.root, slot))
+        self.assertGreater(prune_minute_day(self.root, DAY, now=TODAY + 3 * 86400), 0)
+
+    async def test_recovers_pre_upgrade_archive_without_replacing_its_bytes(self):
+        await self.capture(2)
+        self.sealed.parent.mkdir()
+        _compress([self.hourly], self.sealed, b"")
+        legacy_archive = self.sealed.read_bytes()
+        slot = FIRST + 60
+        sampler = TickerSampler(self.root, "ws://unused", "production", wall=lambda: self.wall)
+        attempt = ReferenceAttempts("production", "deribit", slot)
+        reply = dict(http_status=429, **body_fields(b'{"error":{"code":10028}}'))
+        sampler._write_metadata_failure(attempt, slot, "error", [reply])
+
+        manifest = seal_minute_day(self.root, DAY)
+        self.assertEqual(self.sealed.read_bytes(), legacy_archive)
+        self.assertIn("recovered_late_references", manifest)
+        restored = self.root / "restored"
+        shutil.copytree(self.root / "daily", restored / "daily")
+        self.assertEqual(read_deribit_metadata_failures(restored, slot)[0]["responses"], [reply])
+        self.assertEqual(verify_minute_day(restored, DAY), manifest)
 
     async def test_failed_background_seal_preserves_evidence_and_continues_across_restarts(self):
         await self.capture(2)

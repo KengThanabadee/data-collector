@@ -12,6 +12,8 @@ from option_collector.common import body_bytes, body_fields, dumps, sha, utc, wr
 
 from .decoders import native_json
 from .discovery import METHOD, PARAMS
+from .minute_reference import ReferenceAttempts, read_reference
+from .minute_storage import read_sealed_references
 
 
 WS_URLS = {
@@ -48,10 +50,9 @@ def read_deribit_retirements(root, slot):
     """Read immutable retirement controls initiated in this UTC minute."""
     if type(slot) is not int or slot % 60:
         raise ValueError("expected a UTC minute boundary in Unix seconds")
-    directory = Path(root) / "deribit-retirements" / utc(slot)[:10]
     controls = []
-    for path in directory.glob(f"{slot:012d}-*.json.gz"):
-        event = json.loads(gzip.decompress(path.read_bytes()))
+    for raw in _read_deribit_slot_files(root, slot, "deribit-retirements").values():
+        event = json.loads(gzip.decompress(raw))
         body = body_bytes(event)
         if (event["schema_version"] != 1 or not slot <= event["started_epoch_ms"] / 1000 < slot + 60
                 or (sha(body) if body is not None else None) != event["body_sha256"]
@@ -106,22 +107,30 @@ def read_deribit_metadata(root, version):
     return record
 
 
-class _MetadataAttempt:
-    """The v1 HTTP transport writes attempts here before the change check."""
+def read_deribit_metadata_failures(root, slot):
+    """Read failed discovery checks attributed to a UTC minute."""
+    if type(slot) is not int or slot % 60:
+        raise ValueError("expected a UTC minute boundary in Unix seconds")
+    files = _read_deribit_slot_files(root, slot, "deribit-metadata-failures")
+    return [read_reference(Path(root) / name, archived=raw) for name, raw in sorted(files.items())]
 
-    def __init__(self, environment):
-        self.context = dict(schema_version=1, run_id=uuid.uuid4().hex, job_kind="minute",
-                            environment=environment, currency="deribit", scheduled_slot_utc=None)
-        self.records = []
 
-    def append(self, record):
-        self.records.append(record)
-        return record
+def _read_deribit_slot_files(root, slot, family):
+    root = Path(root)
+    directory = Path(family) / utc(slot)[:10]
+    prefix = f"{slot:012d}-"
+    files = read_sealed_references(root, slot, f"{directory}/{prefix}")
+    for path in (root / directory).glob(f"{prefix}*.json.gz"):
+        raw = path.read_bytes()
+        if files.setdefault(str(path.relative_to(root)), raw) != raw:
+            raise ValueError("local Deribit reference differs from verified daily archive")
+    return files
 
 
 class TickerSampler:
     def __init__(self, root, url, environment, *, wall):
         self.metadata_dir = Path(root) / "deribit-metadata"
+        self.metadata_failures = Path(root) / "deribit-metadata-failures"
         self.retirement_dir = Path(root) / "deribit-retirements"
         self.url, self.environment, self.wall = url, environment, wall
         self.inventory, self.catalog, self.latest = {}, {}, {}
@@ -129,26 +138,37 @@ class TickerSampler:
         self.metadata_status = "unchecked"
         self.connection = None
         self.acknowledged = {}
+        self.retirements_idle = asyncio.Event()
+        self.retirements_idle.set()
         self.cutoff, self.frozen = None, None
         head = max(self.metadata_dir.glob("*.json.gz"), default=None)
         if head is not None:
             self.version = int(head.name.split(".")[0])
             self.catalog, self.inventory = _catalog(read_deribit_metadata(root, self.version))
 
-    async def refresh(self, client, deadline):
-        archive = _MetadataAttempt(self.environment)
-        record = await client.fetch(archive, "deribit:metadata", METHOD, PARAMS, deadline)
+    async def refresh(self, client, slot, deadline):
+        archive = ReferenceAttempts(self.environment, "deribit", slot, run_id=uuid.uuid4().hex)
+        try:
+            record = await client.fetch(archive, "deribit:metadata", METHOD, PARAMS, deadline)
+        except asyncio.CancelledError:
+            if archive.records:
+                self._write_metadata_failure(archive, slot, "interrupted", archive.records)
+            raise
         if record is None:
-            self._metadata_result("missed")
+            self._metadata_failed(archive, slot, "missed")
             return
         if not record["ok"]:
-            self._metadata_result("timeout" if record["transport_error"] == "TimeoutError" else "error")
+            status = "timeout" if record["transport_error"] == "TimeoutError" else "error"
+            self._metadata_failed(archive, slot, status)
             return
         try:
             catalog, inventory = _catalog(record)
         except ValueError:
-            self._metadata_result("error")
+            self._metadata_failed(archive, slot, "error")
             return
+        failed_attempts = [attempt for attempt in archive.records if not attempt["ok"]]
+        if failed_attempts:
+            self._write_metadata_failure(archive, slot, "recovered", failed_attempts)
         if catalog != self.catalog:
             version = 1 if self.version is None else self.version + 1
             path = self.metadata_dir / f"{version:012d}.json.gz"
@@ -160,6 +180,15 @@ class TickerSampler:
                 if inventory.get(name) == frame[0] and frame[0].expires_ms > self.wall() * 1000
             }
         self._metadata_result("ok")
+
+    def _write_metadata_failure(self, archive, slot, status, responses):
+        path = self.metadata_failures / utc(slot)[:10] / f"{slot:012d}-{archive.context['run_id']}.json.gz"
+        entry = dict(schema_version=1, captured_slot_utc=utc(slot), status=status, responses=responses)
+        write_bytes(path, gzip.compress(dumps(entry), compresslevel=6, mtime=0))
+
+    def _metadata_failed(self, archive, slot, status):
+        self._write_metadata_failure(archive, slot, status, archive.records)
+        self._metadata_result(status)
 
     def _metadata_result(self, status):
         self._freeze_if_due(self.wall())
@@ -211,17 +240,22 @@ class TickerSampler:
                 async with socket:
                     self._freeze_if_due(self.wall())
                     self.connection = uuid.uuid4().hex
-                    await self._receive(socket)
+                    try:
+                        await self._receive(socket)
+                    finally:
+                        self._disconnect()
             except (aiohttp.ClientError, OSError, TimeoutError, ValueError):
                 pass
-            finally:
-                self._freeze_if_due(self.wall())
-                self.connection = None
-                self.acknowledged.clear()
             if clock() - started >= 30:
                 delay = 1
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
+
+    def _disconnect(self):
+        if self.connection is not None:
+            self._freeze_if_due(self.wall())
+            self.connection = None
+            self.acknowledged.clear()
 
     def _record_retirement(self, control, status, observed, response=None):
         slot = int(control.started // 60) * 60
@@ -260,7 +294,8 @@ class TickerSampler:
                         raise ValueError("invalid Deribit WebSocket envelope")
                     params = value.get("params")
                     if value.get("method") == "heartbeat" and isinstance(params, dict) and params.get("type") == "test_request":
-                        await socket.send_json(dict(jsonrpc="2.0", id=2, method="public/test"))
+                        async with asyncio.timeout(SOCKET_TIMEOUT):
+                            await socket.send_json(dict(jsonrpc="2.0", id=2, method="public/test"))
                     elif pending is not None and value.get("id") == pending.request_id:
                         control, pending = pending, None
                         changes = control.changes
@@ -275,7 +310,10 @@ class TickerSampler:
                                                       for name, listing in changes.items()})
                         else:
                             status = _retirement_status(control, value)
-                            self._record_retirement(control, status, received, message.data.encode("utf-8"))
+                            try:
+                                self._record_retirement(control, status, received, message.data.encode("utf-8"))
+                            finally:
+                                self.retirements_idle.set()
                             if status not in ("acknowledged", "already_expired"):
                                 raise ValueError("Deribit ticker retirement acknowledgement differs")
                             for name in changes:
@@ -309,10 +347,12 @@ class TickerSampler:
                 control = _Control(request_id, method, changes, started, now + SOCKET_TIMEOUT)
                 if method == "public/unsubscribe":
                     self._record_retirement(control, "requested", started)
+                    self.retirements_idle.clear()
                 pending = control
                 next_control = now + CONTROL_INTERVAL
                 failure = "send_error"
-                await socket.send_json(control.request)
+                async with asyncio.timeout_at(control.deadline):
+                    await socket.send_json(control.request)
                 failure = "disconnected"
                 request_id += 1
         except asyncio.CancelledError:
@@ -320,9 +360,13 @@ class TickerSampler:
             raise
         finally:
             receive.cancel()
-            await asyncio.gather(receive, return_exceptions=True)
-            if pending is not None and pending.method == "public/unsubscribe":
-                self._record_retirement(pending, failure, self.wall())
+            try:
+                if pending is not None and pending.method == "public/unsubscribe":
+                    self._record_retirement(pending, failure, self.wall())
+            finally:
+                self.retirements_idle.set()
+                self._disconnect()
+                await asyncio.gather(receive, return_exceptions=True)
 
     def _ticker(self, params, text, received, requested, active):
         data = params.get("data")

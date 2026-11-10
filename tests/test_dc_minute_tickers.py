@@ -5,14 +5,14 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from aiohttp import web
 
 from data_collector.cli import main
 from data_collector.minute import capture_minutes, read_minute, read_ticker_samples
-from data_collector.minute_tickers import read_deribit_metadata
-from option_collector.common import body_bytes, dumps
+from data_collector.minute_tickers import Instrument, TickerSampler, read_deribit_metadata, read_deribit_metadata_failures
+from option_collector.common import body_bytes, dumps, read_json, write_json
 from option_collector.config import Config
 from tests.test_dc_minute import REPLIES
 
@@ -187,9 +187,15 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(index["deribit_tickers_empty"])
         self.assertEqual(set(index["requests"].values()), {"missed"})
         self.assertEqual(read_ticker_samples(root, FIRST_SLOT)["samples"], {})
+        failures = read_deribit_metadata_failures(root, FIRST_SLOT)
+        reply = next(record for failure in failures for record in failure["responses"]
+                     if record["http_status"] == 429)
+        self.assertEqual(json.loads(body_bytes(reply))["error"], {"code": 10028})
+        self.assertEqual(reply["response_headers"]["retry-after"], "120")
+        self.assertLessEqual(reply["request_started_epoch_ms"], reply["response_received_epoch_ms"])
 
         # This is the previously published representation of the same minute.
-        legacy = dict(index, gap=False, gap_reason=None)
+        legacy = dict(index, schema_version=1, gap=False, gap_reason=None)
         del legacy["deribit_tickers_empty"]
         path = next((root / "minutes").glob("**/0759/index.jsonl"))
         path.write_bytes(dumps(legacy))
@@ -219,13 +225,67 @@ class TickerMinuteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(index["requests"].values()), {"missed"})
 
         # A previously published all-missing snapshot keeps its original index.
-        legacy = dict(index, gap=False, gap_reason=None)
+        legacy = dict(index, schema_version=1, gap=False, gap_reason=None)
         del legacy["deribit_tickers_empty"]
         path = next((root / "minutes").glob("**/0800/index.jsonl"))
         path.write_bytes(dumps(legacy))
         self.assertEqual(read_minute(root, slot), (legacy, []))
         self.assertEqual(read_ticker_samples(root, slot), snapshot)
         self.assertEqual(path.read_bytes(), dumps(legacy))
+
+    async def test_cutoff_during_socket_teardown_marks_the_cached_frame_stale(self):
+        closing = asyncio.Event()
+
+        class ClosingSocket:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_):
+                closing.set()
+                await asyncio.Future()
+
+        self.wall = FIRST_SLOT - 1
+        sampler = TickerSampler(self.config.data_root, self.ws_url, "production", wall=lambda: self.wall)
+        sampler.schedule(FIRST_SLOT)
+        listing = Instrument(1, (FIRST_SLOT - 60) * 1000, (FIRST_SLOT + 60) * 1000)
+        sampler.inventory[FUTURE] = listing
+
+        async def failed_receive(_):
+            received_ms = self.wall * 1000
+            sampler.acknowledged[FUTURE] = (listing, received_ms)
+            sampler.latest[FUTURE] = (listing, sampler.connection, True, received_ms, received_ms, b"{}")
+            raise TimeoutError("subscription timeout")
+
+        with patch.object(sampler, "_receive", side_effect=failed_receive):
+            task = asyncio.create_task(sampler.run(AsyncMock(ws_connect=AsyncMock(return_value=ClosingSocket()))))
+            try:
+                await asyncio.wait_for(closing.wait(), 2)
+                self.wall = FIRST_SLOT
+                snapshot = sampler.snapshot(FIRST_SLOT)
+                self.assertEqual(snapshot["samples"][FUTURE]["status"], "stale")
+                self.assertIsNone(snapshot["current_connection_id"])
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    async def test_startup_metadata_failure_is_attributed_to_the_next_live_slot(self):
+        await self.capture(1)
+        root = self.config.data_root
+        committed = read_minute(root, FIRST_SLOT)
+        state_path = root / "minute-grid.json"
+        state = read_json(state_path)
+        state["next_slot"] = FIRST_SLOT
+        write_json(state_path, state, replace=True)
+        self.wall = FIRST_SLOT + 119
+        self.metadata_throttled = True
+        self.socket_unavailable = True
+        await self.capture(3)
+
+        self.assertEqual(read_minute(root, FIRST_SLOT), committed)
+        self.assertEqual(read_deribit_metadata_failures(root, FIRST_SLOT), [])
+        self.assertEqual(read_deribit_metadata_failures(root, FIRST_SLOT + 60), [])
+        failures = read_deribit_metadata_failures(root, FIRST_SLOT + 120)
+        self.assertTrue(any(record["http_status"] == 429 for failure in failures for record in failure["responses"]))
 
     async def test_refreshes_listings_reconnects_and_retires_at_0800(self):
         self.lifecycle = True

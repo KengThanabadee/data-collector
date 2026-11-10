@@ -24,6 +24,7 @@ PERIOD = 60
 DAY = 86400
 MINUTE_FILES = ("index.jsonl", "context.json", "responses.jsonl.gz", "manifest.json",
                 "truncated-tail.bin", "deribit-tickers.json.gz")
+LATE_REFERENCE_FAMILIES = ("deribit-metadata-failures", "deribit-retirements")
 
 
 def _utc(slot):
@@ -97,14 +98,19 @@ class HourlyJournal:
                 await self.seal_task
                 raise
 
-    async def seal_due(self, slot):
+    async def seal_due(self, slot, retirements_idle=None):
         if self.seal_task is not None and self.seal_task.done():
             await self.seal_task
             self.seal_task = None
         day = _utc(slot).date().isoformat()
         if day != self.scheduled_day and self.seal_task is None:
             self.scheduled_day = day
-            self.seal_task = asyncio.create_task(asyncio.to_thread(self._seal_prior_days, day))
+            self.seal_task = asyncio.create_task(self._seal_after_retirements(day, retirements_idle))
+
+    async def _seal_after_retirements(self, day, retirements_idle):
+        if retirements_idle is not None:
+            await retirements_idle.wait()
+        await asyncio.to_thread(self._seal_prior_days, day)
 
     def _seal_prior_days(self, day):
         for directory in sorted((self.root / "hourly").glob("????-??-??")):
@@ -178,6 +184,7 @@ class HourlyJournal:
             *self.root.glob(f"bybit/reference-failures/*/{label}"),
             *self.root.glob(f"binance/reference/{label}"),
             *self.root.glob(f"binance/reference-failures/{label}"),
+            *self.root.glob(f"deribit-metadata-failures/{_utc(slot):%Y-%m-%d}/{slot:012d}-*.json.gz"),
             *self.root.glob(f"deribit-retirements/{_utc(slot):%Y-%m-%d}/*.json.gz"),
         ]
         hour = slot // 3600 * 3600
@@ -214,13 +221,25 @@ def _sealed_lines(path):
             raise ValueError("daily zstd decompression failed")
 
 
-def _stats(lines, day, *, visit=lambda entry: None):
+def _stats(lines, day, *, visit=lambda entry: None, visit_references=lambda references: None):
     start, end = _day_bounds(day)
     source = hashlib.sha256()
     hours = {}
     first = last = None
     count = size = 0
+    late_hash = None
     for declared_hour, line in lines:
+        if late_hash is not None:
+            raise ValueError("daily archive has data after late references")
+        if declared_hour is None and line.startswith(b'{"late_references":'):
+            trailer = json.loads(line)
+            references = trailer["late_references"]
+            if (last != end - PERIOD or not line.endswith(b"\n") or trailer.get("schema_version") != 1
+                    or not isinstance(references, dict) or not references):
+                raise ValueError("invalid daily late references")
+            late_hash = sha(line)
+            visit_references(references)
+            continue
         entry = _read_entry(line)
         slot = entry["slot"]
         if not start <= slot < end or last is not None and slot != last + PERIOD:
@@ -240,26 +259,35 @@ def _stats(lines, day, *, visit=lambda entry: None):
         count += 1
         size += len(line)
         visit(entry)
+        visit_references(entry["references"])
     if first is None or last != end - PERIOD:
         raise ValueError("closed day has incomplete journal coverage")
-    return dict(first_slot=first, last_slot=last, minutes=count, source_bytes=size,
-                source_sha256=source.hexdigest(),
-                hours={hour: dict(sha256=digest.hexdigest(), minutes=minutes, bytes=length)
-                       for hour, (digest, minutes, length) in hours.items()})
+    result = dict(first_slot=first, last_slot=last, minutes=count, source_bytes=size,
+                  source_sha256=source.hexdigest(),
+                  hours={hour: dict(sha256=digest.hexdigest(), minutes=minutes, bytes=length)
+                         for hour, (digest, minutes, length) in hours.items()})
+    if late_hash is not None:
+        result["late_references_sha256"] = late_hash
+    return result
 
 
-def _sealed_stats(path, day, *, visit=lambda entry: None):
+def _sealed_stats(path, day, **visitors):
     with _sealed_lines(path) as lines:
-        return _stats(lines, day, visit=visit)
+        return _stats(lines, day, **visitors)
 
 
-def _compress(paths, target):
+def _late_reference_trailer(references):
+    return dumps(dict(schema_version=1, late_references=references))
+
+
+def _compress(paths, target, trailer):
     with target.open("wb") as output:
         with subprocess.Popen(["zstd", "-q", "-c", "-3"], stdin=subprocess.PIPE, stdout=output,
                               stderr=subprocess.DEVNULL) as process:
             for path in paths:
                 with path.open("rb") as source:
                     shutil.copyfileobj(source, process.stdin)
+            process.stdin.write(trailer)
             process.stdin.close()
             if process.wait():
                 raise ValueError("daily zstd compression failed")
@@ -267,18 +295,28 @@ def _compress(paths, target):
         os.fsync(output.fileno())
 
 
-def _verified_day(root, day, *, visit=lambda entry: None):
+def _verified_day(root, day, **visitors):
     _day_bounds(day)
     archive, manifest_path = _daily_paths(root, day)
     manifest = read_json(manifest_path)
     if manifest is None:
         raise ValueError("daily archive has no manifest")
-    if (manifest.get("schema_version") != 1 or manifest.get("utc_day") != day
+    schema_version = 2 if "late_references_sha256" in manifest else 1
+    if (manifest.get("schema_version") != schema_version or manifest.get("utc_day") != day
             or manifest.get("archive_bytes") != archive.stat().st_size
             or manifest.get("archive_sha256") != _digest_file(archive)):
         raise ValueError("daily archive does not match manifest")
-    stats = _sealed_stats(archive, day, visit=visit)
-    if any(manifest.get(key) != value for key, value in stats.items()):
+    stats = _sealed_stats(archive, day, **visitors)
+    late_hash = stats.get("late_references_sha256")
+    if "recovered_late_references" in manifest:
+        references = manifest["recovered_late_references"]
+        if late_hash is not None or not isinstance(references, dict) or not references:
+            raise ValueError("invalid recovered daily references")
+        late_hash = sha(_late_reference_trailer(references))
+        if "visit_references" in visitors:
+            visitors["visit_references"](references)
+    if (any(manifest.get(key) != value for key, value in stats.items())
+            or manifest.get("late_references_sha256") != late_hash):
         raise ValueError("daily readback does not match manifest")
     return manifest
 
@@ -299,6 +337,7 @@ def _seal(root, day, *, checkpoint=lambda phase: None):
     paths = sorted((root / "hourly" / day).glob("??.jsonl"))
     stage_day = minute_path(root, end - PERIOD).parent
     staged_indexes = set(stage_day.glob("*/index.jsonl"))
+    journaled_references = set()
 
     def compare_stage(entry):
         directory = minute_path(root, entry["slot"])
@@ -309,20 +348,33 @@ def _seal(root, day, *, checkpoint=lambda phase: None):
                     raise ValueError("hourly journal differs from committed minute files")
             staged_indexes.remove(index)
 
-    expected = _stats(_source_lines(paths), day, visit=compare_stage)
+    expected = _stats(_source_lines(paths), day, visit=compare_stage, visit_references=journaled_references.update)
     if staged_indexes:
         raise ValueError("hourly journals omit committed minute indexes")
+    late_references = {}
+    for family in LATE_REFERENCE_FAMILIES:
+        for path in (root / family / day).glob("*.json.gz"):
+            relative = str(path.relative_to(root))
+            if relative not in journaled_references:
+                late_references[relative] = b64encode(path.read_bytes()).decode("ascii")
+    trailer = _late_reference_trailer(late_references) if late_references else b""
+    seal_stats = dict(expected, late_references_sha256=sha(trailer)) if trailer else expected
     mkdir(archive.parent)
+    recovered = {}
     if archive.exists():
-        if _sealed_stats(archive, day) != expected:
+        existing = _sealed_stats(archive, day)
+        if trailer and existing == expected:
+            # A pre-upgrade sealer may have published immutable zstd bytes before its manifest.
+            recovered["recovered_late_references"] = late_references
+        elif existing != seal_stats:
             raise ValueError("existing daily archive differs from hourly journals")
     else:
         fd, name = tempfile.mkstemp(prefix=f".{day}.", suffix=".zst", dir=archive.parent)
         os.close(fd)
         temporary = Path(name)
         try:
-            _compress(paths, temporary)
-            if _sealed_stats(temporary, day) != expected:
+            _compress(paths, temporary, trailer)
+            if _sealed_stats(temporary, day) != seal_stats:
                 raise ValueError("daily zstd round trip differs from hourly journals")
             checkpoint("before_archive")
             os.link(temporary, archive)
@@ -330,8 +382,8 @@ def _seal(root, day, *, checkpoint=lambda phase: None):
         finally:
             temporary.unlink(missing_ok=True)
     checkpoint("after_archive")
-    manifest = dict(schema_version=1, utc_day=day, archive_bytes=archive.stat().st_size,
-                    archive_sha256=_digest_file(archive), **expected)
+    manifest = dict(schema_version=2 if trailer else 1, utc_day=day, archive_bytes=archive.stat().st_size,
+                    archive_sha256=_digest_file(archive), **seal_stats, **recovered)
     write_json(manifest_path, manifest)
     checkpoint("after_manifest")
     return verify_minute_day(root, day)
@@ -416,7 +468,32 @@ def prune_minute_day(root, day, *, now=None):
         return len(removable)
 
 
-def read_minute_files(root, slot):
+def _read_sealed_minute(root, slot, prefixes, *, include_minute):
+    day = _utc(slot).date().isoformat()
+    _, manifest = _daily_paths(root, day)
+    files, references = {}, {}
+    if manifest.exists():
+        def visit(entry):
+            if include_minute and entry["slot"] == slot:
+                files.update(_decode_files(entry))
+
+        def visit_references(entries):
+            for path, encoded in entries.items():
+                if path.startswith(prefixes):
+                    raw = b64decode(encoded, validate=True)
+                    if references.setdefault(path, raw) != raw:
+                        raise ValueError("sealed reference bytes differ between entries")
+
+        _verified_day(root, day, visit=visit, visit_references=visit_references)
+    return files, references
+
+
+def read_sealed_references(root, slot, prefix):
+    """Return reference files matching a prefix from the verified UTC day seal."""
+    return _read_sealed_minute(root, slot, (prefix,), include_minute=False)[1]
+
+
+def read_minute_files(root, slot, *, reference_keys=()):
     """Resolve committed minute files from staging or verified daily readback."""
     root = Path(root)
     path = minute_path(root, slot)
@@ -434,15 +511,9 @@ def read_minute_files(root, slot):
     day = _utc(slot).date().isoformat()
     _, manifest = _daily_paths(root, day)
     if manifest.exists():
-        found = {}
-
-        def visit(entry):
-            if entry["slot"] == slot:
-                found.update(_decode_files(entry))
-
-        _verified_day(root, day, visit=visit)
+        found, references = _read_sealed_minute(root, slot, reference_keys, include_minute=True)
         if found:
-            return found
+            return found | references
     else:
         hourly = _hour_path(root, slot)
         if hourly.is_file():
