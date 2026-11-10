@@ -2,9 +2,9 @@
 
 V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
-## Current state — 8 November 2026
+## Current state — 10 November 2026
 
-Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2026: one 1-minute grid fired at :00 UTC across Deribit, Bybit and Binance, plus three event streams, at about 0.2–0.55 GB/day. The 100 ms path is superseded. Its [31 October scope](docs/v2/history/COLLECTION_SCOPE_2026-10-31.md) and the [3 November state and steps](docs/v2/history/PLANS_2026-11-08.md), including every measured run, are kept as history.
+Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2026 to one grid fired at :00 UTC every minute across Deribit, Bybit and Binance, plus three event streams. The 100 ms path is superseded. Its [31 October scope](docs/v2/history/COLLECTION_SCOPE_2026-10-31.md) and the [3 November state and steps](docs/v2/history/PLANS_2026-11-08.md), including every measured run, are kept as history.
 
 - V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). Its REST transport and archive are the base for the minute-snapshot service.
 - V2 event capture uses WAL and immutable segments. The shipped profiles subscribe to Binance `!forceOrder@arr` on `/market`, Bybit linear `allLiquidation` for BTCUSDT and ETHUSDT, and Bybit option `publicTrade` for BTC and ETH. A three-minute Lima run verified all subscription ACKs and archived Binance liquidations and Bybit BTC/ETH option trades. The Bybit liquidation channels were quiet during that sample. Evidence is in `~/dc-event-ticket6-20261108T075515Z`.
@@ -15,7 +15,7 @@ Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2
 - Hourly minute journals and daily zstd sealing now verify readback before cleanup. Temporary-archive tests cover interrupted publication and torn appends, manifest conflicts, and protection of the last two completed UTC days until offsite confirmation.
 - A three-minute Lima run of `49145f5` verified 315 successful market requests each minute. Deribit had 1,712 fresh sampler rows in the second and third minutes. Binance reported 301, 300, and 300 weight. Evidence is in `~/dc-minute-smoke-20261108T115933Z`.
 - The integrated review fixes preserve retirement controls, explicitly identify unavailable Bybit depth, recover readback during pruning, and isolate past seal failures from live capture.
-- The combined one-hour run across 08:00 UTC is pending under [ticket #8](https://github.com/KengThanabadee/data-collector/issues/8).
+- [Ticket #8](https://github.com/KengThanabadee/data-collector/issues/8) passed on Lima at `76fbe15`. All 62 minutes from 07:42 through 08:43 UTC on 10 November verified with no gaps and 315 successful market requests each. Deribit acknowledged all 92 observed new options and retirement of all 110 expiring options. Both event archives verified, including Binance liquidations, Bybit BTC and ETH linear liquidations, and Bybit BTC and ETH option trades. Combined peak RSS was 195.5 MiB, peak CPU was 51.7% of one core, and Binance weight was 300 in 60 minutes and 301 in two. Peak sampled UTC uncertainty was 72.9 ms. The fresh archive roots and reports are under `~/dc-minute-acceptance-20261110T074026Z` on `dc-acceptance`.
 - Historical 100 ms measurements (not acceptance of the new scope): the Deribit all-options hour produced 7.15 GB/hour of native payload, about 160 GiB/day; a ten-minute Deribit probe crossed 08:00 UTC with 118 retirements and zero rejected subscriptions.
 
 ## Active work

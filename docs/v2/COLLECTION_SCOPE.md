@@ -99,7 +99,7 @@ Other families dropped earlier (Deribit spot and combos, Binance spot, COIN-M an
 
 ## Sizes
 
-About 0.55 GB/day with gzip per file, and about 0.2 GB/day projected after daily zstd. Neither is yet measured at 60-second spacing.
+The 10 November Lima run measured 158.2 MB of minute files and hourly journals across 62 slots and 13.4 MB of event archives across about 65 minutes. Scaling each component to 24 hours gives about 4.0 GB/day before daily sealing and cleanup. The retained size after daily zstd sealing remains unmeasured. See [the acceptance result](../../PLANS.md).
 
 ## Acceptance
 
