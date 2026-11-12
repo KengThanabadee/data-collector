@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import time
 
-from option_collector.common import dumps, mkdir, process_lock, read_json, sha, sync_dir, write_bytes, write_json
+from .minute_files import dumps, mkdir, process_lock, read_json, sha, sync_dir, write_bytes, write_json
 
 
 LOGGER = logging.getLogger(__name__)

@@ -12,8 +12,8 @@ from aiohttp import web
 
 from data_collector.cli import main
 from data_collector.minute import capture_minutes, read_minute
-from option_collector.common import body_bytes, dumps
-from option_collector.config import Config
+from data_collector.minute_files import body_bytes, dumps
+from data_collector.minute_config import Config
 from tests.helpers import DERIBIT_MINUTE_REPLIES
 
 

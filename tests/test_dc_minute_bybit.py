@@ -13,8 +13,8 @@ from aiohttp import web
 from data_collector.minute import capture_minutes, read_minute
 from data_collector.minute_bybit import read_bybit_reference, read_bybit_selection
 from data_collector.minute_storage import seal_minute_day
-from option_collector.common import body_bytes, read_json
-from option_collector.config import Config
+from data_collector.minute_files import body_bytes, read_json
+from data_collector.minute_config import Config
 from tests.helpers import BYBIT_MINUTE_REPLIES as FIXTURE, DERIBIT_MINUTE_REPLIES as REPLIES
 
 
