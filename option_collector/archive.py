@@ -27,6 +27,12 @@ def verify(path):
         raise ValueError("not committed")
     context_bytes = (path / "context.json").read_bytes()
     packed = (path / "responses.jsonl.gz").read_bytes()
+    tail = (path / "truncated-tail.bin").read_bytes() if manifest["tail_bytes"] else b""
+    return verify_parts(manifest, context_bytes, packed, tail)
+
+
+def verify_parts(manifest, context_bytes, packed, tail=b""):
+    """Verify the same archive contract when files come from a container."""
     if sha(context_bytes) != manifest["context_sha256"] or sha(packed) != manifest["archive_sha256"] or len(packed) != manifest["archive_bytes"]:
         raise ValueError("archive/context checksum mismatch")
     data = gzip.decompress(packed)
@@ -45,10 +51,8 @@ def verify(path):
             raise ValueError("coverage mismatch: " + key)
     if manifest["status"] != "interrupted" and actual["status"] != manifest["status"]:
         raise ValueError("status/coverage mismatch")
-    if manifest["tail_bytes"]:
-        tail = (path / "truncated-tail.bin").read_bytes()
-        if sha(tail) != manifest["tail_sha256"] or len(tail) != manifest["tail_bytes"]:
-            raise ValueError("tail checksum mismatch")
+    if len(tail) != manifest["tail_bytes"] or (sha(tail) if tail else None) != manifest["tail_sha256"]:
+        raise ValueError("tail checksum mismatch")
     return manifest, records
 
 
@@ -103,15 +107,18 @@ class Archive:
         return False
 
     def finalize(self, *, interrupted=False, checkpoint=lambda name: None):
+        keep_work = self.context["job_kind"] == "minute"
         if (self.destination / "manifest.json").exists():
             manifest, _ = verify(self.destination)
             if (self.path / "journal.jsonl").exists():
                 data, _, tail = self.read_journal()
                 if (sha(data) != manifest["journal_sha256"] or (sha(tail) if tail else None) != manifest["tail_sha256"] or sha((self.path / "context.json").read_bytes()) != manifest["context_sha256"]):
                     raise ValueError("journal/context conflict with existing commit")
-                (self.path / "journal.jsonl").unlink()
-                sync_dir(self.path)
-            self.cleanup()
+                if not keep_work:
+                    (self.path / "journal.jsonl").unlink()
+                    sync_dir(self.path)
+            if not keep_work:
+                self.cleanup()
             return manifest
         data, records, tail = self.read_journal()
         context_data = (self.path / "context.json").read_bytes()
@@ -148,10 +155,11 @@ class Archive:
         write_json(self.destination / "manifest.json", manifest)
         checkpoint("after_manifest")
         verify(self.destination)
-        (self.path / "journal.jsonl").unlink()
-        sync_dir(self.path)
-        checkpoint("after_cleanup")
-        self.cleanup()
+        if not keep_work:
+            (self.path / "journal.jsonl").unlink()
+            sync_dir(self.path)
+            checkpoint("after_cleanup")
+            self.cleanup()
         return manifest
 
     def cleanup(self):

@@ -1,71 +1,35 @@
-# Data Collector (DC) — plan
+# Data Collector (DC) — status and evidence
 
 V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
-## Current state — 3 November 2026
+## Current state — 12 November 2026
 
-The [local collection scope](docs/v2/COLLECTION_SCOPE.md) supersedes the earlier full-product queue. Existing hour measurements below describe historical profiles, not acceptance of the new profile. New-profile cross-venue expiry-window acceptance remains pending.
+Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2026 to one grid fired at :00 UTC every minute across Deribit, Bybit and Binance, plus three event streams. The 100 ms path is superseded. Its [31 October scope](docs/v2/history/COLLECTION_SCOPE_2026-10-31.md) and the [3 November state and steps](docs/v2/history/PLANS_2026-11-08.md), including every measured run, are kept as history.
 
-- New live rediscovery path: config/v2-deribit-live-options.toml selects inverse options by native base/settlement currency, records lifecycle-driven universe versions and observed/request/ACK/retirement evidence, and verifies ACK plus first push for every membership incarnation. The committed step-2 path selects top-20 books, tickers, per-kind trades and inverse indexes. A ten-minute Deribit-only development probe crossed 08:00 UTC and passed verify-run for 478,755 WebSocket messages, 341,021,362 native bytes and 13 universe versions, with 118 retirements and zero rejected or throttled subscriptions. All 68,688 book pushes lacked a type field and had at most 20 levels per side; retained unchanged levels support full-replacement semantics. Nine connections included heartbeat and connection-too-slow closes; this historical probe is not final acceptance.
-- V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). It has not run on a Linux host yet.
-- V2: raw Deribit book, ticker and trades at 100ms ran for 3,601.137 seconds after all 4 workers initialized, covering all 2,800 BTC/ETH options in the startup discovery (8,400 channels). The Ubuntu 24.04 Lima `dc-acceptance` run used chrony, its separate Python 3.12 venv and `caffeinate -i -s`; capture completed with 10,993,156 WebSocket messages and 7,149,854,234 native payload bytes. Full `verify-run` passed with 10,995,639 records and exhaustive feed-plan initialization coverage. Continuous limits and bounded snapshot mode are described in [running instructions](docs/v2/RUNNING.md).
-- Capture resource samples every second: peak summed process RSS 492,284 KiB (480.75 MiB), peak CPU 403.44% (100% is one vCPU; VM has 6). Summed RSS was 456,100 KiB near startup and 452,836 KiB before shutdown.
-- Venue/transport results: zero RPC rejections or throttles; 3 server closes with code 4000 (`heartbeat close`), 5 CLOSED events without a code, and 94 DNS-failed connection attempts. All workers recovered and reacquired their feed plans. Recorded DNS gap windows were 218.30–224.55 seconds per worker, plus shorter reconnect gaps; timeout detection can follow actual loss. The run has explicit coverage gaps.
+- V1: Deribit REST snapshot collector with CLI, archive reader and systemd units. One full public-API capture ran locally (BTC 884/884, ETH 766/766). Its REST transport and archive are the base for the minute-snapshot service.
+- V2 event capture uses WAL and immutable segments. The shipped profiles subscribe to Binance `!forceOrder@arr` on `/market`, Bybit linear `allLiquidation` for BTCUSDT and ETHUSDT, and Bybit option `publicTrade` for BTC and ETH. A three-minute Lima run verified all subscription ACKs and archived Binance liquidations and Bybit BTC/ETH option trades. The Bybit liquidation channels were quiet during that sample. Evidence is in `~/dc-event-ticket6-20261108T075515Z`.
+- Minute grid: the Deribit REST profile captures and reads back 11 requests per UTC minute through the v1 transport and archive. Recorded-reply tests exercise byte and timestamp fidelity, per-request outcomes, missed slots, clock steps and interrupted-run recovery.
+- The Deribit `ticker.<name>.agg2` sampler reads back native ticker frames and changed metadata on the same grid. Recorded-reply tests covered subscription ACKs, reconnects, new listings on a healthy connection and retirement at 08:00 UTC.
+- Bybit REST minutes include BTC/ETH option and hedge-perp tickers and configurable depth at 25 levels. Recorded-reply tests cover hourly reselection, changed paginated metadata and risk tiers, daily settlement and per-request outcomes. The depth selection rule remains open for production review.
+- Binance USDⓈ-M REST minutes include depth at 20 levels, open interest, and changed instrument metadata. Recorded-reply tests cover the fixed build-time universe, per-IP weight admission and explicit guard skips. The production symbol universe remains open.
+- Hourly minute journals and daily zstd sealing now verify readback before cleanup. Temporary-archive tests cover interrupted publication and torn appends, manifest conflicts, and protection of the last two completed UTC days until offsite confirmation.
+- A three-minute Lima run of `49145f5` verified 315 successful market requests each minute. Deribit had 1,712 fresh sampler rows in the second and third minutes. Binance reported 301, 300, and 300 weight. Evidence is in `~/dc-minute-smoke-20261108T115933Z`.
+- The integrated review fixes preserve retirement controls, explicitly identify unavailable Bybit depth, recover readback during pruning, and isolate past seal failures from live capture.
+- PR #9 review follow-up preserves native Bybit pagination and recovers the depth plan with its minute index. It also preserves failed Deribit metadata replies, marks disconnected samples stale and payload-free slots as gaps, and restores Bybit selections and late Deribit evidence from the verified daily pair.
+- [Ticket #8](https://github.com/KengThanabadee/data-collector/issues/8) passed on Lima at `76fbe15`. All 62 minutes from 07:42 through 08:43 UTC on 10 November verified with no gaps and 315 successful market requests each. Deribit acknowledged all 92 observed new options and retirement of all 110 expiring options. Both event archives verified, including Binance liquidations, Bybit BTC and ETH linear liquidations, and Bybit BTC and ETH option trades. Combined peak RSS was 195.5 MiB, peak CPU was 51.7% of one core, and Binance weight was 300 in 60 minutes and 301 in two. Peak sampled UTC uncertainty was 72.9 ms. The fresh archive roots and reports are under `~/dc-minute-acceptance-20261110T074026Z` on `dc-acceptance`.
+- Ticket #8 passed again on Lima at `677a3e5`, whose code is identical to `bae997b`. All 62 minutes from 07:53 through 08:54 UTC on 12 November verified with no gaps and 315 successful market requests each. Deribit acknowledged all 138 observed new options and retirement of all 120 expiring options. Both event archives verified with live pushes on all five configured topics and one Binance and two Bybit connections without rejection or throttling. Combined peak RSS was 205.4 MiB, peak CPU was 43.6% of one core, and Binance weight was 300 in 60 minutes and 301 in two with zero guard skips. Peak sampled UTC uncertainty was 56.1 ms. Scaled by each profile's observed duration, the unsealed archives grow by about 3.78 GB/day for the minute grid, 83 MB/day for Binance events and 145 MB/day for Bybit events. The archive roots and reports are under `~/dc-minute-acceptance-20261112T074810Z` on `dc-acceptance`.
+- Historical 100 ms measurements (not acceptance of the new scope): the Deribit all-options hour produced 7.15 GB/hour of native payload, about 160 GiB/day; a ten-minute Deribit probe crossed 08:00 UTC with 118 retirements and zero rejected subscriptions.
 
-Observed linear projections divide all captured bytes, including initialization and network gaps, by the post-ready elapsed time. Retained worker data includes WAL and archive; it excludes shared discovery/aggregate metadata. These are logical file sizes, not allocated filesystem blocks.
+## Active work
 
-| Byte basis | Bytes per hour | Projected GiB per day |
-|---|---:|---:|
-| Native WebSocket payload | 7,147,595,853 | 159.76 |
-| Compressed immutable archive and manifests | 2,755,437,912 | 61.59 |
-| All retained worker data, including WAL and archive | 24,208,069,497 | 541.09 |
-
-- V2 futures/index: all 46 discovered BTC/ETH native futures (4 perpetuals and 42 dated contracts) and their 4 metadata index dependencies (142 channels) passed a 3,600.635-second post-initialization run in dc-acceptance under `caffeinate -i -s`; `verify-run` passed 823,276 records, including 822,679 WebSocket messages and 492,094,910 native payload bytes. All book/ticker/trade 100ms channels and native index topics were initialized. Three connections initialized successfully after two code 4000 heartbeat closes; recorded gap windows were 2.604 and 2.560 seconds. RPC rejections and throttles were zero.
-- Futures/index 1-second resource samples: peak summed RSS 150,504 KiB (146.98 MiB), peak CPU 101.15% (100% is one vCPU); RSS was 113,004 KiB after initialization and 113,024 KiB before shutdown. The same observed-rate basis applies; retained capture data excludes the parent discovery.
-
-| Futures/index byte basis | Bytes per hour | Projected GiB per day |
-|---|---:|---:|
-| Native WebSocket payload | 492,008,069 | 11.00 |
-| Compressed immutable archive and manifests | 220,160,167 | 4.92 |
-| All retained capture data, including WAL and archive | 1,771,514,629 | 39.60 |
-
-- Binance discovery ran in dc-acceptance and passed raw archive/projection verification for spot, UM and CM: 69 BTC/ETH spot rows (31 feed-enabled), 13 UM and 6 CM futures. The configured USDⓈ-M raw profile now captures BTCUSDT/ETHUSDT bookTicker and depth20@100ms on /public, aggTrade and all-symbol liquidations on /market; its five-minute development evidence is recorded below. The later combined expiry-window acceptance remains deferred.
-
-- Selected Binance USDⓈ-M development run: 300.224 post-ready seconds in dc-acceptance under caffeinate -i -s, with BTCUSDT/ETHUSDT bookTicker/depth20@100ms on /public and aggTrade plus all-symbol !forceOrder@arr on /market. verify-run passed 150,472 records, including 150,414 WebSocket messages, 35,313,051 native bytes and five append-only full exchangeInfo versions. Both connections stayed open; subscription rejections and throttles were zero. Delivery included 153 liquidation pushes and all six configured symbol topics; all 11,618 recorded depth sides had exactly 20 levels.
-- Binance sampled peak RSS was 62,068 KiB and CPU 100.47% (one vCPU is 100%). Native-event receipt lag peaked at 9.262 seconds and returned to about 50–100 ms at stop; depth medians were about 51 ms and bookTicker medians 104/166 ms. This five-minute development result does not certify the deferred combined expiry-window acceptance. Evidence: dc-acceptance ~/dc-binance-selected-evidence/20261103T082241Z; raw root ~/dc-binance-selected-data/runs/bc4c0c5bbe0f4e099908ba151275839d.
-
-The same observed linear projection basis applies to this five-minute Binance run; retained sizes include its WAL, archive and frozen collector source, and exclude the separate vendor-document evidence bundle.
-
-| Binance byte basis | Bytes per hour | Projected GiB per day |
-|---|---:|---:|
-| Native WebSocket payload | 423,440,057 | 9.46 |
-| Compressed immutable archive and manifests | 240,960,535 | 5.39 |
-| All retained run files, including WAL and archive | 2,896,240,572 | 64.74 |
-
-## Next
-
-Step 4 is integrated and committed (3 November 2026). Next is step 5, the combined expiry-window run; Bybit live runs await a VPS as recorded below.
-
-Bybit step 4 integration:
-```
-Goal: Run the selected exp/bybit-a BTC/ETH option ticker/publicTrade collector from this repo with strict listing deadlines, complete changing-universe verification and accurate configuration/evidence.
-Done when: config-check accepts the shipped Bybit profile; capture/verify-run fixtures prove pagination, PreLaunch, new listings, retirement, strict ACK/first-push coverage through stop and reconnect recovery; the archived one-time character-cap probe is checked and recorded; the reviewed integration is committed. Bybit live capacity and combined expiry-window acceptance await the VPS under steps 5–6.
-Out of scope: Bybit option depth, other feeds, VPS setup, step 5 combined acceptance and merging the documentation reorganization.
-When unsure: pick the simplest option consistent with COLLECTION_SCOPE.md, add one line to PLANS.md Notes, continue.
-```
-
-1. Rediscovery foundation is implemented: shared bounded option membership/timing policy, Bybit complete-pagination/PreLaunch projection, and the runnable Deribit lifecycle/300-second audit driver with append-only metadata and per-version verification. Bybit transport applies the shared policy in step 4; live cross-venue lifecycle acceptance remains pending.
-2. Deribit selected-feed chunk is committed: inverse-option top-20 book, ticker, per-kind trades and btc_usd/eth_usd indexes; first book push after ACK initializes without a type field. Futures and USDC linear options/indexes are disabled. The worker capacity chunk is complete with the five-minute evidence below; proceed to Binance.
-3. Binance USDⓈ-M configured list initially BTCUSDT/ETHUSDT: bookTicker and depth20@100ms on /public, aggTrade on /market, plus all-symbol !forceOrder@arr liquidations on /market (at most one per symbol per second). On 31 October /public ACKed liquidation subscriptions without pushes; do not use it. Implemented and reviewed with the five-minute capture/readback evidence below; no spot/COIN-M subscriptions, REST seeds or reference polling. Step 3 is complete.
-4. Active integration from the completed experiment: Bybit BTC/ETH option tickers and publicTrade, sharded across connections under 21,000 args-array characters and 2,000 option args per connection with headroom for listings. Run one bounded live character-cap enforcement probe separately from acceptance; record whether enforcement is per connection or request and keep per-connection sharding unless evidence shows otherwise. Settlement is downloadable via new-delivery-price; no ticker-derived settlement or index fallback. The preceding goal stopped after step 3; this goal implements step 4. The experiment finished on 1 Nov 2026: build step 4 on branch `exp/bybit-a` (e4301c4, worktree `~/Developer/experiments/a`), which both reviewers chose. Fix its agreed defects:
-   - verify-run passes a new listing subscribed more than 120 s after it was observed;
-   - the run config records `raw_feeds=['book']`;
-   - its EXPERIMENT_REPORT.md claims more about reconnect recovery than the evidence shows.
-   The reviewers split on one more: it exempts options first seen in the last 120 s before stop from coverage. The Codex judge rated it blocking, the Claude judge minor. Verdicts are in `~/Developer/experiments/` (`judge-*.json`, `rebuttal-*.json`). Bandwidth: Keng's home line measured 0.05–0.75 MB/s against about 0.85 MB/s for the full Bybit option feed, so Bybit closes connections there. The branch enables WebSocket compression, but plan Bybit live and acceptance runs on the VPS. Do not use `exp/bybit-b` (92d4d54). It has 2 blockers: a reconnect over 120 s stops capture, and `socket.close()` without a timeout hangs every shard (`data_collector/bybit.py:195, 247, 308` on that branch).
-5. Deferred until the separately built Bybit path is integrated: run the selected feeds together in dc-acceptance under caffeinate -i -s for at least one hour, starting by 07:25 UTC and continuing past 08:00 UTC, any day including weekends. Fail on verify-run failure (including any universe version), a Deribit option created during the run subscribed later than creation plus 120 seconds or never, a next-expiry Bybit PreLaunch option not subscribed before 08:00, an 08:00 expiry not retired, or any rejected subscription. Record-only: Bybit PreLaunch→Trading within one discovery interval of launchTime, first post-08:00 bid/ask ticker, any added strikes (none acceptable), the separate live character-cap enforcement result, storage rates, RSS/CPU and throttling. Prior runs do not satisfy this gate; a run without a Bybit intraday strike addition does not exercise its mid-run listing path.
-6. Wait for a VPS before the later 24-hour production gate.
+The minute-collection spec and tickets are in [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1). Use `minute-grid` as the integration branch. The [collection scope](docs/v2/COLLECTION_SCOPE.md) defines capture and acceptance.
 
 ## Notes
+
+- 8 November scope wording: "BTC/ETH option" on Deribit means currency BTC/ETH (inverse) instruments, so USDC linear options stay not_enabled; the Bybit hedge perps for `allLiquidation` start as BTCUSDT and ETHUSDT; a sampler instrument with no value since its subscribe is written as missing; a Binance request skipped by the weight guard is recorded as missed.
+- 8 November scope: the orchestrator's contracts index still needs the new date; that file lives in the orchestrator repository, not here.
+
+Notes below this line were written under the superseded 100 ms scope. They are kept for their decisions and evidence locations; where one mentions step 5, the 120-second listing deadline or the expiry-window run, it no longer applies.
 
 - Reviewed Bybit step-4 integration: exp/bybit-a BTC/ETH option tickers/publicTrade now run from this repo with the shipped config/v2-bybit-options.toml, strict 120-second first-ACK deadline, ACK/first-push coverage through stop and reconnect gaps, and ticker/trades recorded in the run config; 755 tests pass. Live capacity and step 5 await the VPS.
 - Bybit review note: assign() may place a new listing on a reconnecting shard; an outage like the observed 150/70-second ones would then miss the 120-second deadline. Prefer ready shards if this appears on the VPS.

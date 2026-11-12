@@ -1,11 +1,150 @@
 # Run the Deribit collector
 
-This is the first runnable v2 path: public discovery → raw metadata → selected
+> **Scope change, 8 November 2026.** The [collection scope](COLLECTION_SCOPE.md) now records one 1-minute grid plus three event streams. The 100 ms profiles below (Deribit option book/ticker/trades, Binance bookTicker/depth20@100ms/aggTrade, Bybit option tickers WebSocket) are superseded and kept as history. Start new captures with the [shared minute grid](#shared-minute-grid) or the [continuous event profiles](#continuous-event-streams), which use the V2 WebSocket archive.
+
+## Shared minute grid
+
+Use a fresh data root dedicated to minute capture. A bounded run counts scheduled
+slots, including explicit gaps. Omit `--minutes` to keep the grid running.
+
+```sh
+.venv/bin/python -m data_collector minute-capture --data-root data/minute-grid --minutes 1
+.venv/bin/python -m data_collector minute-read --data-root data/minute-grid --slot 2026-11-08T07:21:00Z
+```
+
+For readback, use the UTC minute of your run. The grid dispatches the profile at
+:00 UTC, with the v1 REST transport pacing individual sends. The first run starts
+at the next boundary. A wakeup one second or more after a boundary records a
+gap. On restart the same root resumes its grid and indexes any elapsed slots
+without reissuing old requests. `--request-window` sets the request deadline in
+seconds after the boundary and defaults to 20.
+
+Each slot has one `index.jsonl` line under `minutes/YYYY/MM/DD/HHMM/`. The
+index lists the expected requests and distinguishes `ok`, `error`, `timeout`
+and `missed`. In version 2 of the index, a slot without a native REST body or
+ticker body is a gap even when requests were attempted. The index still lists
+those request outcomes and identifies unavailable Bybit depth selections.
+Readers preserve version 1 indexes as recorded.
+Readback verifies the index against the v1 response archive, which retains raw
+bytes and local send and receive times. Deribit `usOut` is stored as
+`venue_server_epoch_us` and Bybit `time` as `venue_server_epoch_ms` when
+available. Binance depth `E` and open-interest `time` are stored as
+`venue_event_epoch_ms` when available. Native market timestamps remain in the
+raw body.
+
+The profile uses `public/get_index_price` for the live BTC and ETH DVOL indexes,
+`btcdvol_usdc` and `ethdvol_usdc`.
+
+The CLI enables the Deribit `ticker.<name>.agg2` sampler by default. Add
+`--rest-only` to run just the REST profile. At each cutoff, `minute-read`
+returns the last ticker per BTC/ETH inverse option or dated future in
+`deribit_tickers`. Each entry contains its native frame, venue and local
+receipt timestamps, and connection ID. The snapshot also carries the current
+connection and each instrument's subscription ACK time when available.
+A frame from an earlier connection or one received before its ACK is
+`stale`. An instrument without a frame is `missing`.
+
+Discovery runs at startup and once per captured minute. The snapshot names
+the most recent valid metadata version and reports the last discovery
+outcome. Changed replies are kept as native response envelopes under
+`deribit-metadata/`. Failed discovery attempts retain their native bytes and
+available timestamps under `deribit-metadata-failures/`. Use
+`read_deribit_metadata_failures(root, slot)` in `data_collector.minute_tickers`
+to read them by UTC Unix slot. The sampler reconciles new listings on the current
+connection and retires listings at their native expiry, including options
+expiring at 08:00 UTC. `minute-read` returns retirement requests and native outcomes in `deribit_retirements` for the minute in which the requests began.
+
+The Bybit profile requests BTC and ETH option ticker lists, BTCUSDT and ETHUSDT
+perp tickers, and option depth at 25 levels. Use `--deribit-only` to skip
+Bybit and Binance. Depth defaults to 50 options per base from the two nearest active
+expiries. Adjust the defaults with `--bybit-depth-btc`,
+`--bybit-depth-eth` and `--bybit-expiries`.
+
+The first successful selection in each UTC hour uses the median available
+option ticker index for that base. It ranks strikes by distance to that index
+and breaks ties by expiry then symbol. When a selection is due, its ticker and
+metadata must arrive before depth requests can start. The minute index lists
+the selected symbols for each base with a selection. The hourly evidence under
+`bybit/selection/` records the index, expiries, selected symbols, and source
+checksums.
+
+Hourly reference checks preserve changed option and hedge-perp instruments
+and risk tiers under `bybit/reference/`. Failed checks keep their outcomes and
+available native bytes in `bybit/reference-failures/`. The first successful daily settlement
+read at or after 08:02 UTC keeps each BTC and ETH USDT and USDC reply as returned.
+`read_bybit_selection(root, slot, base)` and
+`read_bybit_reference(root, name, slot)` in `data_collector.minute_bybit`
+read the stored evidence by UTC Unix slot. Pass `failed=True` to read a failed
+reference check.
+
+Binance requests USDⓈ-M depth at 20 levels and current open interest for each
+configured symbol. The packaged [ranked universe](../../data_collector/binance-top-100.json)
+preserves the build-time top 100 USDT perpetuals, ranking rule, retrieval time,
+and source checksums. Use `--binance-symbols BTCUSDT,ETHUSDT` to override the
+list or `--no-binance` to skip the profile.
+
+The guard defaults to an IP limit of 2,400 weight per minute and reserves 300
+for the trading bot. At each boundary it sends one weight-1 open-interest
+probe. Further admissions use the highest observed `x-mbx-used-weight-1m`
+value and reserve weight for requests still in flight or without a confirmed
+header. A missing probe header blocks the rest of that minute. The index lists
+guard skips as `missed` and records their reasons under `binance_weight`.
+Use `--binance-ip-limit`, `--binance-bot-reserve`, and `--binance-rate` to
+configure the budget and request pace.
+
+Hourly `exchangeInfo` checks share the same weight guard. Changed native
+responses and failed checks are stored under `binance/reference/` and
+`binance/reference-failures/`. Use
+`read_binance_reference(root, slot, failed=False)` in
+`data_collector.minute_binance` to read them by UTC Unix slot.
+
+### Daily archive and retention
+
+Install the `zstd` command on the capture host. Each committed minute is
+appended and synced to `hourly/YYYY-MM-DD/HH.jsonl` before the grid advances.
+The collector seals closed UTC days in the background when the grid moves to
+the next date. If a bounded run ends on the last slot of a day, use
+`minute-seal` to seal it explicitly. The seal is one
+`daily/YYYY-MM-DD.jsonl.zst` file and a manifest with the compressed and decoded
+SHA-256 checksums, minute range and counts, and hourly checksums.
+The seal includes Deribit retirement outcomes and failed discovery replies that
+arrive after the last journal append. Their checksum is recorded separately so
+the original hourly journals can still be verified byte for byte.
+When recovering an archive published by an older sealer that stopped before
+writing its manifest, the manifest carries those references with their checksum.
+
+```sh
+.venv/bin/python -m data_collector minute-seal --data-root data/minute-grid --day 2026-11-08
+.venv/bin/python -m data_collector minute-verify-day --data-root data/minute-grid --day 2026-11-08
+```
+
+Sealing keeps the hourly journals and per-minute WAL. To prune, stop the
+writer and run `minute-prune` for a sealed day. Pruning verifies the full
+compressed and decoded archive and checks the local minute files, journals and
+WAL against it before removing those redundant copies. `minute-read` can read
+minutes, Bybit selections and Deribit retirements from the verified seal and
+manifest in a fresh root. The prior two completed UTC days
+require a matching offsite checksum before pruning. Older sealed days are
+eligible after local verification. Reference revisions remain available
+through their dedicated readers.
+
+```sh
+.venv/bin/python -m data_collector minute-confirm-offsite --data-root data/minute-grid --day 2026-11-08 --sha256 "$OFFSITE_ARCHIVE_SHA256"
+.venv/bin/python -m data_collector minute-prune --data-root data/minute-grid --day 2026-11-08
+```
+
+Copy both the zstd file and its manifest to the offsite destination. Supply the
+SHA-256 calculated from the copied zstd file. The confirmation records that
+digest against the local manifest.
+The pilot provides the verification and retention commands. An operator
+provides the offsite copy and its digest.
+
+## Deribit 100 ms inverse-option profile (superseded 8 November 2026)
+
+This was the first runnable v2 path: public discovery → raw metadata → selected
 option books → committed archive → independent replay/export. It reuses the v2
 writer, lane, clock sampler, receiver and publication pipeline. The selected scope is defined in
 COLLECTION_SCOPE.md; the older frozen profiles below are historical paths. This command is a **partial pilot**, not a production service.
-
-## Current inverse-option profile
 
 The live path selects BTC/ETH inverse options by native base and settlement currency; USDC linear options remain visible as not_enabled in each revision and are never subscribed.
 
@@ -48,8 +187,8 @@ ACK. Reconnect opens an explicit coverage gap and repeats initialization;
 stopping in a later gap does not erase earlier proven coverage of that same
 incarnation. New options still require their own ACK and first pushes.
 
-Bybit transport is described below; its intended-host live capacity and the
-cross-venue expiry-window run remain pending. Old archive formats remain verifiable, while new CLI futures capture
+Bybit transport is described below. The cross-venue expiry-window run of the
+31 October scope will not be run; the 8 November acceptance replaces it. Old archive formats remain verifiable, while new CLI futures capture
 is not_enabled because its history is downloadable. No multi-owner raw export
 is enabled for this path. A verified failed prefix is integrity evidence, not a
 passed capture.
@@ -120,7 +259,8 @@ as false; that does not pass capture acceptance.
 ### Export for other repositories
 
 `python -m data_collector verify-run RUN_ROOT --export FILE` is the interface
-other repositories use to read a capture (trading-bot's `bot.convert` calls it).
+other repositories use to read a V2 capture (trading-bot's `bot.convert` calls it).
+The minute snapshots will need their own reader, which trading-bot builds.
 It verifies the run as above and writes the raw envelopes losslessly as JSONL to
 `FILE`, which must not already exist. It prints the result JSON on stdout, which
 includes `archive_verified`, and exits nonzero when verification fails.
@@ -132,7 +272,36 @@ The bounded historical snapshot path still uses `capture_mode = "snapshots"`,
 at most 120 seconds and 64 frames, with explicit symbols and its original
 snapshot/replay semantics. It is separate from the selected live raw profile.
 
-## Current boundary
+## Continuous event streams
+
+Copy the shipped configs, choose a fresh writable Linux `data_root` for each,
+and run the commands as separate collector processes. Both use `event_streams = true`.
+
+```sh
+.venv/bin/python -m data_collector capture --config config/v2-binance.toml
+.venv/bin/python -m data_collector capture --config config/v2-bybit-options.toml
+.venv/bin/python -m data_collector verify-run RUN_ROOT
+```
+
+The Binance config opens `/market/stream` for `!forceOrder@arr`. All native
+liquidation rows stay in the raw archive, including rows outside configured
+minute-grid symbols and any COIN-M rows from the shared stream. The native
+`st` and `ps` fields are retained. Binance sends at most one liquidation per
+symbol per second. The Bybit config opens `/v5/public/linear` for
+`allLiquidation.<symbol>` and `/v5/public/option` for `publicTrade.BTC` and
+`publicTrade.ETH`. Set `bybit_liquidation_symbols` to the native linear symbols
+of the hedge perps. The default is `BTCUSDT` and `ETHUSDT`.
+
+Each run records subscription requests, ACKs, exact inbound messages and
+transport gaps. The duration starts after every route acknowledges its
+subscriptions. `verify-run` checks the stored plan and ACKs against the raw
+archive and reports the observed push topics in `topics_seen`. A quiet topic
+can be subscribed successfully without appearing in that list. Reconnects
+repeat the subscription and leave explicit gaps. The event profiles make no
+REST requests, so minute metadata collection and the Binance REST weight
+budget are handled by the minute service.
+
+## Historical Binance discovery and 100 ms capture
 
 Binance discovery is available with
 `python -m data_collector discover --config config/v2-binance.toml`, using an
@@ -140,16 +309,9 @@ explicit writable Linux data root. It archives spot, UM and CM exchangeInfo,
 requests spot `showPermissionSets=false`, and verifies the BTC/ETH projection
 against those exact responses. Non-trading rows remain visible as disabled.
 Spot listing incarnation is null because exchangeInfo does not supply it.
-Binance continuous capture uses the selected USDⓈ-M profile:
-
-```sh
-.venv/bin/python -m data_collector capture --config config/v2-binance.toml
-.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
-```
-
-Set `binance_symbols = ["BTCUSDT", "ETHUSDT"]` to the complete desired native list;
-a missing or non-trading configured symbol fails startup. The profile always
-subscribes bookTicker and depth20@100ms on `/public`, aggTrade and the all-symbol
+The 31 October USDⓈ-M capture profile used `binance_symbols` for a fixed
+native list. A missing or non-trading configured symbol failed startup. The
+historical profile subscribes bookTicker and depth20@100ms on `/public`, aggTrade and the all-symbol
 `!forceOrder@arr` feed on `/market`. The feed plan is archived explicitly;
 `raw_feeds`, `raw_processes` and the Deribit selection settings do not choose
 Binance feeds or workers. No spot/COIN-M subscription, REST seed or reference
@@ -189,18 +351,9 @@ still allow 10,000 segments; configured unbounded limits do not remove that guar
 Observed acceptance runs and their evidence locations are recorded in
 [PLANS.md](../../PLANS.md).
 
-## Bybit option raw capture
+## Bybit option raw capture (31 October profile)
 
-Use the single-process sharded profile with a writable Linux data root and the
-Linux Python 3.12 environment:
-
-```sh
-.venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
-.venv/bin/python -m data_collector capture --config config/v2-bybit-options.toml
-.venv/bin/python -m data_collector verify-run /absolute/data/root/runs/<run-id>
-```
-
-It selects BTC/ETH option `tickers.<symbol>` and `publicTrade.BTC/ETH`, including
+The single-process sharded profile selected BTC/ETH option `tickers.<symbol>` and `publicTrade.BTC/ETH`, including
 PreLaunch instruments from a complete unfiltered paginated discovery walk every
 60 seconds. Each full HTTP response and poll result is archived append-only in
 `metadata/`; changed metadata and expiry produce referenced universe versions.
@@ -232,12 +385,12 @@ The independent [cap probe readback](bybit-cap-evidence.json) found no rejection
 in its tested 22,887-character cases; sharding still follows the documented caps.
 [Official source hashes](bybit-source-evidence.json), recorded-reply fixtures and
 the [corrected historical experiment](history/BYBIT_EXPERIMENT_A.md) retain the
-evidence and its limits. Bybit live capacity and combined expiry-window runs
-await the VPS because the home connection could not keep up with the experiment.
+evidence and its limits. Under the 8 November scope only `publicTrade.BTC/ETH` stays selected; the
+`tickers.<symbol>` WebSocket is not_enabled and moves to the minute REST read.
+The home connection could not keep up with the full ticker feed in the experiment.
 
-Public origins are configured independently with `bybit_rest_host` and
-`bybit_ws_host`; values are bare DNS hostnames. The selected production profile
-uses these overrides on the acceptance network:
+The historical Bybit profile used independent `bybit_rest_host` and
+`bybit_ws_host` overrides on the acceptance network:
 
 ```toml
 bybit_rest_host = "api.bytick.com"

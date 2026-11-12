@@ -15,3 +15,6 @@ data-collector = "data_collector.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["option_collector*", "data_collector*"]
+
+[tool.setuptools.package-data]
+data_collector = ["binance-top-100.json"]

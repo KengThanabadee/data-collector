@@ -1,25 +1,28 @@
 # Data Collector
 
-A raw-first market-data recorder for crypto options and perpetuals. It records live WebSocket feeds from Deribit, Binance and Bybit byte-for-byte, writes each message to disk before it acknowledges it, and keeps an explicit, verifiable record of every gap in coverage.
+A raw-first market-data recorder for crypto options and perpetuals on Deribit, Binance and Bybit. It keeps each venue reply byte-for-byte with its send, receive and venue times, and records every missed minute or dropped connection as an explicit gap.
 
-The goal is a research archive of data **that cannot be downloaded later**: option order books, tickers and trades, perp top-20 books and liquidations. Those are gone once the moment passes. Anything a venue already offers as history (bars, funding, settlement prices) is fetched later and left out of live capture.
+The goal is an archive of data **that has no free history**, recorded on one 1-minute grid shared by all three venues, plus three small event streams. Anything a venue already offers as history (trades, bars, funding, perp order books) is downloaded later and left out of live capture.
 
-> **Status:** working pilot, not yet deployed as a 24/7 service. Hour-long runs have passed verification on a Linux VM. The combined three-venue run and the 24-hour VPS soak are still to do. See [PLANS.md](PLANS.md) for current status.
+> **Status:** the shared minute grid and the three continuous event streams are runnable on `minute-grid`. See [PLANS.md](PLANS.md) for live evidence and acceptance status.
 
 ## What it captures
 
-| Venue | Live feeds | Why live |
-|---|---|---|
-| Deribit BTC/ETH inverse options | top-20 book and ticker at 100 ms for every listed option, option trades, BTC/ETH index | no free book or ticker history |
-| Binance USDⓈ-M perps | `bookTicker`, `depth20@100ms`, `aggTrade` for configured symbols; all-symbol liquidations | bookTicker archive ended in 2024; no depth-20 or liquidation archive |
-| Bybit BTC/ETH options | per-symbol `tickers`, `publicTrade`, including PreLaunch listings | no option book, ticker or trade history |
-| All three | instrument metadata (tick size, strikes, expiries), append-only | venues only publish current values |
+Every minute at :00 UTC:
 
-The reasons behind each choice are in [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md). Feeds that were looked at and left out are listed with reasons in [docs/v2/FEEDS.md](docs/v2/FEEDS.md).
+| Venue | Data |
+|---|---|
+| Deribit | ticker for every BTC/ETH option and dated future (WebSocket sampler, last value per instrument each minute), futures book summary, five indexes, DVOL, BTC/ETH perpetual ticker |
+| Bybit | option tickers per coin, order book (25 levels) for about 100 near-ATM short-dated options, BTC/ETH perp ticker |
+| Binance USDⓈ-M | order book (20 levels) and open interest for about 100 symbols |
 
-## Measured results
+Continuously, as event streams: Binance all-symbol liquidations, Bybit liquidations for the hedge perps, and Bybit option trades. Instrument metadata for all three venues is stored when it changes, Bybit risk-limit tiers on change, and Bybit option settlement once a day.
 
-From a one-hour Deribit options run on an Ubuntu 24.04 VM (6 vCPU, 6 GiB):
+The reasons behind each choice, what is downloadable and what was dropped are in [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md). Every feed that was looked at and left out, including the 100 ms streams, is listed with its reason in [docs/v2/FEEDS.md](docs/v2/FEEDS.md).
+
+## Measured results (100 ms path, historical)
+
+These numbers come from the superseded 100 ms v2 capture. From a one-hour Deribit options run on an Ubuntu 24.04 VM (6 vCPU, 6 GiB):
 
 | Metric | Value |
 |---|---:|
@@ -30,9 +33,11 @@ From a one-hour Deribit options run on an Ubuntu 24.04 VM (6 vCPU, 6 GiB):
 | Peak memory / CPU | 481 MiB summed RSS, about 4 of 6 vCPUs |
 | Faults handled | 3 server heartbeat closes, 94 failed DNS lookups; every worker reconnected and re-initialized, with each gap recorded |
 
-A separate ten-minute run spanning the 08:00 UTC Deribit expiry passed verification across 13 universe versions: 118 expired options retired, new listings subscribed, and zero rejected subscriptions. Full numbers are in [PLANS.md](PLANS.md).
+A separate ten-minute run spanning the 08:00 UTC Deribit expiry passed verification across 13 universe versions: 118 expired options retired, new listings subscribed, and zero rejected subscriptions. Full numbers are in the [archived plan](docs/v2/history/PLANS_2026-11-08.md).
 
 ## How it works
+
+This describes the v2 WebSocket capture, which carries the event streams. The minute-snapshot service will reuse v1's REST transport and archive.
 
 ```mermaid
 flowchart LR
@@ -56,7 +61,7 @@ Design decisions worth knowing:
 - **Exact bytes, never re-encoded.** Each record keeps the original message bytes inside a versioned envelope (`dc.raw/2`) with receive time, monotonic clock, connection ID, sequence number and config hash. Prices stay as the venue's own strings, so nothing is lost to float conversion.
 - **Durable before acknowledged.** A single writer owns a framed write-ahead log and fsyncs before a record counts as captured. After a crash, the damaged tail is kept for inspection, the good prefix is sealed, and capture resumes under a new session ID, so no gap is hidden.
 - **Gaps are data.** Disconnects, reconnects, rejected subscriptions, clock problems and writer failures become `control` records. `verify-run` will not report coverage for an instrument until it has seen the subscription ACK and the first real update after every reconnect.
-- **The universe follows listings.** Deribit lists new expiries at 08:00 UTC and adds strikes during the day. The collector listens to Deribit's `instrument.state` stream, runs a full REST audit every 300 seconds, and must subscribe each new option within 120 seconds of its creation. Bybit pre-lists the next expiry as `PreLaunch`; those options are subscribed as soon as discovery sees them. Each universe change is stored as a new version.
+- **The universe follows listings.** Deribit lists new expiries at 08:00 UTC and adds strikes during the day. Each universe change is stored as a new version; under the 1-minute scope the Deribit sampler subscribes new listings from stored metadata and retires expired options at 08:00 UTC.
 - **Scaled by partition.** Options are split across worker processes by stable symbol hash. Each worker owns its archive; a supervisor starts and stops them together and checks coverage across all partitions. Bybit subscriptions are spread over connections to stay under its per-connection argument limits.
 - **Clock honesty.** Receive timestamps are never adjusted. Clock offset and uncertainty are sampled from chrony and recorded beside the data, so later analysis can judge time quality.
 
@@ -67,7 +72,7 @@ Requires Python 3.12. No API keys are needed; every feed is public.
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
-.venv/bin/python -m unittest discover -s tests        # 755 tests, about 5 minutes, loopback only
+.venv/bin/python -W error -m unittest discover -s tests
 ```
 
 Check a configuration (this works on macOS):
@@ -76,12 +81,20 @@ Check a configuration (this works on macOS):
 .venv/bin/python -m data_collector config-check --config config/v2-bybit-options.toml
 ```
 
-Live capture runs on Linux with chrony. Copy a config, pick `production` or `testnet`, set a fresh `data_root`, then:
+Live capture runs on Linux with chrony. Start the minute collector with its own fresh data root.
 
 ```sh
-.venv/bin/python -m data_collector discover   --config my-config.toml
-.venv/bin/python -m data_collector capture    --config my-config.toml
-.venv/bin/python -m data_collector verify-run <printed-root> --export out.jsonl
+.venv/bin/python -m data_collector minute-capture --data-root data/minute-grid --minutes 1
+```
+
+For the continuous event streams, copy
+`config/v2-binance.toml` or `config/v2-bybit-options.toml` to `my-events.toml`
+and set a fresh `data_root`. Start `capture` directly with the copied config
+and use the printed run directory as `RUN_ROOT`.
+
+```sh
+.venv/bin/python -m data_collector capture --config my-events.toml
+.venv/bin/python -m data_collector verify-run RUN_ROOT --export out.jsonl
 ```
 
 [docs/v2/RUNNING.md](docs/v2/RUNNING.md) covers configs for each venue, disk requirements and running in a Lima VM.
@@ -100,17 +113,17 @@ Live capture runs on Linux with chrony. Copy a config, pick `production` or `tes
 ## Documentation
 
 - [SPEC.md](SPEC.md): v2 contracts for record formats, ordering, gaps and adapters
-- [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md): what is recorded live and why
+- [docs/v2/COLLECTION_SCOPE.md](docs/v2/COLLECTION_SCOPE.md): what is recorded, at what cadence, and why
 - [docs/v2/FEEDS.md](docs/v2/FEEDS.md): feed catalogue and per-venue limits
 - [docs/v2/RUNNING.md](docs/v2/RUNNING.md): how to run and verify a capture
 - [docs/v2/ACCEPTANCE.md](docs/v2/ACCEPTANCE.md): production acceptance gates
 - [docs/v2/SNAPSHOTS.md](docs/v2/SNAPSHOTS.md): snapshot, replay and validity-correction rules
-- [PLANS.md](PLANS.md): current status and next steps; [docs/v2/history/](docs/v2/history/) holds the earlier development log
+- [PLANS.md](PLANS.md): current status and measured evidence. The [history directory](docs/v2/history/) holds earlier scope and run records
 - v1: [docs/SPEC_V1.md](docs/SPEC_V1.md), [docs/OPERATIONS.md](docs/OPERATIONS.md)
 - Research: [docs/RESEARCH_DATA_SUFFICIENCY.md](docs/RESEARCH_DATA_SUFFICIENCY.md), [docs/EXPERIMENT_REPORT.md](docs/EXPERIMENT_REPORT.md)
 
 ## Roadmap
 
-1. One run of at least an hour with all three venues together, spanning the 08:00 UTC expiry.
-2. Deploy to a VPS and pass a 24-hour soak test.
-3. Add derived layers (book snapshots, replay products) when a research use needs them.
+1. Verify the combined profile across 08:00 UTC on `minute-grid`. See [GitHub issue #1](https://github.com/KengThanabadee/data-collector/issues/1) for the spec and tickets.
+2. Choose a VPS (decided last), then deploy with offsite backup.
+3. Add derived layers when a research use needs them.

@@ -1,5 +1,7 @@
 # DC v2 acceptance and resource release contract
 
+Current goal (8 November 2026): the acceptance for the 1-minute grid is the one-hour run across 08:00 UTC defined in [COLLECTION_SCOPE.md](COLLECTION_SCOPE.md). It replaces the 31 October expiry-window gate. The gates below are the later production release contract. On the minute grid, coverage is counted per expected request per minute (ok, error, timeout or missed), and the receive→durable, snapshot-publication, ACK and bootstrap targets apply only to the V2 event streams. Off-host backup and the soak wait for the VPS, which is decided last.
+
 Profile `dc-v2-bounded-pilot-20261023.1` in [pilot-budget.toml](pilot-budget.toml) is a **proposed test configuration**, not an installed/runnable config for the v1 application. No throughput, disk/day, streaming-host size or recovery result is certified yet. Production cannot use this disabled pilot unchanged: freeze a full-universe release configuration with concrete endpoint limits, symbol list, host, storage/backup destination and known gates resolved. Keep all prior runs and configuration hashes.
 
 ## 1. Scope and measurements

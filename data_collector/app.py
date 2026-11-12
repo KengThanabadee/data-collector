@@ -89,7 +89,7 @@ def verify_run(root, *, export=None):
     if report.get('schema')=='dc.bybit-options/1':
         from .bybit_options import verify
         return verify(root,report,export=export)
-    if report.get('schema')=='dc.binance-selected/1':
+    if report.get('schema') in ('dc.binance-selected/1','dc.event-streams/1'):
         from .binance_capture import verify
         return verify(root,report,export=export)
     if report.get('schema')=='dc.option-workers/1':
@@ -174,6 +174,10 @@ async def _capture_for(capture, session, seconds):
 async def run(config, *, discover_only=False, session_factory=discovery_session,
               observer=observe, clock_read=None, clock_wait=None, schedule_wait=None):
     """Own one declared pilot. Internal clock/transport seams are for fixtures."""
+    if isinstance(config,DiscoveryConfig) and config.event_streams and not discover_only:
+        from .binance_capture import capture
+        return await capture(config,session_factory=session_factory,observer=observer,
+            clock_read=clock_read,clock_wait=clock_wait)
     if isinstance(config,DiscoveryConfig) and config.venue=='binance':
         from .binance import run as binance_run
         return await binance_run(config,discover_only=discover_only,session_factory=session_factory,
@@ -184,6 +188,7 @@ async def run(config, *, discover_only=False, session_factory=discovery_session,
             and (config.symbols or config.all_options)):
         raise ValueError('legacy Deribit raw capture is not_enabled; use the live inverse-options configuration with rediscover_options=true')
     if isinstance(config,DiscoveryConfig) and config.venue=='bybit':
+        if discover_only and config.event_streams:raise ValueError('Bybit event capture uses only WebSocket feeds')
         if discover_only:raise ValueError('Bybit discovery is archived by capture; run capture')
         from .bybit_options import capture as bybit_capture
         return await bybit_capture(config,session_factory=session_factory,observer=observer,

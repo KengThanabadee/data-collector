@@ -1,101 +1,132 @@
 # Collection scope
 
-Decided by Keng on 31 Oct 2026. This file is the contract for the current collection goal; runtime implementation and acceptance remain pending.
+Decided by Keng on 8 November 2026. This file is the contract for the current collection goal. It replaces the 31 October 100 ms scope, which is kept unchanged in [history/COLLECTION_SCOPE_2026-10-31.md](history/COLLECTION_SCOPE_2026-10-31.md). See the [runbook](RUNNING.md#shared-minute-grid) for the minute service and [PLANS.md](../../PLANS.md) for observed readiness.
 
 ## Principle
 
-- Live-record what cannot be downloaded later.
-- Also record cheap feeds when they make use simpler.
-- Features come from the deepest market for each instrument type, wherever the trade happens: Deribit for options, Binance for perps. They use 20 book levels.
-- Cost modelling uses the trading venue's own top of book with size: Binance perps, Bybit options and Bybit perps.
+- Record live everything that has no free history, on one 1-minute grid shared by Deribit, Bybit and Binance. Anything a venue lets us download later is left out.
+- Keep raw bytes and explicit gaps. A minute that cannot be recorded is written as a gap and never backfilled.
+- Research covers options and volatility on Deribit BTC/ETH and stat arb on Binance USDⓈ-M perps; features may cross between them. Trading uses Bybit options (portfolio margin) hedged with Bybit perps, and Binance perp stat arb, at a 5–15 minute horizon (maybe 1 minute later).
+- Trading cost comes from Bybit and Binance; research cost comes from Binance and Deribit.
+- Order-book microstructure (imbalance and similar signals) is out of scope, so no 100 ms stream is recorded.
 
 ## Consumers
 
-| Use | Venue | Data |
+| Consumer | Uses |
+|---|---|
+| trading-bot | features and cost data from the minute grid and event streams |
+| crypto-options-analytics | the recorded history, together with the downloadable history listed under "Not recorded" |
+
+## Recorded every minute
+
+All requests fire at :00 UTC. Each response keeps its raw bytes, its send and receive times, and the venue server time.
+
+| Venue | Data | Source |
 |---|---|---|
-| Stat arb (trade) | Binance USDⓈ-M perps | features + cost |
-| Options strategy (trade) | Bybit options, hedged with Bybit perps (portfolio margin) | cost |
-| Options research | Deribit options, hedged with the Deribit perp | features; perp book features come from the Binance perp book |
+| Deribit | Ticker for every BTC/ETH inverse option and dated future | WS sampler (below) |
+| Deribit | Futures book summary, BTC and ETH | REST |
+| Deribit | Indexes `btc_usd`, `eth_usd`, `usdt_usd`, `btc_usdt`, `eth_usdt` | REST |
+| Deribit | DVOL, BTC and ETH | REST |
+| Deribit | `BTC-PERPETUAL` and `ETH-PERPETUAL` ticker | REST |
+| Bybit | Option tickers per base coin (BTC, ETH) | REST |
+| Bybit | Order book, limit 25, for about 100 near-ATM short-dated options | REST |
+| Bybit | BTC and ETH perp ticker | REST |
+| Binance USDⓈ-M | Depth (limit 20) and open interest for about 100 symbols | REST |
 
-Bybit perp prices and costs may be proxied by Binance perp prices plus Bybit funding and fees. On a quiet 1m sample, Bybit sat 2.5 bp (BTC) and 1.3 bp (ETH) below Binance, with a 1m return-difference sd of about 0.6 bp. Bybit's own downloadable data can replace the proxy at any time.
+"BTC/ETH option" means the Deribit instruments listed under currency BTC or ETH (the inverse options). Deribit USDC linear options stay not_enabled, as in the 31 October scope.
 
-## Live-recorded
+About 313 REST requests per minute: Binance about 200, Bybit about 103, Deribit about 10.
 
-| Venue | Feeds | Why live |
+**Deribit WS sampler.** Subscribe to `ticker.<name>.agg2` for every BTC/ETH inverse option and dated future. At each minute the sampler writes the last raw value received for every instrument, with its venue timestamp, receive time and connection ID. A value received before the current connection's subscribe ACK is marked stale. An instrument with no value since it was subscribed is written as missing. The sampler receives about 1 MB/s.
+
+## Recorded continuously (event streams)
+
+These stay on the V2 WebSocket capture path.
+
+| Venue | Stream | Note |
 |---|---|---|
-| Deribit BTC/ETH inverse options (USDC linear options excluded) | `book.<id>.none.20.100ms`, `ticker.<id>.100ms`, `trades.option.<currency>.100ms` | no free book/ticker history |
-| Deribit | BTC/ETH index | reference for options |
-| Binance USDⓈ-M | `bookTicker` and `depth20@100ms` on the `/public` route; `aggTrade` on the `/market` route. Symbols come from a configured list (BTCUSDT, ETHUSDT, alts TBD). Liquidations: `!forceOrder@arr` (all symbols) on the `/market` route; on 31 Oct the `/public` route ACKed it and delivered nothing. | bookTicker archive ended 2024-03-30; no depth-20 archive; no liquidation archive. aggTrade is kept for alignment with the book. Liquidations are a stat-arb feature; Binance sends at most one per symbol per second. |
-| Bybit BTC/ETH options | `tickers.<symbol>`, `publicTrade.<baseCoin>` | no option book, ticker or trade history |
-| All three venues | discovery and instrument metadata (Deribit instruments, Binance `exchangeInfo`, Bybit `instruments-info`), append-only | tick/lot, strikes and expiries are current-only on the venues |
+| Binance USDⓈ-M | `!forceOrder@arr` on the `/market` route | all symbols; Binance sends at most one liquidation per symbol per second. On 31 October the `/public` route ACKed it and delivered nothing. |
+| Bybit linear | `allLiquidation.<symbol>` for the hedge perps | configured list, initially BTCUSDT and ETHUSDT |
+| Bybit option | `publicTrade.<baseCoin>` for BTC and ETH | no free option trade history |
 
-## Requirements
+## Recorded on change or daily
 
-- **New listings.** The option universe must follow listings during a run. Subscribe new options within 120 s and retire expired ones (SPEC.md discovery rules). Before this change, the collector froze the startup discovery.
-  - Deribit creates new expiries at 08:00 UTC and adds strikes intraday. Use the `instrument.state` stream: the 300 s REST audit alone cannot meet 120 s.
-  - Bybit pre-lists the next expiry hours before 08:00 UTC with status `PreLaunch` and zero bid/ask. Subscribe `PreLaunch` instruments when they first appear in discovery.
-- **Timing evidence.** For every instrument, archive:
-  - when it was observed (Deribit `creation_timestamp`/`instrument.state` receipt, or the discovery poll time);
-  - the subscribe request time and the subscribe-ACK receipt time;
-  - the retirement time.
-  The 120 s requirement is measured from these records.
-- **Coverage with a changing universe.** verify-run checks each universe version. An option added mid-run must have an ACK and a first push. A retired option is exempt after its retirement time.
-- **Deribit book.** Verify that each depth-20 push on an option is a full top-20 snapshot. These pushes have no `type` field (keys: `asks`, `bids`, `change_id`, `instrument_name`, `timestamp`). A book counts as initialized at its first push after the subscribe ACK. The old verifier's `type == 'snapshot'` check does not apply.
-- **Bybit subscription limits.** Bybit's docs cap the `args` array at 21,000 characters per public connection, and at 2,000 option args per connection. BTC tickers alone come to about 26k characters as JSON, so a single coin does not fit on one connection.
-  - Shard topics across connections so each connection stays under the cap, with headroom for new listings.
-  - Test once, live, whether the cap is enforced per connection or per request, and record the result. Shard per connection unless the test shows otherwise.
-  - On 31 Oct, 1,378 options were listed (730 BTC, 648 ETH), all USDT-settled.
-- **Dropped feeds.** Each is marked `not_enabled` with its reason, never removed silently (SPEC.md).
+- Instrument metadata for all venues (Deribit instruments, Binance `exchangeInfo`, Bybit `instruments-info`), stored when it changes. The Deribit sampler subscribes new listings from it and retires expired options at 08:00 UTC.
+- Bybit risk-limit tiers, stored when they change.
+- Bybit option settlement from `/v5/market/new-delivery-price`, once a day. The endpoint keeps only the latest 200 days.
 
-## Not recorded
+## Not recorded (downloadable)
 
 | Data | Source |
 |---|---|
-| Deribit perp/futures 1m bars, trades, funding | `get_tradingview_chart_data`, history.deribit.com, `get_funding_rate_history` |
-| Deribit option settlement, expired instruments | `get_delivery_prices`; history.deribit.com `get_instruments?expired=true` (verified 31 Oct 2026: 124,759 expired BTC options; `include_old=true` returns only the 985 active ones) |
-| Binance klines, aggTrades, funding, mark/index/premium | data.binance.vision (from 2020-01) |
-| Bybit perp book and trades | quote-saver.bycsi.com (ob200, 100 ms), public.bybit.com |
-| Bybit klines, mark/index/premium | `/v5/market/*kline`, 1000 rows per request, back to 2020 |
+| Deribit option, perp, block and combo trades | history.deribit.com |
+| Deribit funding, 1-minute bars, delivery prices | `get_funding_rate_history`, `get_tradingview_chart_data`, `get_delivery_prices` |
+| Deribit expired instruments | history.deribit.com `get_instruments?expired=true` (verified 31 October 2026: 124,759 expired BTC options) |
+| Deribit DVOL, long history | `get_volatility_index_data` (the 1-minute series reaches only about 4–6 months back, which is why DVOL is also recorded each minute) |
+| Binance klines, aggTrades, funding, mark/index/premium, 5-minute metrics, bookDepth | data.binance.vision |
+| Bybit perp L2 | quote-saver.bycsi.com (ob200) |
+| Bybit perp trades | public.bybit.com |
+| Bybit klines | `/v5/market/*kline`, 1,000 rows per request, back to 2020 |
 | Bybit funding | `/v5/market/funding/history`, 200 rows per request |
-| Bybit option settlement prices | `/v5/market/new-delivery-price?category=option&baseCoin=<coin>&settleCoin=USDT` (daily history; the old `/delivery-price` returns an empty list) |
 
-**Dropped entirely:** Deribit futures feeds; Deribit USDC linear options (`BTC_USDC`, `ETH_USDC`), since nearly all liquidity is in the inverse options; Binance spot, COIN-M, options, diff book and REST seed; Bybit spot, inverse, spreads, RPI and liquidation (Binance liquidations are the feature); Bybit option depth books for now (see Open); full-depth books on all venues.
+## Dropped
+
+Every 100 ms book and ticker stream is dropped. Each stays visible in [FEEDS.md](FEEDS.md) as `not_enabled` with its reason:
+
+| Feed (31 October scope) | Status and reason |
+|---|---|
+| Deribit `book.<id>.none.20.100ms` for options | not_enabled: order-book microstructure is out of scope; the minute ticker carries best bid/ask with size |
+| Deribit `ticker.<id>.100ms` for options | not_enabled: replaced by the minute sampler on `ticker.<name>.agg2` |
+| Deribit `trades.option.<currency>.100ms` | not_enabled: option trades are downloadable from history.deribit.com |
+| Deribit `deribit_price_index.btc_usd` / `eth_usd` stream | not_enabled: replaced by the minute REST index reads |
+| Binance `bookTicker` (`/public`) | not_enabled: 100 ms stream; the minute depth-20 read carries top of book |
+| Binance `depth20@100ms` (`/public`) | not_enabled: 100 ms stream; replaced by minute REST depth, limit 20 |
+| Binance `aggTrade` (`/market`) | not_enabled: downloadable from data.binance.vision |
+| Bybit option `tickers.<symbol>` WebSocket | not_enabled: 100 ms stream; replaced by minute REST tickers per base coin |
+| Bybit option depth beyond the about 100 selected options | not_enabled: cost data is needed only near ATM and short-dated |
+
+Other families dropped earlier (Deribit spot and combos, Binance spot, COIN-M and options, Bybit spot, inverse, spreads and RPI, full-depth books on all venues) stay not_enabled with the reasons in FEEDS.md.
+
+## Requirements
+
+- **One grid.** Every venue uses one 1-minute grid fired at :00 UTC. A minute that cannot be recorded is written as a gap and never backfilled.
+- **Raw and timed.** Each response keeps its raw bytes, send time, receive time and venue server time.
+- **Minute index.** Each minute writes one index line listing every expected request as `ok`, `error`, `timeout` or `missed`.
+- **Listings.** The Deribit sampler subscribes new listings found in the metadata and retires expired options at 08:00 UTC.
+- **Stale marking.** A sampler value received before the current connection's subscribe ACK is marked stale.
+- **Binance weight guard.** Binance REST is guarded on the `x-mbx-used-weight-1m` response header. The weight budget is per IP and shared with the trading bot (about 300 of 2,400 per minute). A request skipped by the guard is recorded as missed.
+- **Storage.** Append each minute to an hourly journal. Seal each day as one zstd file with a manifest. Delete the journal and WAL only after the sealed file reads back and matches the manifest. Keep the last 2 days of journals until the offsite copy is confirmed.
+
+## Sizes
+
+The 10 November Lima run measured 158.2 MB of minute files and hourly journals across 62 slots and 13.4 MB of event archives across about 65 minutes. Scaling each component to 24 hours gives about 4.0 GB/day before daily sealing and cleanup. The retained size after daily zstd sealing remains unmeasured. See [the acceptance result](../../PLANS.md).
 
 ## Acceptance
 
-One Linux run under the collector's acceptance setup. Both venues list and expire options daily at 08:00 UTC, weekends included, so any day works. The run must:
-- be at least one hour long;
-- start by 07:25 UTC (14:25 Bangkok time);
-- continue past 08:00 UTC.
+One run of at least an hour that spans 08:00 UTC. Until a VPS is chosen, run it in the Lima VM `dc-acceptance`.
 
 **The run fails if any of these is true:**
-- verify-run fails, including coverage of every universe version;
-- a Deribit option created during the run was subscribed more than 120 s after its creation, or was never subscribed;
-- a Bybit `PreLaunch` option for the next expiry was not subscribed before 08:00 UTC;
-- an option that expired at 08:00 UTC was not retired;
-- any subscription was rejected.
+- a minute in the run is neither recorded nor written as a gap;
+- a minute index line does not list every expected request;
+- an option listed during the run is not subscribed by the sampler;
+- an option that expired at 08:00 UTC is not retired.
 
-**Record only (these do not fail the run):**
-- Bybit: the `PreLaunch`→`Trading` change, seen within one discovery interval of `launchTime`, and the first ticker with bid/ask after 08:00;
-- strikes added during the run on either venue (none is acceptable);
-- the live test of Bybit's character cap: per connection or per request;
-- bytes per hour and GiB per day (native, archive, and including WAL);
+**Record (these do not fail the run):**
+- bytes per day;
 - peak RSS and CPU;
-- throttled subscriptions.
-
-Bybit options are pre-listed before 07:25, so this run does not exercise Bybit's mid-run listing path. That path is covered only by an intraday strike addition, if one occurs.
+- Binance weight used per minute.
 
 ## Open
 
-- The Binance alt list. Book data for an alt starts only from the day it is added.
-- Bybit Thai-KYC access from a foreign IP. This concerns trading only; public data needs no account.
-- Bybit option depth books (`orderbook.25`, 20 ms; no smaller depth exists). Revisit once order sizes show whether fills go past the top level that `tickers` carries. They have no archive, so data before that decision is not recoverable.
-- Optional: Deribit DVOL (`deribit_volatility_index`). Its 1m history is downloadable only about 4–6 months back.
+- VPS, decided last: Ubuntu 24.04, chrony, a reproducible install so the host can change within an hour, an external dead-man's switch to Keng's phone, and a nightly offsite backup with a monthly restore test. Candidates: Oracle Free (unconfirmed), Contabo, Vultr Tokyo.
+- Trading-bot host: a separate paid VPS with a reserved IP and a watchdog that flattens positions, decided later.
+- Bybit API trading from a foreign server with a Thai-KYC account (Keng expects it works; unverified), and the Thai tax and legal view.
+- Bybit depth selection for production. Ship configurable defaults of 50 BTC and 50 ETH options from the two nearest expiries, using the strikes nearest the corresponding index. Re-select hourly and record each selection.
+- Deribit new-listing deadline. By default, check metadata every minute and subscribe newly discovered instruments before the next minute.
+- Binance symbol universe for production. Default to a fixed config list of the top 100 USDT perps by 24-hour volume at build time.
 
 ## Affected elsewhere
 
-- **trading-bot:**
-  - `bot.convert` assumes Deribit diff books and needs a snapshot path.
-  - `bot.convert` builds instruments only from the startup `universe.json`. Options listed mid-run need the later metadata versions.
-  - Update PLANS.md: Bybit options are USDT-settled.
-- **VPS sizing:** wait for the acceptance sizes. The earlier full-book Deribit run measured 541 GiB/day including WAL.
+- **trading-bot:** `bot.convert` reads V2 exports of the 100 ms feeds. It needs a reader for the minute snapshots; trading-bot builds that itself.
+- **crypto-options-analytics:** reads the recorded history together with the downloadable sources above.
+- **orchestrator:** its contracts index gets the 8 November date.
