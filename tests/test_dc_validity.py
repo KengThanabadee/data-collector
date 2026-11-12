@@ -4,7 +4,7 @@ import unittest
 
 from data_collector.contracts import canonical
 from data_collector.validity import CloseGap, FeedTarget, GapCorrection, LedgerEntry, LedgerPin, LedgerStart, ValidityLedger
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 
 def gap(**kwargs):

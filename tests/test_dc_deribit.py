@@ -15,23 +15,10 @@ from data_collector.quota import PriorityQuota,QuotaWindow
 from data_collector.journal import JournalLimits
 from data_collector.queues import QueueLimits
 from data_collector.segments import SegmentLimits
-from tests import test_dc_lane as lane_fixtures
+from tests import helpers as lane_fixtures
 from data_collector.snapshots import read_snapshot
 from tests import test_dc_schedule_cutovers as fixtures
-
-
-class Socket:
-    def __init__(self):
-        self.incoming=asyncio.Queue();self.sent=[];self.closed=False
-    async def send_str(self,body):
-        value=strict_json(body.encode());self.sent.append(value)
-        result=value['params']['channels'] if value['method']=='public/subscribe' else True
-        self.put(dict(jsonrpc='2.0',id=value['id'],result=result))
-    def put(self,value):
-        body=value if isinstance(value,bytes) else canonical(value)
-        self.incoming.put_nowait(aiohttp.WSMessage(aiohttp.WSMsgType.BINARY,body,''))
-    async def receive(self):return await self.incoming.get()
-    async def close(self):self.closed=True
+from tests.helpers import Socket
 
 
 class HTTP:

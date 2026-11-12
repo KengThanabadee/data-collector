@@ -18,8 +18,7 @@ from data_collector.config import DiscoveryConfig,load
 from data_collector.contracts import canonical,strict_json
 from data_collector.rawrun import RawOwner
 from data_collector.segments import iter_segment_records
-from tests import test_dc_app as fixtures
-from tests.test_dc_discovery import Response
+from tests.helpers import AppHarness, Response
 
 
 def row(symbol,identity,*,status='Trading',expiry=None,launch=None):
@@ -80,10 +79,7 @@ class Venue:
         return set().union(*(s.topics for s in self.sockets if not s.closed)) if self.sockets else set()
 
 
-class BybitOptionTests(unittest.IsolatedAsyncioTestCase):
-    setUp=fixtures.AppTests.setUp
-    observe=fixtures.AppTests.observe
-    clock_read=fixtures.AppTests.clock_read
+class BybitOptionTests(AppHarness, unittest.IsolatedAsyncioTestCase):
     async def clock_wait(self,deadline):await asyncio.Event().wait()
 
     def setup_live(self,**overrides):

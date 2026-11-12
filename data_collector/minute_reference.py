@@ -3,7 +3,7 @@ from decimal import Decimal
 import gzip
 import json
 
-from option_collector.common import body_bytes, dumps, sha, utc
+from .minute_files import body_bytes, dumps, sha, utc
 
 
 class ReferenceAttempts:

@@ -12,16 +12,13 @@ from aiohttp import web
 
 from data_collector.cli import main
 from data_collector.minute import capture_minutes, read_minute
-from option_collector.common import body_bytes, dumps
-from option_collector.config import Config
+from data_collector.minute_files import body_bytes, dumps
+from data_collector.minute_config import Config
+from tests.helpers import DERIBIT_MINUTE_REPLIES
 
 
 SLOT = 1794122460
-FIXTURE = Path(__file__).parent / "fixtures" / "dc_deribit_minute_rest.json"
-REPLIES = {
-    (row["method"], tuple(sorted(row["params"].items()))): row["body"].encode()
-    for row in json.loads(FIXTURE.read_bytes())
-}
+REPLIES = DERIBIT_MINUTE_REPLIES
 
 
 def recorded_body(method, **params):

@@ -3,7 +3,7 @@ import unittest
 
 from data_collector.clock import ClockMonitor, ClockRestartRequired, ClockSample
 from data_collector.cutoffs import IngressWriter
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 
 class ClockTests(unittest.TestCase):

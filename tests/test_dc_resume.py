@@ -26,7 +26,7 @@ from data_collector.validity import FeedTarget,GapCorrection
 from data_collector.writer import SessionWriter,recover_session
 from tests import test_dc_pipeline as fixtures
 from tests import test_dc_publisher as publisher_fixtures
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 C=MINUTE_NS
 

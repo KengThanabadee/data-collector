@@ -10,10 +10,10 @@ import time
 
 import aiohttp
 
-from option_collector.archive import Archive, read_archive, verify_parts
-from option_collector.collector import context
-from option_collector.common import dumps, process_lock, read_json, sha, utc, write_bytes, write_json
-from option_collector.transport import Client
+from .minute_archive import Archive, read_archive, verify_parts
+from .minute_config import context
+from .minute_files import dumps, process_lock, read_json, sha, utc, write_bytes, write_json
+from .minute_transport import Client
 
 from .minute_storage import HourlyJournal, minute_path, read_minute_files
 from .minute_tickers import TickerSampler
@@ -336,17 +336,6 @@ async def _capture_slot(config, client, slot, destination, request_window, wall,
     if selection is not None:
         capture_context["bybit_selection"] = selection
         capture_context["bybit_selection_unavailable"] = bybit.unavailable_depth(selection)
-    files = capture_context["code"]["files"]
-    files["data_collector/minute.py"] = sha(Path(__file__).read_bytes())
-    if sampler is not None or bybit is not None or binance is not None:
-        files["data_collector/minute_reference.py"] = sha(Path(__file__).with_name("minute_reference.py").read_bytes())
-    if sampler is not None:
-        files["data_collector/minute_tickers.py"] = sha(Path(__file__).with_name("minute_tickers.py").read_bytes())
-    if bybit is not None:
-        files["data_collector/minute_bybit.py"] = sha(Path(__file__).with_name("minute_bybit.py").read_bytes())
-    if binance is not None:
-        files["data_collector/minute_binance.py"] = sha(Path(__file__).with_name("minute_binance.py").read_bytes())
-    capture_context["code"]["source_sha256"] = sha(dumps(files))
     archive = Archive(root, capture_context)
     async with asyncio.TaskGroup() as tasks:
         send_window = (slot, slot + request_window)

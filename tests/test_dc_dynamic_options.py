@@ -12,8 +12,8 @@ from data_collector.dynamic_options import LIFECYCLE,GLOBALS,INDEXES,instrument_
 from data_collector.rawrun import RawOwner
 from data_collector.segments import iter_segment_records
 from tests import test_dc_app as fixtures
-from tests.test_dc_deribit import Socket
-from tests.test_dc_discovery import Response,response_body
+from tests.helpers import Socket
+from tests.helpers import Response,response_body
 
 
 class LiveSession:

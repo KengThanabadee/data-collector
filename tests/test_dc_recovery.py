@@ -9,7 +9,7 @@ from data_collector.recovery import RecoverySegment,reconcile_cutoffs
 from data_collector.segments import SegmentContext,seal_segment,iter_segment_records
 from data_collector.writer import SessionWriter,recover_session
 from tests import test_dc_cutoffs as fixtures
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 C=MINUTE_NS
 

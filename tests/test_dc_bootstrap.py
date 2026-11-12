@@ -3,7 +3,7 @@ import unittest
 
 from data_collector.bootstrap import BootstrapLimits, BufferedBook, BufferedDelta
 from tests.test_dc_books import event, levels
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 
 class BootstrapTests(unittest.TestCase):

@@ -6,7 +6,7 @@ from data_collector.books import SnapshotBook
 from data_collector.bootstrap import BufferedBook
 from data_collector.contracts import canonical
 from data_collector.decoders import decode_depth, decode_seed, native_json
-from tests.test_dc_contracts import raw, key
+from tests.helpers import raw, key
 
 
 class NativeDecoderTests(unittest.TestCase):
