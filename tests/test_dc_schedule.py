@@ -14,7 +14,7 @@ from data_collector.replay import BookBinding,SnapshotPlan
 from data_collector.schedule import MinuteCutoffs,ScheduleStopped
 from data_collector.validity import FeedTarget
 from tests import test_dc_lane as fixtures
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 C=MINUTE_NS
 

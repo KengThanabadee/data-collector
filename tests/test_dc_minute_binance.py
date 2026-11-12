@@ -11,8 +11,7 @@ from data_collector.minute import capture_minutes, read_minute
 from data_collector.minute_binance import _metadata_digest, read_binance_reference, read_default_binance_universe
 from option_collector.common import body_bytes, body_fields
 from option_collector.config import Config
-from tests.test_dc_minute import REPLIES
-from tests.test_dc_minute_bybit import FIXTURE as BYBIT_FIXTURE
+from tests.helpers import BYBIT_MINUTE_REPLIES as BYBIT_FIXTURE, DERIBIT_MINUTE_REPLIES as REPLIES
 
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dc_binance_minute_rest.json").read_bytes())

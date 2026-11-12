@@ -18,7 +18,7 @@ from data_collector.segments import SegmentContext,seal_segment
 from data_collector.recovery import RecoverySegment,iter_recovery_prefix,reconcile_cutoffs,verify_recovery_marker
 from data_collector.validity import FeedTarget,GapCorrection
 from data_collector.snapshots import publish_snapshot,read_snapshot
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 
 class BufferedDiscoveryTests(unittest.TestCase):

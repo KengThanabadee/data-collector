@@ -11,7 +11,7 @@ from data_collector.metadata import MetadataVersion
 from data_collector.replay import BookBinding,SnapshotPlan,materialize_snapshot
 from data_collector.validity import FeedTarget
 from data_collector.writer import SessionWriter
-from tests.test_dc_contracts import key
+from tests.helpers import key
 from tests import test_dc_deribit_ends as ends
 
 C=60_000_000_000

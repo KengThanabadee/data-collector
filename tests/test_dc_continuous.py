@@ -61,7 +61,7 @@ class ContinuousTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(verify_run(result['root'])['archive_verified'])
 
     async def test_all_feed_batches_are_paced_and_all_acks_required(self):
-        from tests.test_dc_deribit import Socket
+        from tests.helpers import Socket
         from data_collector.contracts import strict_json
         async def send(body):
             await Socket.send_str(self.session.socket,body)

@@ -17,7 +17,7 @@ from data_collector.replay import BookBinding,SnapshotPlan,materialize_snapshot
 from data_collector.segments import SegmentContext,seal_segment
 from data_collector.snapshots import publish_snapshot,read_snapshot
 from data_collector.validity import FeedTarget
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 C=MINUTE_NS
 

@@ -14,7 +14,7 @@ from data_collector.journal import Journal, JournalDamaged, JournalFull, Journal
 from data_collector.ledger import DurableLedger
 from data_collector.segments import SegmentLimits, iter_segment_records, verify_segment
 from data_collector.writer import SessionWriter, recover_session
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 
 class WriterTests(unittest.TestCase):
@@ -202,7 +202,7 @@ class WriterTests(unittest.TestCase):
         code = '''import os,sys
 from data_collector.writer import SessionWriter
 from data_collector.contracts import Provenance
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 root,stage=sys.argv[1:]
 def killed(current):
     if current==stage:os._exit(77)

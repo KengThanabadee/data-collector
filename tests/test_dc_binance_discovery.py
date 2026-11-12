@@ -9,14 +9,10 @@ import aiohttp
 from data_collector.app import run, verify_run
 from data_collector.contracts import canonical, strict_json
 from data_collector.segments import iter_segment_records
-from tests import test_dc_app as fixtures
-from tests.test_dc_discovery import HTTP, Response
+from tests.helpers import AppHarness, HTTP, Response
 
 
-class BinanceDiscoveryTests(unittest.IsolatedAsyncioTestCase):
-    setUp=fixtures.AppTests.setUp
-    observe=fixtures.AppTests.observe
-    clock_read=fixtures.AppTests.clock_read
+class BinanceDiscoveryTests(AppHarness, unittest.IsolatedAsyncioTestCase):
 
     async def clock_wait(self,deadline):await asyncio.Event().wait()
 

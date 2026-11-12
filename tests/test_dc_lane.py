@@ -25,83 +25,10 @@ from data_collector.segments import SegmentLimits, iter_segment_records
 from data_collector.writer import SessionWriter, recover_session
 from data_collector.clock import ClockSample
 from data_collector.clocklog import SOURCE, replay_clock
-from tests.test_dc_contracts import raw, key
+from tests.helpers import LaneHarness, key
 
 
-class LaneTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name); self.counter = 0
-        self.mono = [1000]
-        self.utc = 1_700_000_000_000_000_000
-
-    def observe(self):
-        return self.utc+self.mono[0]-1000,self.mono[0],'epoch'
-
-    def lane(self, *, venue='deribit', queue=None, observe=None, max_connections=4,clock_policy=None,cutoffs=False,snapshot_limits=None):
-        self.counter += 1
-        root = self.root/str(self.counter)
-        provenance = Provenance('a'*64,'b'*64,'c'*64)
-        writer = SessionWriter(root/'wal',root/'archive',venue=venue,environment='production',capture_id='capture',
-            process_session_id='process',provenance=provenance,started_utc_ns=self.utc,now_ns=lambda:self.mono[0],
-            limits=JournalLimits(max_record_bytes=131072,target_bytes=12000,max_streams=16),
-            segment_limits=SegmentLimits(max_record_bytes=131072,max_uncompressed_bytes=262144,max_compressed_bytes=262144))
-        emergency_path = root/'emergency.wal'
-        emergency = Journal(emergency_path,venue=venue,environment='production',create=True,
-                            limits=JournalLimits(max_record_bytes=131072))
-        q = queue or ByteQueue(QueueLimits(max_bytes=131072,max_items=8,max_item_bytes=32768),now_ns=lambda:self.mono[0])
-        lane = ArchiveLane(writer,q,emergency_writer=emergency,observe=observe or self.observe,max_connections=max_connections,
-                           clock_policy=clock_policy,cutoff_scope='capture' if cutoffs else None,
-                           cutoff_ledger_id='ledger' if cutoffs else None,
-                           snapshot_limits=ReplayLimits() if snapshot_limits is None else snapshot_limits)
-        lane.test_task = None
-        self.addCleanup(writer.abort); self.addCleanup(emergency.close)
-        async def cleanup():
-            lane.stop()
-            task = lane.test_task
-            if task is None:task = asyncio.create_task(lane.run())
-            await asyncio.wait_for(asyncio.gather(task,return_exceptions=True),5)
-        self.addAsyncCleanup(cleanup)
-        return lane,emergency_path
-
-    def record(self, lane, seq=0, *, connection='connection', body=None):
-        record = raw(seq, **({'body':body} if body is not None else {}))
-        stamp = self.observe()
-        return replace(record,venue=lane.identity['venue'],instrument=key(venue=lane.identity['venue']),
-            receipt=Receipt('capture','process',connection,seq,*stamp))
-
-    def start(self, lane):
-        task = asyncio.create_task(lane.run()); lane.test_task=task
-        return task
-
-    def records(self, lane):
-        return [record for path in lane.segments for record in iter_segment_records(path)]
-
-    def controls(self, lane):
-        return [strict_json(r.body) for r in self.records(lane) if r.channel=='runtime_events']
-
-    def clock_policy(self):
-        return dict(sample_interval_ns=60,max_sample_age_ns=60,max_offset_ns=100,step_tolerance_ns=2,max_epochs=8)
-
-    def clock_request(self,lane,sequence=0):
-        utc,mono,_=self.observe()
-        source=RawRecord(Receipt('capture','process',SOURCE,sequence,utc,mono,'measurement'),
-            lane.identity['venue'],'production','control','clock_measurement','control',b'original clock provider output',lane.provenance)
-        return ClockSample(utc,mono,0,0,'boot',digest(source.to_bytes())),source
-
-    def clock_replay(self,lane):
-        return replay_clock(self.records(lane),venue=lane.identity['venue'],environment='production',capture_id='capture',
-            process_session_id='process',provenance=lane.provenance,policy=self.clock_policy(),expected_pin=lane._clock.pin)
-
-    def clock_check(self,lane,**kwargs):
-        utc,mono,_=self.observe()
-        return lane.submit_clock_check(utc_ns=kwargs.get('utc_ns',utc),monotonic_ns=kwargs.get('monotonic_ns',mono),
-                                       boot_id=kwargs.get('boot_id','boot'))
-
-    def received(self,lane,seq=0):
-        record=self.record(lane,seq)
-        return replace(record,receipt=replace(record.receipt,clock_epoch=PENDING_CLOCK_EPOCH))
-
+class LaneTests(LaneHarness, unittest.IsolatedAsyncioTestCase):
     def cutoff_request(self,lane,cutoff=MINUTE_NS):
         utc,mono,_=self.observe()
         return lane.submit_cutoff_allocation(cutoff,[StreamKey('capture','process','connection')],

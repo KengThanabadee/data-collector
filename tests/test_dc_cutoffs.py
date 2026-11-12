@@ -9,7 +9,7 @@ from data_collector.cutoffs import ClockAnchor, CutoffCoordinator, IngressWriter
 from data_collector.journal import Journal
 from data_collector.segments import SegmentContext, iter_segment_records, seal_segment
 from data_collector.validity import LedgerPin
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 C = MINUTE_NS
 DEPS = dict(config='a'*64, universe='b'*64, metadata='c'*64, required_feeds='d'*64)

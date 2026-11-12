@@ -13,7 +13,7 @@ from unittest.mock import patch
 from data_collector.contracts import canonical, digest
 from data_collector.journal import FRAME, MAGIC, Journal, JournalDamaged
 from data_collector.segments import SegmentContext, SegmentLimits, iter_segment_records, seal_segment, verify_segment, _mkdir, sync_directory
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 
 class SegmentTests(unittest.TestCase):

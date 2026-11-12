@@ -19,7 +19,7 @@ from data_collector.minute_tickers import (
 )
 from option_collector.common import body_fields, dumps
 from option_collector.config import Config
-from tests.test_dc_minute import REPLIES
+from tests.helpers import DERIBIT_MINUTE_REPLIES as REPLIES
 
 
 DAY = "2026-11-08"

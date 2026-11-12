@@ -15,10 +15,9 @@ from data_collector.minute_bybit import read_bybit_reference, read_bybit_selecti
 from data_collector.minute_storage import seal_minute_day
 from option_collector.common import body_bytes, read_json
 from option_collector.config import Config
-from tests.test_dc_minute import REPLIES
+from tests.helpers import BYBIT_MINUTE_REPLIES as FIXTURE, DERIBIT_MINUTE_REPLIES as REPLIES
 
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dc_bybit_minute_rest.json").read_bytes())
 START = 1794124740
 BTC_CALL = "BTC-9NOV26-76000-C-USDT"
 BTC_PUT = "BTC-9NOV26-76000-P-USDT"

@@ -13,9 +13,7 @@ from data_collector.cli import main
 from data_collector.config import DiscoveryConfig
 from data_collector.contracts import canonical, strict_json
 from data_collector.runtime import DeribitCapture
-from tests.test_dc_clocksource import tracking
-from tests.test_dc_deribit import Socket
-from tests.test_dc_discovery import HTTP, Response, response_body
+from tests.helpers import AppHarness, HTTP, Response, Socket, response_body, tracking
 
 
 class Session(HTTP):
@@ -46,28 +44,10 @@ class Session(HTTP):
         return self.socket
 
 
-class AppTests(unittest.IsolatedAsyncioTestCase):
+class AppTests(AppHarness, unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name).resolve()/'data'
-        self.offset = 0
-        self.reads = 0
+        AppHarness.setUp(self)
         self.session = Session()
-        self.config = DiscoveryConfig(self.root,'testnet',symbols=('BTC-TEST-C',),max_frames=4,duration_seconds=90,capture_mode='snapshots')
-
-    def observe(self):
-        return time.time_ns()+self.offset,time.monotonic_ns()+self.offset,'test-boot'
-
-    async def clock_read(self,*args):
-        self.reads+=1
-        return 0,tracking(self.observe()[0]),b''
-
-    async def clock_wait(self,deadline):
-        if self.reads<4:
-            self.offset+=max(0,deadline-self.observe()[1])
-            await asyncio.sleep(0)
-        else:await asyncio.Event().wait()
 
     async def capture(self,**kwargs):
         return await run(self.config,session_factory=lambda:self.session,observer=self.observe,

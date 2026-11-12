@@ -11,7 +11,7 @@ from data_collector.contracts import canonical,digest,strict_json
 from data_collector.replay import ReplayLimits,_book_message,materialize_snapshot
 from data_collector.segments import iter_segment_records
 from tests.test_dc_books import event,levels
-from tests.test_dc_contracts import key
+from tests.helpers import key
 from tests import test_dc_replay as fixtures
 from tests import test_dc_deribit_ends as ends
 

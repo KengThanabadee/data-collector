@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from data_collector.journal import FRAME, MAGIC, Journal, JournalDamaged
 from data_collector.ledger import DurableLedger
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 from tests import test_dc_writer as writers
 from tests import test_dc_discoveries as discoveries
 

@@ -11,34 +11,7 @@ from data_collector.contracts import canonical,strict_json
 from data_collector.discovery import DeribitDiscovery,project_instruments,discovery_session
 from data_collector.quota import PriorityQuota,QuotaWindow
 from tests import test_dc_lane as base
-
-
-def response_body(rows=None):
-    if rows is None:
-        return (b'{"jsonrpc":"2.0","unknown_root":true,"result":['
-            b'{"instrument_name":"BTC-TEST-C","instrument_id":1,"creation_timestamp":1000,'
-            b'"kind":"option","base_currency":"BTC","settlement_currency":"USDC",'
-            b'"is_active":false,"tick_size":0.000000000000000000123,"new_field":{"x":1e-20}}]}')
-    return canonical(dict(jsonrpc='2.0',result=rows))
-
-
-class Response:
-    def __init__(self,body,status=200,headers=(),delay=None,error=None):
-        self.body=body;self.status=status;self.raw_headers=headers;self.content=self
-        self.offset=0;self.delay=delay;self.error=error;self.closed=False
-    async def __aenter__(self):return self
-    async def __aexit__(self,*args):self.closed=True
-    async def read(self,size):
-        if self.delay is not None:await self.delay.wait()
-        if self.error is not None and self.offset:raise self.error
-        chunk=self.body[self.offset:self.offset+min(size,19)];self.offset+=len(chunk);return chunk
-
-
-class HTTP:
-    _retry_connection=False
-    def __init__(self,responses):self.responses=list(responses);self.calls=[]
-    def get(self,url,**kwargs):
-        self.calls.append((url,kwargs));return self.responses.pop(0)
+from tests.helpers import response_body, Response, HTTP
 
 
 class DiscoveryTests(unittest.IsolatedAsyncioTestCase):

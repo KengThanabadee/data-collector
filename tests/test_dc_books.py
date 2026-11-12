@@ -3,7 +3,7 @@ from decimal import Decimal
 import unittest
 
 from data_collector.books import BookLimits, DepthEvent, L2Book, LevelChange, SnapshotBook, decimal_value
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 
 def levels(*values):

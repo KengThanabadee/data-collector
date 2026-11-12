@@ -8,7 +8,7 @@ from data_collector.runtime import DeribitCapture, CaptureStopped
 from data_collector.contracts import strict_json
 from data_collector.snapshots import publish_snapshot, read_snapshot
 from tests import test_dc_deribit as base
-from tests.test_dc_clocksource import tracking
+from tests.helpers import tracking
 
 C=60_000_000_000
 
