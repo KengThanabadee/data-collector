@@ -5,8 +5,8 @@ import gzip
 import json
 from pathlib import Path
 
-from option_collector.common import body_bytes, dumps, sha, utc, write_bytes
-from option_collector.transport import WEIGHT_HEADER
+from .minute_files import body_bytes, dumps, sha, utc, write_bytes
+from .minute_transport import WEIGHT_HEADER
 
 from .minute_reference import ReferenceAttempts, read_reference, reference_json
 

@@ -22,7 +22,7 @@ from data_collector.queues import ByteQueue, QueueLimits
 from data_collector.replay import ReplayLimits
 from data_collector.segments import SegmentLimits, iter_segment_records
 from data_collector.writer import SessionWriter
-from option_collector.common import body_fields, utc
+from data_collector.minute_files import body_fields, utc
 
 
 FIXTURES = Path(__file__).parent / "fixtures"

@@ -4,8 +4,8 @@ import asyncio
 import json
 from pathlib import Path
 
-from option_collector.common import epoch
-from option_collector.config import Config as RestConfig
+from .minute_files import epoch
+from .minute_config import Config as RestConfig
 
 from .app import run, verify_run
 from .config import load

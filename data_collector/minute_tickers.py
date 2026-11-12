@@ -8,10 +8,9 @@ import uuid
 
 import aiohttp
 
-from option_collector.common import body_bytes, body_fields, dumps, sha, utc, write_bytes
+from .minute_files import body_bytes, body_fields, dumps, sha, utc, write_bytes
 
-from .decoders import native_json
-from .discovery import METHOD, PARAMS
+from .minute_native import METHOD, PARAMS, native_json
 from .minute_reference import ReferenceAttempts, read_reference
 from .minute_storage import read_sealed_references
 

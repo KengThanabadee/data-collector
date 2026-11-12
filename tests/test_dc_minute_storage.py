@@ -17,8 +17,8 @@ from data_collector.minute_reference import ReferenceAttempts
 from data_collector.minute_tickers import (
     Instrument, TickerSampler, _Control, read_deribit_metadata_failures, read_deribit_retirements,
 )
-from option_collector.common import body_fields, dumps
-from option_collector.config import Config
+from data_collector.minute_files import body_fields, dumps
+from data_collector.minute_config import Config
 from tests.helpers import DERIBIT_MINUTE_REPLIES as REPLIES
 
 
