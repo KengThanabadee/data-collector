@@ -2,7 +2,7 @@
 
 V1 follows [SPEC v1](docs/SPEC_V1.md). V2 follows [SPEC.md](SPEC.md). The chunk-by-chunk log up to 28 October 2026 is archived in [docs/v2/history/](docs/v2/history/PLANS_2026-10.md).
 
-## Current state — 10 November 2026
+## Current state — 12 November 2026
 
 Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2026 to one grid fired at :00 UTC every minute across Deribit, Bybit and Binance, plus three event streams. The 100 ms path is superseded. Its [31 October scope](docs/v2/history/COLLECTION_SCOPE_2026-10-31.md) and the [3 November state and steps](docs/v2/history/PLANS_2026-11-08.md), including every measured run, are kept as history.
 
@@ -17,6 +17,7 @@ Keng changed the [collection scope](docs/v2/COLLECTION_SCOPE.md) on 8 November 2
 - The integrated review fixes preserve retirement controls, explicitly identify unavailable Bybit depth, recover readback during pruning, and isolate past seal failures from live capture.
 - PR #9 review follow-up preserves native Bybit pagination and recovers the depth plan with its minute index. It also preserves failed Deribit metadata replies, marks disconnected samples stale and payload-free slots as gaps, and restores Bybit selections and late Deribit evidence from the verified daily pair.
 - [Ticket #8](https://github.com/KengThanabadee/data-collector/issues/8) passed on Lima at `76fbe15`. All 62 minutes from 07:42 through 08:43 UTC on 10 November verified with no gaps and 315 successful market requests each. Deribit acknowledged all 92 observed new options and retirement of all 110 expiring options. Both event archives verified, including Binance liquidations, Bybit BTC and ETH linear liquidations, and Bybit BTC and ETH option trades. Combined peak RSS was 195.5 MiB, peak CPU was 51.7% of one core, and Binance weight was 300 in 60 minutes and 301 in two. Peak sampled UTC uncertainty was 72.9 ms. The fresh archive roots and reports are under `~/dc-minute-acceptance-20261110T074026Z` on `dc-acceptance`.
+- Ticket #8 passed again on Lima at `677a3e5`, whose code is identical to `bae997b`. All 62 minutes from 07:53 through 08:54 UTC on 12 November verified with no gaps and 315 successful market requests each. Deribit acknowledged all 138 observed new options and retirement of all 120 expiring options. Both event archives verified with live pushes on all five configured topics and one Binance and two Bybit connections without rejection or throttling. Combined peak RSS was 205.4 MiB, peak CPU was 43.6% of one core, and Binance weight was 300 in 60 minutes and 301 in two with zero guard skips. Peak sampled UTC uncertainty was 56.1 ms. Scaled by each profile's observed duration, the unsealed archives grow by about 3.78 GB/day for the minute grid, 83 MB/day for Binance events and 145 MB/day for Bybit events. The archive roots and reports are under `~/dc-minute-acceptance-20261112T074810Z` on `dc-acceptance`.
 - Historical 100 ms measurements (not acceptance of the new scope): the Deribit all-options hour produced 7.15 GB/hour of native payload, about 160 GiB/day; a ten-minute Deribit probe crossed 08:00 UTC with 118 retirements and zero rejected subscriptions.
 
 ## Active work
