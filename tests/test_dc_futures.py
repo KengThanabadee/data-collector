@@ -12,8 +12,8 @@ from data_collector.contracts import strict_json
 from data_collector.segments import iter_segment_records
 from tests import test_dc_app as fixtures
 from tests import test_dc_continuous as continuous_fixtures
-from tests.test_dc_deribit import Socket
-from tests.test_dc_discovery import Response, response_body
+from tests.helpers import Socket
+from tests.helpers import Response, response_body
 
 
 class FuturesTests(unittest.IsolatedAsyncioTestCase):

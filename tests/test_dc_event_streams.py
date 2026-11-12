@@ -9,65 +9,10 @@ from data_collector.app import run, verify_run
 from data_collector.config import load
 from data_collector.contracts import canonical, strict_json
 from data_collector.segments import iter_segment_records
-from tests import test_dc_app as fixtures
-from tests.test_dc_deribit import Socket
+from tests.helpers import AppHarness, BybitEventSession as BybitSession, BYBIT_LIQUIDATION as LIQUIDATION, BYBIT_OPTION_TRADE as OPTION_TRADE
 
 
-OPTION_TRADE = json.loads((Path(__file__).parent / 'fixtures/dc_bybit_options.json').read_text())[
-    'samples']['trade']['body'].encode()
-# Representative hedge-perp push using the documented all-liquidation schema.
-# https://bybit-exchange.github.io/docs/v5/websocket/public/all-liquidation
-LIQUIDATION = (b'{"topic":"allLiquidation.ETHUSDT", "type":"snapshot", "ts":1739502303204, "data":['
-               b'{"T":1739502302929,"s":"ETHUSDT","S":"Sell","v":"0.34","p":"2258.9400"},'
-               b'{"T":1739502303040,"s":"ETHUSDT","S":"Buy","v":"0.01","p":"2258.9500"}]}')
-
-
-class BybitSession:
-    def __init__(self):
-        self.sockets = []
-        self.option_ack_topics = ['publicTrade.ETH', 'publicTrade.BTC']
-        self.linear_control = None
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        pass
-
-    async def ws_connect(self, url, **kwargs):
-        socket = Socket()
-        self.sockets.append((url, socket))
-
-        async def send(body):
-            value = strict_json(body.encode())
-            socket.sent.append(value)
-            if url.endswith('/linear'):
-                socket.put(b'{"success":true,"ret_msg":"","conn_id":"linear-test","req_id":"","op":"subscribe"}')
-                if self.linear_control is not None:
-                    socket.put(self.linear_control)
-                socket.put(LIQUIDATION)
-            else:
-                socket.put(canonical(dict(success=True, type='COMMAND_RESP', conn_id='option-test',
-                    data=dict(failTopics=[], successTopics=self.option_ack_topics))))
-                socket.put(OPTION_TRADE)
-
-        async def receive():
-            message = await socket.incoming.get()
-            if isinstance(message, Exception):
-                raise message
-            return message
-
-        socket.send_str = send
-        socket.receive = receive
-        return socket
-
-
-class BybitEventTests(unittest.IsolatedAsyncioTestCase):
-    setUp = fixtures.AppTests.setUp
-    observe = fixtures.AppTests.observe
-    clock_read = fixtures.AppTests.clock_read
-    clock_wait = fixtures.AppTests.clock_wait
-
+class BybitEventTests(AppHarness, unittest.IsolatedAsyncioTestCase):
     async def test_shipped_profile_archives_liquidation_and_option_trade_routes(self):
         shipped = load(Path(__file__).parents[1] / 'config/v2-bybit-options.toml')
         self.config = replace(shipped, data_root=self.root, duration_seconds=1)

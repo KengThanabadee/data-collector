@@ -20,7 +20,7 @@ from data_collector.replay import BookBinding,ReplayLimits,SnapshotPlan
 from data_collector.segments import SegmentContext,seal_segment,iter_segment_records
 from data_collector.snapshots import publish_snapshot,read_snapshot
 from data_collector.validity import FeedTarget,GapCorrection
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 C=MINUTE_NS
 

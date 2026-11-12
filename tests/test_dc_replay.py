@@ -12,7 +12,7 @@ from data_collector.metadata import MetadataVersion
 from data_collector.replay import BookBinding,ReplayLimits,SnapshotPlan,materialize_snapshot
 from data_collector.segments import SegmentContext,iter_segment_records,seal_segment
 from data_collector.validity import FeedTarget,GapCorrection
-from tests.test_dc_contracts import key
+from tests.helpers import key
 
 C=MINUTE_NS
 

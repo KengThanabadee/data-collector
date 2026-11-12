@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import gc
-from decimal import Decimal
 import os
 import sys
 import threading
@@ -18,25 +17,10 @@ from data_collector.queues import ByteQueue
 from data_collector.segments import SegmentLimits, iter_segment_records
 from data_collector.writer import SessionWriter
 from data_collector.contracts import strict_json
-from tests import test_dc_lane as base
+from tests.helpers import LaneHarness, tracking
 
 
-def tracking(utc,**changes):
-    fields=['CB00710F','192.0.2.1','3',str(Decimal(utc)/1_000_000_000),'0','0','0','0','0','0','0','0','64.2','Normal']
-    for key,value in changes.items():fields[int(key[1:])]=value
-    return (','.join(fields)+'\n').encode()
-
-
-class ClockSourceTests(unittest.IsolatedAsyncioTestCase):
-    setUp=base.LaneTests.setUp
-    observe=base.LaneTests.observe
-    lane=base.LaneTests.lane
-    start=base.LaneTests.start
-    records=base.LaneTests.records
-    clock_policy=base.LaneTests.clock_policy
-    received=base.LaneTests.received
-    record=base.LaneTests.record
-
+class ClockSourceTests(LaneHarness, unittest.IsolatedAsyncioTestCase):
     async def wait(self,deadline):self.mono[0]=deadline
     async def read(self,*args):return 0,tracking(self.observe()[0]),b''
     async def setup_sampler(self,**kwargs):

@@ -14,7 +14,7 @@ from data_collector.minute import capture_minutes, read_minute, read_ticker_samp
 from data_collector.minute_tickers import Instrument, TickerSampler, read_deribit_metadata, read_deribit_metadata_failures
 from option_collector.common import body_bytes, dumps, read_json, write_json
 from option_collector.config import Config
-from tests.test_dc_minute import REPLIES
+from tests.helpers import DERIBIT_MINUTE_REPLIES as REPLIES
 
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "dc_deribit_minute_tickers.json").read_bytes())

@@ -14,44 +14,10 @@ from data_collector.config import load
 from data_collector.contracts import canonical,strict_json
 from data_collector.rawrun import RawOwner
 from data_collector.segments import iter_segment_records
-from tests import test_dc_app as fixtures
-from tests.test_dc_deribit import Socket
-from tests.test_dc_discovery import Response
-
-FIXTURE=json.loads((Path(__file__).parent/'fixtures/dc_binance_selected.json').read_text())
+from tests.helpers import AppHarness, BINANCE_EVENTS as FIXTURE, BinanceEventSession as Session
 
 
-class Session:
-    _retry_connection=False
-    def __init__(self):
-        self.calls=[];self.sockets=[];self.reject=False;self.no_book=False;self.before_ack=False
-        self.closed=False;self.status=200;self.body=canonical(FIXTURE['metadata'])
-    async def __aenter__(self):return self
-    async def __aexit__(self,*args):self.closed=True
-    def get(self,url,**kwargs):
-        self.calls.append(url);return Response(self.body,status=self.status)
-    async def ws_connect(self,url,**kwargs):
-        socket=Socket();self.sockets.append((url,socket))
-        async def send(body):
-            value=strict_json(body.encode());socket.sent.append(value)
-            if self.reject:
-                socket.put(dict(id=1,code=-1003,msg='Too many requests'));return
-            topics=value['params']
-            async def push():
-                for topic in topics:
-                    if self.no_book and '@depth' in topic:continue
-                    socket.put(FIXTURE['samples'][topic].encode())
-            if self.before_ack:await push()
-            socket.put(FIXTURE['samples']['ack'].encode())
-            if not self.before_ack:await push()
-        socket.send_str=send
-        return socket
-
-
-class BinanceCaptureTests(unittest.IsolatedAsyncioTestCase):
-    setUp=fixtures.AppTests.setUp
-    observe=fixtures.AppTests.observe
-    clock_read=fixtures.AppTests.clock_read
+class BinanceCaptureTests(AppHarness, unittest.IsolatedAsyncioTestCase):
     async def clock_wait(self,deadline):await asyncio.Event().wait()
 
     def setup_capture(self,**values):

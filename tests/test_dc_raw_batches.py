@@ -6,21 +6,10 @@ from unittest.mock import patch
 
 from data_collector.contracts import strict_json
 from data_collector.lane import DurabilityUnknown
-from tests import test_dc_lane as fixtures
+from tests.helpers import LaneHarness
 
 
-class RawBatchTests(unittest.IsolatedAsyncioTestCase):
-    setUp=fixtures.LaneTests.setUp
-    observe=fixtures.LaneTests.observe
-    lane=fixtures.LaneTests.lane
-    start=fixtures.LaneTests.start
-    record=fixtures.LaneTests.record
-    received=fixtures.LaneTests.received
-    records=fixtures.LaneTests.records
-    clock_policy=fixtures.LaneTests.clock_policy
-    clock_request=fixtures.LaneTests.clock_request
-    clock_check=fixtures.LaneTests.clock_check
-
+class RawBatchTests(LaneHarness, unittest.IsolatedAsyncioTestCase):
     async def test_fsync_precedes_all_acks_and_clock_barrier_splits_batches(self):
         lane,_=self.lane(clock_policy=self.clock_policy());lane.raw_batch_size=512;self.start(lane)
         await lane.submit_clock(*self.clock_request(lane))
