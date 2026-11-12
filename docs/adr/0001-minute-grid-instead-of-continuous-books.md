@@ -1,0 +1,3 @@
+# Record market state on a one-minute grid instead of continuous order books
+
+Data Collector first captured every order-book update over WebSocket. A measured hour of all Deribit options at 100 ms produced 7.15 GB, about 160 GiB/day, which is too large to keep and back up for the research it serves. On 8 November 2026 we chose to record each venue's market state at every UTC minute instead, plus a few event streams (liquidations and option trades) that have no free history. The accepted one-hour run on 12 November measured about 4 GB/day before compression. Book-level replay between minutes is therefore not available, and anything a venue lets us download later is left out.
