@@ -9,7 +9,7 @@ import signal
 from unittest.mock import patch
 
 from data_collector.journal import FRAME, MAGIC, Journal, JournalDamaged, JournalFull, JournalLimits, sync_directory
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 
 
 class JournalTests(unittest.TestCase):

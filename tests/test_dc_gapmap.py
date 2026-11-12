@@ -210,7 +210,7 @@ class GapMappingTests(unittest.TestCase):
         from data_collector.journal import Journal
         from data_collector.replay import BookBinding,SnapshotPlan
         from data_collector.validity import FeedTarget
-        from tests.test_dc_contracts import key
+        from tests.helpers import key
         inst=key(venue='bybit',native_product='linear',native_symbol='BTCUSDT')
         other=replace(inst,native_symbol='ETHUSDT');channel='orderbook.full.BTCUSDT'
         ws=replace(self.ws,connection_id='ws');seed=replace(self.ws,connection_id='seed')

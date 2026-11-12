@@ -7,18 +7,7 @@ import unittest
 from data_collector.contracts import InstrumentKey, Provenance, RawRecord, Receipt, canonical
 from data_collector.metadata import MetadataHistory, MetadataVersion
 from data_collector.legacy import legacy_observations, read_legacy_archive
-
-
-def key(**changes):
-    return InstrumentKey(**(dict(venue="deribit", environment="production", native_product="option",
-        native_symbol="BTC-SYNTHETIC-C", listing_incarnation="listing-1") | changes))
-
-
-def raw(seq=0, body=b'{"price":0.123456789012345678901234567890}', **changes):
-    values = dict(receipt=Receipt("capture", "process", "connection", seq, 100, 50, "epoch"),
-        venue="deribit", environment="production", native_product="option", channel="synthetic",
-        kind="ws_message", body=body, provenance=Provenance("a"*64, "b"*64, "c"*64), instrument=key())
-    return RawRecord(**(values | changes))
+from tests.helpers import key, raw
 
 
 class ContractsTests(unittest.TestCase):

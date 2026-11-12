@@ -8,12 +8,13 @@ from data_collector.contracts import canonical, strict_json
 from data_collector.deribit import DeribitLimits, DeribitStopped
 from data_collector.snapshots import read_snapshot
 from tests import test_dc_deribit as base
+from tests.helpers import Socket
 
 
 class HTTP:
     def __init__(self):self.sockets=[]
     async def ws_connect(self,url,**kwargs):
-        socket=base.Socket();self.sockets.append(socket);return socket
+        socket=Socket();self.sockets.append(socket);return socket
 
 
 class ReconnectTests(unittest.IsolatedAsyncioTestCase):

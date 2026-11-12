@@ -9,7 +9,7 @@ from data_collector.journal import Journal
 from data_collector.ledger import DurableLedger
 from data_collector.segments import SegmentContext,iter_segment_records,seal_segment
 from data_collector.validity import CloseGap,LedgerEntry,LedgerStart
-from tests.test_dc_contracts import raw
+from tests.helpers import raw
 from tests.test_dc_validity import gap
 
 
